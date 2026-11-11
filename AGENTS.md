@@ -1,15 +1,29 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Мінімальні bootstrap-інструкції для AI-агента (Claude Code) у цьому репозиторії.
 
-## Project state
+## Про проєкт
 
-This is a new, mostly empty Go module (`github.com/vitalis-virtus/customer-portal`, Go 1.25). `main.go` currently contains only an empty `main` function. There is no build tooling, test suite, or architecture yet — update this file as real structure is added.
+- **Customer Portal** — навчальний backend-проєкт на Go.
+- **Основна навчальна мета** — побудувати Artifact Driven Agentic SDLC.
+- **Поточна фаза** — налаштування Agentic Infrastructure, а не реалізація бізнес-функціональності.
 
-## Commands
+## Поведінка агента
 
-- Build: `go build ./...`
-- Run: `go run .`
-- Test: `go test ./...`
-- Format: `gofmt -l .` (check) / `gofmt -w .` (apply)
-- Vet: `go vet ./...`
+- Не вигадуй бізнес-вимоги та важливі архітектурні рішення. Якщо вимога або важливе архітектурне рішення не визначені, спочатку перевір наявну документацію. Якщо відповіді немає — поясни невизначеність і запроси рішення користувача.
+- Не створюй компонентів чи документів, яких не вимагає поточне завдання.
+- Не змінюй файли, не пов'язані з поточним завданням.
+- Не виконуй `git commit`, `git push` чи деструктивні операції без явного дозволу.
+- Пояснюй нетривіальні рішення та повідомляй про невизначеності.
+
+## Infrastructure Development Mode
+
+- Робочий процес (workflow) ще не реалізовано.
+- Не намагайся запускати чи імітувати Story Orchestrator, skills або Human Gates.
+- Створюй компоненти інфраструктури поступово і лише за окремим завданням.
+- Не додавай посилань на документи чи компоненти, яких ще не існує.
+
+## Мова
+
+- Спілкування з користувачем і пояснення — українською.
+- Файли документації та інструкцій — українською.
