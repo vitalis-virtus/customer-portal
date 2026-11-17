@@ -1,0 +1,876 @@
+# Workflow Definition — Stage Map
+#
+# Канонічна декларативна модель Story Lifecycle: стадії, порядок, логічні власники,
+# дозволені переходи, Loopbacks, Human Gates, Optional Stages і термінальні стани.
+#
+# Це єдине джерело правил маршрутизації. Інші документи Workflow Definition посилаються
+# на ідентифікатори з цього файлу і не повторюють маршрути:
+#   - stages.md               — призначення, входи, виходи й умови завершення стадій;
+#   - workflow-state-model.md — Workflow State, Execution State, Verdicts, Recovery, Staleness;
+#   - workflow-policies.md    — Human Gates, Reviews, Autonomy, DoD, Git, режими виконання.
+#
+# Файл не є Artifact Contract і не є схемою state/history. Поля нижче описують Workflow,
+# а не формат файлів стану. Формат стану визначає етап Artifact Contracts.
+#
+# Workflow Core не залежить від мови, фреймворків чи сховищ даних проєкту.
+# Технологічні правила належать Project Foundation і майбутнім Stage Skills.
+
+document:
+  id: workflow-stage-map
+  title: Workflow Definition — Stage Map
+  status: APPROVED       # Погоджено людиною 2026-11-16 після фінального Review (revision 3).
+  revision: 3
+  approved_on: 2026-11-16
+
+# Маркери походження елементів моделі.
+definition_status:
+  APPROVED_DECISION: >-
+    Елемент прямо випливає з погоджених рішень Q1–Q28, OD-01…OD-17, погоджених Review Findings
+    або рішень фінального Review FR-01…FR-03.
+  DERIVED: >-
+    Елемент логічно випливає з погоджених рішень, але не погоджувався окремо. У погодженій версії
+    таких елементів немає: колишні DERIVED-елементи погоджено рішенням FR-01. Маркер лишається
+    для майбутніх змін Workflow Definition.
+# Посилання OD-*, WF-*, WF-V2-* і FR-* ведуть до розділу 14 документа workflow-policies.md.
+
+# ---------------------------------------------------------------------------
+# Перелічення
+# ---------------------------------------------------------------------------
+
+stage_types:
+  producer: Створює або оновлює артефакт Story.
+  review: Незалежно перевіряє артефакти producer-стадій. Не виправляє їх.
+  verification: Перевіряє результат Story як ціле (тести, вимоги, traceability, DoD).
+  human_gate: Точка погодження людиною. Автоматично не проходиться.
+  human_action: Дія, яку виконує людина (не погодження артефакта).
+  check: Агентна перевірка факту без створення контрольованого артефакта.
+
+stage_verdicts:          # Повертає агентна стадія. Див. workflow-state-model.md.
+  - PASS
+  - CHANGES_REQUIRED
+  - BLOCKED
+  - NOT_APPLICABLE
+
+gate_decisions:          # Ухвалює людина на human_gate / human_action. Не є Stage Verdict.
+  APPROVE: Повне погодження артефактів Approval Scope з їхньою поточною Approved Content Identity.
+  RECONFIRM: >-
+    Скорочене повторне підтвердження чинного approval (OD-06). Доступне лише тоді, коли кожен
+    артефакт Scope має ту саму Approved Content Identity, що й під час попереднього APPROVE,
+    approval має стан VALID або SUSPENDED, а кожна upstream-зміна після останнього рішення
+    людини покрита revalidation-record, який перевірила review-стадія. Не є погодженням
+    зміненого вмісту. Не скидає Retry Counters. Auto Mode його не виконує.
+  REQUEST_CHANGES: Повернути Story на одну з дозволених цілей gate через Rework Protocol (RR-11).
+  CANCEL: Скасувати Story.
+  CONFIRM_MERGED: >-
+    Лише для HUMAN_MERGE. Людина підтверджує, що merge виконано. Якщо діє контрольована ручна
+    процедура (Merge Protection Status NOT_SUPPORTED або погоджений порядок для UNAVAILABLE),
+    людина також підтверджує, що дотрималася її і target branch не змінилася після
+    MERGE_READINESS_CHECK, або обирає REQUEST_CHANGES на MERGE_READINESS_CHECK (RR-13).
+  # Жодне рішення людини на gate не може прийняти порушення обов'язкового правила Foundation (RR-14).
+
+recovery_actions:        # Q14. Семантика — workflow-state-model.md, розділ 9.
+  - RESUME
+  - ROUTE_BACK
+  - CANCEL
+  - KEEP_BLOCKED
+
+recovery_route_back_targets: >-
+  ROUTE_BACK у Recovery може вести на ціль із loopbacks поточної стадії або на будь-яку
+  producer-стадію з меншим order. Рішення ухвалює лише людина. Усі Human Gates між ціллю
+  і поточною стадією обробляються через Rework Protocol (RR-11). Виняток: з
+  INTEGRATION_CONFIRMATION, коли зміни вже інтегровано, ROUTE_BACK можливий лише на цілі з її
+  loopbacks. Код в target branch агент не змінює. Подальша робота над уже інтегрованими змінами —
+  корекція людиною поза Story або нова пов'язана Story (OD-16). Умови DONE після зовнішнього
+  виправлення — OD-17 (workflow-state-model.md, розділ 9).
+
+route_conditions:        # Умови, з якими оголошено окремі маршрути.
+  CHANGESET_CONTENT_UNCHANGED: >-
+    Changeset Content Identity не змінилася відносно версії, яку перевірили CODE_REVIEW і
+    SECURITY_REVIEW (якщо застосовна). Змінилася лише Target Base Identity. Порівняння за
+    змістом змін, а не лише за Git SHA (OD-12).
+
+story_types:             # OD-14. Тип фіксується в story-spec і погоджується на HUMAN_SPEC_APPROVAL.
+  - FEATURE
+  - BUG
+  - TECHNICAL
+  - INFRASTRUCTURE
+  - SECURITY
+
+retry_policy:            # OD-08
+  definition_status: APPROVED_DECISION     # модель і початкові значення погоджено (OD-08, 3/3/3)
+  defaults:              # погоджені початкові значення конфігурації, не незмінні глобальні константи
+    technical_attempts: 3   # послідовні технічні невдачі однієї стадії
+    quality_loops: 3        # окремо для кожної producer-стадії-цілі і кожної стадії-ініціатора
+    repeated_failure: 3     # кількість появ однієї Finding Identity в межах Story (3 = друге повторення після виправлення)
+  configuration_rule: >-
+    Значення є конфігурацією Workflow Definition. Змінює їх лише людина через зміну цього файлу.
+    Агент не збільшує бюджет. Додаткові спроби для конкретної Story дозволяє лише людина через
+    Recovery RESUME. Правила обліку й скидання — workflow-state-model.md, розділ 10.
+
+review_context_isolation:   # OD-10. Логічна вимога, не механізм реалізації.
+  required: [DESIGN_REVIEW, CODE_REVIEW, SECURITY_REVIEW]
+  risk_triggered: [SPEC_REVIEW, PLAN_REVIEW]
+  risk_triggers:
+    ISO-01: Story Type — SECURITY або INFRASTRUCTURE.
+    ISO-02: Story змінює автентифікацію, авторизацію, сесії, облікові дані чи обробку чутливих даних.
+    ISO-03: Для Story заплановано SECURITY_REVIEW (лише для PLAN_REVIEW).
+    ISO-04: Артефакт, який перевіряють, створено після Loopback, що перетнув Human Gate.
+    ISO-05: Для цієї review-стадії спрацював ліміт Repeated Failure або людина розширила Retry Budget.
+    ISO-06: Людина вимагала ізоляції.
+  ambiguity_rule: Якщо застосовність тригера неочевидна, ізоляція потрібна.
+
+initial_state:           # Стан нової Story після її реєстрації у Workflow.
+  # Передумови реєстрації — workflow-policies.md, розділ 15 (Prerequisites) і розділ 16 (Story Types).
+  stage: CLARIFICATION
+  story_status: ACTIVE
+  execution_state: READY
+
+loopback_confirmation_decisions:   # Рішення людини щодо Loopback із crosses_gates (RR-04).
+  ROUTE_BACK: Підтвердити запропоновану ціль або обрати іншу ціль із loopbacks поточної стадії. Далі — Rework Protocol.
+  RESUME: Відхилити Loopback. Story лишається на поточній стадії і починає нову спробу з урахуванням рішення людини.
+  CANCEL: Скасувати Story через Cancellation Protocol.
+
+terminal_states:
+  DONE: >-
+    Story завершена. Досяжна лише з INTEGRATION_CONFIRMATION з verdict PASS: інтегровано саме
+    погоджені зміни, а якщо Target Base Identity змінилася до merge — Post-Merge Validation пройдена.
+  CANCELLED: >-
+    Story скасована рішенням людини через Cancellation Protocol (OD-13). Досяжна з будь-якого
+    нетермінального стану. Повторно не відкривається: для продовження роботи створюється нова
+    пов'язана Story.
+
+# ---------------------------------------------------------------------------
+# Фази (логічні етапи Q1)
+# ---------------------------------------------------------------------------
+
+phases:
+  - id: CLARIFICATION
+    order: 1
+    definition_status: APPROVED_DECISION   # Q1
+  - id: SPECIFICATION
+    order: 2
+    definition_status: APPROVED_DECISION   # Q1
+  - id: TECHNICAL_DESIGN
+    order: 3
+    definition_status: APPROVED_DECISION   # Q1, Q2
+  - id: IMPLEMENTATION_PLANNING
+    order: 4
+    definition_status: APPROVED_DECISION   # Q1
+  - id: IMPLEMENTATION
+    order: 5
+    definition_status: APPROVED_DECISION   # Q1, Q3
+  - id: VERIFICATION
+    order: 6
+    definition_status: APPROVED_DECISION   # Q1
+  - id: DELIVERY
+    order: 7
+    definition_status: APPROVED_DECISION   # Q4, Q5, Q8, OD-02
+
+# ---------------------------------------------------------------------------
+# Логічні ролі (не прив'язані до конкретних Skills чи Subagents)
+# ---------------------------------------------------------------------------
+
+roles:
+  agent:
+    orchestrator: Застосовує переходи, веде Workflow State і History. Не виконує стадії.
+    requirements_analyst: Clarification і Specification.
+    requirements_reviewer: Review специфікації.
+    solution_architect: Impact Analysis і Solution Design.
+    api_designer: Дизайн зовнішнього інтерфейсу.
+    data_designer: Дизайн збереження даних.
+    design_reviewer: Review технічного дизайну.
+    implementation_planner: Implementation Plan.
+    plan_reviewer: Review Implementation Plan.
+    implementer: Код і тести.
+    code_reviewer: Review реалізації.
+    security_reviewer: Security Review.
+    traceability_auditor: Reconciliation.
+    verifier: Verification.
+    delivery_coordinator: Підготовка PR, перевірка перед merge, підтвердження інтеграції, Post-Merge Validation, backlog-entry для FOLLOW_UP.
+  human:
+    product_approver: HUMAN_SPEC_APPROVAL.
+    technical_approver: HUMAN_TECHNICAL_APPROVAL.
+    pr_approver: HUMAN_PR_APPROVAL.
+    integrator: HUMAN_MERGE.
+  note: Одна людина може виконувати всі людські ролі. Producer і Reviewer однієї перевірки — різні агентні ролі (Q6).
+
+# ---------------------------------------------------------------------------
+# Загальні правила маршрутизації
+# ---------------------------------------------------------------------------
+
+routing_rules:
+  - id: RR-01
+    rule: Перехід виконується лише за маршрутом, оголошеним у цьому файлі. Інший маршрут відхиляється.
+  - id: RR-02
+    rule: >-
+      PASS і NOT_APPLICABLE ведуть на стадію з поля next. NOT_APPLICABLE дозволено лише стадіям
+      з optional: true.
+  - id: RR-03
+    rule: >-
+      CHANGES_REQUIRED має містити ціль із поля loopbacks поточної стадії. Стадія пропонує ціль,
+      Orchestrator перевіряє її. Відсутня або недозволена ціль — переходу немає (Q13).
+  - id: RR-04
+    rule: >-
+      Loopback із полем crosses_gates змінює артефакт, уже погоджений людиною. Такий Loopback
+      виконується лише після рішення людини (Q7, Q16). Можливі рішення —
+      loopback_confirmation_decisions. Auto Mode зупиняється.
+  - id: RR-05
+    rule: >-
+      BLOCKED не має автоматичного маршруту. Story переходить у стан BLOCKED і далі — лише через
+      Recovery Protocol (workflow-state-model.md).
+  - id: RR-06
+    rule: >-
+      Після будь-якого повернення Story знову проходить усі наступні стадії за порядком. Кожна
+      стадія виконує Revalidation своїх результатів (Rework Protocol, RR-11).
+  - id: RR-07
+    rule: >-
+      Human Gate — обов'язкова точка зупинки під час кожного проходження. Gate проходиться лише
+      рішенням людини: APPROVE (повне погодження) або RECONFIRM (лише за умов gate_decisions.RECONFIRM).
+      Якщо Approved Content Identity будь-якого артефакта Scope змінилася або approval має стан
+      INVALIDATED, доступне лише APPROVE. Auto Mode не ухвалює жодного з цих рішень (OD-06).
+  - id: RR-08
+    rule: >-
+      CANCEL доступний людині з будь-якого нетермінального стану і веде в CANCELLED через
+      Cancellation Protocol (OD-13). Агент не видаляє гілки, PR чи незакомічені зміни без явного
+      дозволу людини.
+  - id: RR-09
+    rule: DONE досяжний лише з INTEGRATION_CONFIRMATION з verdict PASS (Q4, Q8, OD-12, OD-16).
+  - id: RR-10
+    rule: >-
+      Review Binding Guard (WF-02). Нову версію implementation-changeset створює лише
+      IMPLEMENTATION. Вхід у будь-яку стадію з order більшим за CODE_REVIEW дозволений лише
+      тоді, коли для поточної Changeset Content Identity є PASS від CODE_REVIEW, а SECURITY_REVIEW
+      і RECONCILIATION мають PASS або NOT_APPLICABLE для тієї самої identity (для стадій, через
+      які Story вже пройшла в поточному проходженні). NOT_APPLICABLE зараховується лише тоді, коли
+      Applicability Basis його applicability-decision не змінився (AP-08, WF-V2-02). Якщо умова не виконується, перехід
+      відхиляється, а Story переходить у BLOCKED (Integrity Error). Відновлення — лише ROUTE_BACK
+      на IMPLEMENTATION або раніше. Маршрут на стадію після CODE_REVIEW, що не проходить через
+      IMPLEMENTATION, оголошується лише з condition CHANGESET_CONTENT_UNCHANGED.
+  - id: RR-11
+    rule: >-
+      Rework Protocol (WF-04). Кожен механізм повернення застосовує ту саму процедуру Staleness,
+      Approval State, повторного Review, APPROVE/RECONFIRM і подій History: Stage Loopback,
+      REQUEST_CHANGES на gate або HUMAN_MERGE, loopback_confirmation ROUTE_BACK, Recovery
+      ROUTE_BACK і RESUME, відновлення після Foundation Change Request, Staleness, виявлена під
+      час Session Recovery, і зміна артефакта поза Workflow (workflow-state-model.md, розділ 14).
+  - id: RR-12
+    rule: >-
+      Зміна лише метаданих PR (заголовок, опис, мітки) не змінює Changeset Content Identity і не
+      вимагає нового CODE_REVIEW, VERIFICATION чи HUMAN_PR_APPROVAL. Метадані не входять до
+      Approved Content Identity артефакта pull-request. Зміна фіксується в History.
+  - id: RR-13
+    rule: >-
+      Merge Protection (OD-16, FR-02). Якщо Git-платформа підтримує механізми захисту target branch
+      (Branch Protection, Required Checks, заборона merge із застарілими перевірками або еквівалент),
+      вони мають використовуватися відповідно до Merge Protection Policy проєкту.
+      MERGE_READINESS_CHECK фіксує Merge Protection Status і діє за merge_protection_statuses.
+      Агент не змінює налаштування захисту без дозволу людини. Ручна процедура не обходить
+      обов'язкових правил проєкту. Workflow Core не залежить від конкретної платформи чи
+      стратегії merge.
+
+  - id: RR-14
+    rule: >-
+      Foundation Rule Guard (WF-V2-01). Порушення обов'язкового правила Product, Architecture чи
+      Security Foundation лишається BLOCKING. Його не усуває ні Risk Acceptance, ні рішення на gate,
+      ні перекласифікація у NON_BLOCKING чи FOLLOW_UP. Вирішення — лише виправлення, погоджений
+      Foundation Change Request або foundation-exception-record, якщо саме це правило Foundation
+      прямо допускає виняток.
+
+merge_protection_statuses:   # FR-02. Оцінює MERGE_READINESS_CHECK. Політика — workflow-policies.md, розділ 9.
+  ACTIVE: Потрібний механізм увімкнено. Звичайна перевірка перед merge.
+  NOT_SUPPORTED: >-
+    Платформа не підтримує механізм. Дозволена контрольована ручна процедура, якщо Merge Protection
+    Policy проєкту не вимагає саме цього механізму. Обмеження фіксується. Якщо вимагає — як DISABLED.
+  UNAVAILABLE: >-
+    Механізм підтримується, але об'єктивно недоступний (тарифний план, права доступу, тимчасова
+    недоступність). Обмеження фіксується. MERGE_READINESS_CHECK → BLOCKED (Merge Protection
+    Unavailable). Людина в Recovery погоджує допустимий порядок інтеграції (RESUME) або інший шлях.
+  DISABLED: >-
+    Механізм доступний, Merge Protection Policy вимагає його, але він вимкнений.
+    MERGE_READINESS_CHECK → BLOCKED (Merge Protection Disabled). RESUME лише після ввімкнення
+    захисту людиною або за чинним foundation-exception-record, якщо політика прямо допускає виняток
+    (WF-V2-01). Ручна процедура цей випадок не замінює.
+  # Механізм доступний, але не вимагається політикою й вимкнений — обробляється як UNAVAILABLE.
+
+# ---------------------------------------------------------------------------
+# Стадії
+# ---------------------------------------------------------------------------
+
+stages:
+
+  # ---------------- CLARIFICATION ----------------
+
+  - id: CLARIFICATION
+    order: 1
+    phase: CLARIFICATION
+    type: producer
+    owner: requirements_analyst
+    optional: false
+    reviewed_by: SPEC_REVIEW        # OD-03: окремої Clarification Review Stage немає
+    definition_status: APPROVED_DECISION   # Q1, OD-03, OD-14
+    next: SPECIFICATION
+    loopbacks: []
+
+  # ---------------- SPECIFICATION ----------------
+
+  - id: SPECIFICATION
+    order: 2
+    phase: SPECIFICATION
+    type: producer
+    owner: requirements_analyst
+    optional: false
+    reviewed_by: SPEC_REVIEW
+    definition_status: APPROVED_DECISION   # Q1, OD-14
+    next: SPEC_REVIEW
+    loopbacks:
+      - target: CLARIFICATION
+
+  - id: SPEC_REVIEW
+    order: 3
+    phase: SPECIFICATION
+    type: review
+    owner: requirements_reviewer
+    optional: false
+    reviews: [CLARIFICATION, SPECIFICATION]
+    context_isolation: risk_triggered      # OD-10
+    definition_status: APPROVED_DECISION   # Q6, Q28, OD-03
+    next: HUMAN_SPEC_APPROVAL
+    loopbacks:
+      - target: SPECIFICATION
+      - target: CLARIFICATION
+
+  - id: HUMAN_SPEC_APPROVAL
+    order: 4
+    phase: SPECIFICATION
+    type: human_gate
+    owner: product_approver
+    definition_status: APPROVED_DECISION   # Q5
+    approval_scope: [clarification-record, story-spec]   # story-spec містить Story Type (OD-14)
+    decisions:
+      APPROVE: IMPACT_ANALYSIS
+      RECONFIRM: IMPACT_ANALYSIS
+      REQUEST_CHANGES: [SPECIFICATION, CLARIFICATION]
+      CANCEL: CANCELLED
+
+  # ---------------- TECHNICAL_DESIGN ----------------
+
+  - id: IMPACT_ANALYSIS
+    order: 5
+    phase: TECHNICAL_DESIGN
+    type: producer
+    owner: solution_architect
+    optional: true
+    applicability: APPLICABILITY_IMPACT_ANALYSIS
+    reviewed_by: DESIGN_REVIEW
+    definition_status: APPROVED_DECISION   # Q26
+    next: SOLUTION_DESIGN
+    loopbacks:
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+
+  - id: SOLUTION_DESIGN
+    order: 6
+    phase: TECHNICAL_DESIGN
+    type: producer
+    owner: solution_architect
+    optional: false
+    reviewed_by: DESIGN_REVIEW
+    definition_status: APPROVED_DECISION   # OD-01: універсальна Design Stage (Domain, Application, Integration, Infrastructure)
+    next: API_DESIGN
+    loopbacks:
+      - target: IMPACT_ANALYSIS
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+
+  - id: API_DESIGN
+    order: 7
+    phase: TECHNICAL_DESIGN
+    type: producer
+    owner: api_designer
+    optional: true
+    applicability: APPLICABILITY_API_DESIGN
+    reviewed_by: DESIGN_REVIEW
+    definition_status: APPROVED_DECISION   # Q2
+    next: DB_DESIGN
+    loopbacks:
+      - target: SOLUTION_DESIGN
+      - target: IMPACT_ANALYSIS
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+
+  - id: DB_DESIGN
+    order: 8
+    phase: TECHNICAL_DESIGN
+    type: producer
+    owner: data_designer
+    optional: true
+    applicability: APPLICABILITY_DB_DESIGN
+    reviewed_by: DESIGN_REVIEW
+    definition_status: APPROVED_DECISION   # Q2
+    next: DESIGN_REVIEW
+    loopbacks:
+      - target: API_DESIGN
+      - target: SOLUTION_DESIGN
+      - target: IMPACT_ANALYSIS
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+
+  - id: DESIGN_REVIEW
+    order: 9
+    phase: TECHNICAL_DESIGN
+    type: review
+    owner: design_reviewer
+    optional: false                         # Завжди застосовна: SOLUTION_DESIGN обов'язкова (Q28, OD-01)
+    reviews: [IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN]
+    context_isolation: required            # OD-10
+    definition_status: APPROVED_DECISION   # Q2, OD-05 (перший рівень security-перевірки — архітектура)
+    next: IMPLEMENTATION_PLANNING
+    loopbacks:
+      - target: DB_DESIGN
+      - target: API_DESIGN
+      - target: SOLUTION_DESIGN
+      - target: IMPACT_ANALYSIS
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+
+  # ---------------- IMPLEMENTATION_PLANNING ----------------
+
+  - id: IMPLEMENTATION_PLANNING
+    order: 10
+    phase: IMPLEMENTATION_PLANNING
+    type: producer
+    owner: implementation_planner
+    optional: false
+    reviewed_by: PLAN_REVIEW
+    definition_status: APPROVED_DECISION   # Q1
+    next: PLAN_REVIEW
+    loopbacks:
+      - target: DB_DESIGN
+      - target: API_DESIGN
+      - target: SOLUTION_DESIGN
+      - target: IMPACT_ANALYSIS
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+
+  - id: PLAN_REVIEW
+    order: 11
+    phase: IMPLEMENTATION_PLANNING
+    type: review
+    owner: plan_reviewer
+    optional: false
+    reviews: [IMPLEMENTATION_PLANNING]
+    context_isolation: risk_triggered      # OD-10
+    definition_status: APPROVED_DECISION   # Q6, Q28, OD-04
+    next: HUMAN_TECHNICAL_APPROVAL
+    loopbacks:
+      - target: IMPLEMENTATION_PLANNING
+      - target: DB_DESIGN
+      - target: API_DESIGN
+      - target: SOLUTION_DESIGN
+      - target: IMPACT_ANALYSIS
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_SPEC_APPROVAL]
+
+  - id: HUMAN_TECHNICAL_APPROVAL
+    order: 12
+    phase: IMPLEMENTATION_PLANNING
+    type: human_gate
+    owner: technical_approver
+    definition_status: APPROVED_DECISION   # Q5
+    approval_scope:
+      - impact-analysis         # якщо стадія застосовна
+      - solution-design
+      - api-design              # якщо стадія застосовна
+      - db-design               # якщо стадія застосовна
+      - implementation-plan     # включно зі Story Risk Assessment і Testing Approach (OD-15)
+      - applicability-decision  # рішення фази TECHNICAL_DESIGN і заплановані рішення для фази VERIFICATION (окремі від рішень, ухвалених у фазі VERIFICATION)
+    decisions:
+      APPROVE: IMPLEMENTATION
+      RECONFIRM: IMPLEMENTATION
+      REQUEST_CHANGES:
+        - IMPLEMENTATION_PLANNING
+        - DB_DESIGN
+        - API_DESIGN
+        - SOLUTION_DESIGN
+        - IMPACT_ANALYSIS
+        - SPECIFICATION
+        - CLARIFICATION
+      CANCEL: CANCELLED
+
+  # ---------------- IMPLEMENTATION ----------------
+
+  - id: IMPLEMENTATION
+    order: 13
+    phase: IMPLEMENTATION
+    type: producer
+    owner: implementer
+    optional: false
+    reviewed_by: CODE_REVIEW
+    definition_status: APPROVED_DECISION   # Q1, Q3 (тести входять до стадії)
+    next: CODE_REVIEW
+    loopbacks:
+      - target: IMPLEMENTATION_PLANNING
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: DB_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: API_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SOLUTION_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: IMPACT_ANALYSIS
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+
+  - id: CODE_REVIEW
+    order: 14
+    phase: IMPLEMENTATION
+    type: review
+    owner: code_reviewer
+    optional: false
+    reviews: [IMPLEMENTATION]
+    context_isolation: required            # OD-10
+    definition_status: APPROVED_DECISION   # Q6, Q28, FR-01
+    next: SECURITY_REVIEW
+    loopbacks:
+      - target: IMPLEMENTATION
+      - target: IMPLEMENTATION_PLANNING
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: DB_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: API_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SOLUTION_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: IMPACT_ANALYSIS
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+
+  # ---------------- VERIFICATION ----------------
+
+  - id: SECURITY_REVIEW
+    order: 15
+    phase: VERIFICATION
+    type: review
+    owner: security_reviewer
+    optional: true
+    applicability: APPLICABILITY_SECURITY_REVIEW
+    reviews: [IMPLEMENTATION]              # Поглиблена перевірка реалізації; архітектурний рівень — DESIGN_REVIEW (OD-05)
+    context_isolation: required            # OD-10
+    definition_status: APPROVED_DECISION   # Q22, OD-05
+    next: RECONCILIATION
+    loopbacks:
+      - target: IMPLEMENTATION
+      - target: IMPLEMENTATION_PLANNING
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: DB_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: API_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SOLUTION_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: IMPACT_ANALYSIS
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+
+  - id: RECONCILIATION
+    order: 16
+    phase: VERIFICATION
+    type: verification
+    owner: traceability_auditor
+    optional: true
+    applicability: APPLICABILITY_RECONCILIATION
+    definition_status: APPROVED_DECISION   # Q27. Лише traceability; фактичну перевірку робить VERIFICATION (WF-05)
+    next: VERIFICATION
+    loopbacks:
+      - target: IMPLEMENTATION
+      - target: IMPLEMENTATION_PLANNING
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: DB_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: API_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SOLUTION_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: IMPACT_ANALYSIS
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+
+  - id: VERIFICATION
+    order: 17
+    phase: VERIFICATION
+    type: verification
+    owner: verifier
+    optional: false                         # Базова перевірка відповідності вимогам обов'язкова завжди (Q27)
+    definition_status: APPROVED_DECISION   # Q1, Q23, OD-15. Прив'язана до Changeset Content Identity і Target Base Identity (OD-12)
+    next: PR_PREPARATION
+    loopbacks:
+      - target: IMPLEMENTATION
+      - target: IMPLEMENTATION_PLANNING
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: DB_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: API_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SOLUTION_DESIGN
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: IMPACT_ANALYSIS
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL]
+      - target: SPECIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+      - target: CLARIFICATION
+        crosses_gates: [HUMAN_TECHNICAL_APPROVAL, HUMAN_SPEC_APPROVAL]
+
+  # ---------------- DELIVERY ----------------
+
+  - id: PR_PREPARATION
+    order: 18
+    phase: DELIVERY
+    type: producer
+    owner: delivery_coordinator
+    optional: false
+    reviewed_by: HUMAN_PR_APPROVAL
+    definition_status: APPROVED_DECISION   # Q8, FR-01. Змінює лише метадані PR, не вміст змін (RR-10, RR-12)
+    next: HUMAN_PR_APPROVAL
+    loopbacks:
+      - target: IMPLEMENTATION             # будь-яка потреба змінити вміст змін, зокрема конфлікт із target branch
+      - target: VERIFICATION
+        condition: CHANGESET_CONTENT_UNCHANGED   # змінилася лише target branch — перевірка інтеграційного результату
+
+  - id: HUMAN_PR_APPROVAL
+    order: 19
+    phase: DELIVERY
+    type: human_gate
+    owner: pr_approver
+    definition_status: APPROVED_DECISION   # Q5
+    approval_scope:                # Кожен елемент має Approved Content Identity (WF-03)
+      - implementation-changeset   # Changeset Content Identity
+      - review-report              # лише звіти CODE_REVIEW і SECURITY_REVIEW (якщо застосовна) для цієї identity
+      - reconciliation-report      # якщо RECONCILIATION застосовна
+      - verification-report        # Findings Disposition, FOLLOW_UP, Target Base Identity
+      - applicability-decision     # рішення, які SECURITY_REVIEW і RECONCILIATION ухвалили на вході (AP-06)
+      - pull-request               # identity PR: репозиторій, PR, source і target branch, Changeset Content Identity; без метаданих (RR-12)
+    decisions:
+      APPROVE: MERGE_READINESS_CHECK
+      RECONFIRM: MERGE_READINESS_CHECK
+      REQUEST_CHANGES:
+        - PR_PREPARATION
+        - IMPLEMENTATION
+        - IMPLEMENTATION_PLANNING
+        - DB_DESIGN
+        - API_DESIGN
+        - SOLUTION_DESIGN
+        - IMPACT_ANALYSIS
+        - SPECIFICATION
+        - CLARIFICATION
+      CANCEL: CANCELLED
+
+  - id: MERGE_READINESS_CHECK
+    order: 20
+    phase: DELIVERY
+    type: check
+    owner: delivery_coordinator
+    optional: false
+    definition_status: APPROVED_DECISION   # OD-12 (кроки 2–5), OD-16, FR-01, FR-02: перевірка перед merge, окремо від підтвердження після merge
+    next: HUMAN_MERGE
+    loopbacks:
+      - target: VERIFICATION
+        condition: CHANGESET_CONTENT_UNCHANGED   # target branch змінилася — перевірка інтеграційного результату
+        crosses_gates: [HUMAN_PR_APPROVAL]
+      - target: PR_PREPARATION                   # PR не відповідає погодженій identity (наприклад, інша target branch)
+        crosses_gates: [HUMAN_PR_APPROVAL]
+      - target: IMPLEMENTATION                   # для інтеграції потрібно змінити вміст змін
+        crosses_gates: [HUMAN_PR_APPROVAL]
+
+  - id: HUMAN_MERGE
+    order: 21
+    phase: DELIVERY
+    type: human_action
+    owner: integrator
+    definition_status: APPROVED_DECISION   # Q5, Q8, OD-12 (крок 6)
+    decisions:
+      CONFIRM_MERGED: INTEGRATION_CONFIRMATION
+      REQUEST_CHANGES: [MERGE_READINESS_CHECK, PR_PREPARATION, IMPLEMENTATION]
+      CANCEL: CANCELLED
+
+  - id: INTEGRATION_CONFIRMATION
+    order: 22
+    phase: DELIVERY
+    type: check
+    owner: delivery_coordinator
+    optional: false
+    definition_status: APPROVED_DECISION   # Q4, Q8, OD-11, OD-12 (кроки 7–8)
+    next: DONE
+    loopbacks:
+      - target: HUMAN_MERGE                # merge ще не виконано
+    post_merge_validation:                 # OD-16, Recovery. Частина стадії, не окрема стадія.
+      check_order:
+        - INTEGRATION_MATCH                # результат merge = погоджена Changeset Content Identity; інакше BLOCKED (Integration Mismatch)
+        - BASE_COMPARISON                  # Target Base Identity на момент merge = перевірена → Post-Merge Validation не потрібна
+        - POST_MERGE_VALIDATION            # лише якщо база змінилася: перевірка поточного стану target branch → post-merge-validation-record
+        - FOLLOW_UP_BACKLOG                # backlog-entry для погоджених FOLLOW_UP
+      resume_rules:                        # OD-17. Після зовнішнього виправлення і RESUME людини.
+        after_post_merge_validation_failed: >-
+          DONE можливий, якщо первісний Integration Match = PASS, людина дозволила RESUME, повторна
+          Post-Merge Validation = PASS на поточному стані target branch і виконано всі умови DoD.
+          Саме зовнішнє виправлення Story не завершує.
+        after_integration_mismatch: >-
+          Успішна інша Story не виправдовує первісну інтеграцію. DONE можливий лише з доказом, що
+          погоджена Changeset Content Identity цієї Story інтегрована належно, і за виконання всіх
+          умов DoD. Без такого доказу Story лишається BLOCKED або завершується CANCELLED рішенням людини.
+        merge_binding: >-
+          Integration Match оцінює результат merge, зафіксований останнім CONFIRM_MERGED. Повторний
+          merge після корекції проходить через Recovery ROUTE_BACK → HUMAN_MERGE → новий
+          CONFIRM_MERGED, а не через RESUME. RESUME повторює перевірки для того самого merge.
+      on_fail: BLOCKED                     # Post-Merge Validation Failed, з діагностикою в post-merge-validation-record
+      approval_effect: >-
+        Не змінює Approval State HUMAN_PR_APPROVAL, якщо Changeset Content Identity не змінилася.
+        post-merge-validation-record не входить до жодного Approval Scope.
+      forbidden_actions: [merge, revert, push to target branch, автоматичне виправлення інтегрованого коду]
+
+# ---------------------------------------------------------------------------
+# Умови застосовності Optional Stages (OD-07)
+# ---------------------------------------------------------------------------
+# Модель погоджено (OD-07). Конкретні тригери погоджено рішенням FR-01, SEC-08 уточнено рішенням FR-03.
+#
+# Спільні нормативні правила для всіх умов:
+#   AP-01  Стадія застосовна, якщо виконується хоча б один тригер.
+#   AP-02  Якщо застосовність тригера неоднозначна, тригер вважається виконаним (стадія застосовна).
+#   AP-03  NOT_APPLICABLE потребує applicability-decision: для кожного тригера — відповідь
+#          «не виконується» з посиланням на джерело (артефакт і місце), на якому вона ґрунтується.
+#   AP-04  applicability-decision прив'язаний до Applicability Basis — усіх релевантних фактів, на
+#          яких ґрунтується рішення (WF-V2-02). Категорії релевантних фактів для кожної стадії
+#          перелічено в basis_facts. Якщо релевантний факт змінився, рішення переоцінюється перед
+#          використанням. Якщо висновок не змінився, створюється revalidation-record, а не новий
+#          applicability-decision.
+#   AP-05  Обґрунтування NOT_APPLICABLE перевіряє стадія з na_checked_by. Людина бачить його
+#          на найближчому Human Gate.
+#   AP-06  Оцінка виконується для фактичного стану: заплановане в implementation-plan рішення
+#          стадія перевіряє на вході проти поточних артефактів і може лише розширити застосовність.
+#          Рішення на вході — окремий applicability-decision у Scope HUMAN_PR_APPROVAL. Він не
+#          замінює запланованого рішення зі Scope HUMAN_TECHNICAL_APPROVAL.
+#   AP-07  NOT_APPLICABLE Optional Stage не звільняє від обов'язкових DESIGN_REVIEW, CODE_REVIEW
+#          і VERIFICATION, зокрема від їхніх security-перевірок.
+#   AP-08  Перевірка Applicability Basis перед використанням: стадія під час власного входу, стадія
+#          з na_checked_by, Orchestrator під час Review Binding Guard (RR-10) і перед Human Gate.
+#          Рішення зі зміненим релевантним фактом не можна використати повторно.
+#   AP-09  Події, яких немає в basis_facts відповідної стадії, не інвалідують її applicability-decision.
+#   AP-10  Заплановане рішення в implementation-plan (Scope HUMAN_TECHNICAL_APPROVAL) — прогноз. Його
+#          basis — лише артефакти, на яких ґрунтується план. Після входу в стадію чинним є рішення
+#          на вході (Scope HUMAN_PR_APPROVAL), тож події Workflow не призупиняють Technical approval.
+
+applicability_conditions:
+
+  APPLICABILITY_IMPACT_ANALYSIS:
+    definition_status: APPROVED_DECISION   # OD-07, FR-01
+    evaluated_by: IMPACT_ANALYSIS          # на вході стадії, за погодженим story-spec
+    triggers:
+      IA-01: Story змінює або вилучає наявну поведінку, наявний зовнішній контракт або наявну структуру даних, а не лише додає нові.
+      IA-02: Story змінює компоненти, конфігурацію або код, якими користуються кілька модулів або спільна технічна інфраструктура.
+      IA-03: Story потребує міграції чи перетворення даних, які вже існують.
+      IA-04: Story змінює артефакти, контракти чи файли, яких торкається інша нетермінальна Story.
+      IA-05: Story Type — BUG, INFRASTRUCTURE або SECURITY.
+    basis_facts: [story-spec version, Story Type, codebase state зачеплених областей, Workflow State інших нетермінальних Stories]
+    not_applicable_evidence: Перелік областей, яких торкається Story, і для кожного тригера — чому він не виконується.
+    na_checked_by: DESIGN_REVIEW
+
+  APPLICABILITY_API_DESIGN:
+    definition_status: APPROVED_DECISION   # OD-07, FR-01
+    evaluated_by: API_DESIGN               # на вході стадії, за solution-design
+    triggers:
+      API-01: Story додає, змінює або вилучає операцію зовнішнього інтерфейсу, формат запиту чи відповіді, коди помилок або заголовки.
+      API-02: Story змінює видиму клієнту поведінку наявної операції без зміни її форми (валідація, авторизація, помилки, побічні ефекти).
+      API-03: Story змінює видимий клієнту механізм автентифікації, сесій чи захисту запитів.
+      API-04: solution-design посилається на зміну зовнішнього інтерфейсу.
+    basis_facts: [story-spec version, solution-design version]
+    not_applicable_evidence: Підтвердження, що зовнішній інтерфейс не змінюється ані формою, ані видимою поведінкою, з посиланням на solution-design.
+    na_checked_by: DESIGN_REVIEW
+
+  APPLICABILITY_DB_DESIGN:
+    definition_status: APPROVED_DECISION   # OD-07, FR-01
+    evaluated_by: DB_DESIGN                # на вході стадії, за solution-design
+    triggers:
+      DB-01: Story створює, змінює або вилучає структури збережених даних (таблиці, колонки, індекси, обмеження, структуровані ключі).
+      DB-02: Story потребує міграції схеми чи даних.
+      DB-03: Story змінює формат, строк життя або спосіб зберігання даних у будь-якому сховищі.
+      DB-04: Story змінює гарантії цілісності чи конкурентного доступу на рівні сховища.
+      DB-05: solution-design посилається на зміну збережених даних.
+    basis_facts: [story-spec version, solution-design version]
+    not_applicable_evidence: Підтвердження, що структура, формат і гарантії збережених даних не змінюються, з посиланням на solution-design.
+    na_checked_by: DESIGN_REVIEW
+
+  APPLICABILITY_SECURITY_REVIEW:
+    definition_status: APPROVED_DECISION   # Q22, OD-05, OD-07, FR-01, FR-03
+    evaluated_by: SECURITY_REVIEW          # заплановано в implementation-plan; на вході — проти поточної Changeset Content Identity
+    triggers:
+      SEC-01: Зміни автентифікації, авторизації, сесій, токенів або облікових даних.
+      SEC-02: Зміни обробки паролів, секретів, ключів або криптографії.
+      SEC-03: Зміни обробки персональних чи інших чутливих даних, зокрема в логах і відповідях.
+      SEC-04: Нові чи змінені точки входу через межу довіри або розбір недовірених вхідних даних.
+      SEC-05: Зміни адміністративних можливостей або перевірок прав.
+      SEC-06: Нова зовнішня залежність або оновлення залежності, яка стосується безпеки.
+      SEC-07: Зміни security-конфігурації (cookies, CORS, CSRF, TLS, security-заголовки, доступ до секретів).
+      SEC-08: >-
+        Зміни, які безпосередньо впливають на security controls або на поведінку, яку регулюють
+        спеціалізовані Security Rules Project Foundation (FR-03). Код, до якого застосовуються лише
+        загальні правила безпечного програмування, цей тригер не активує. Базові security-перевірки
+        лишаються в DESIGN_REVIEW і VERIFICATION.
+      SEC-09: Story Type — SECURITY.
+      SEC-10: DESIGN_REVIEW або CODE_REVIEW зафіксували security-рішення чи finding, що потребує поглибленої перевірки реалізації.
+      SEC-11: Людина вимагала SECURITY_REVIEW (на gate, у Recovery чи в рішенні щодо Loopback).
+    basis_facts:
+      - Changeset Content Identity               # SEC-01…SEC-08
+      - версії артефактів дизайну                # SEC-01…SEC-08
+      - Story Type                               # SEC-09
+      - Story Risk Assessment                    # категорії ризику плану
+      - findings DESIGN_REVIEW і CODE_REVIEW     # SEC-10, зокрема нові після повернення
+      - рішення людини щодо застосування Review  # SEC-11
+      - Recovery-рішення після BLOCKED, що змінили ризики Story
+    not_applicable_evidence: Для кожного тригера — чому він не виконується, з посиланням на changeset і дизайн.
+    na_checked_by: VERIFICATION
+
+  APPLICABILITY_RECONCILIATION:
+    definition_status: APPROVED_DECISION   # Q27, OD-07, FR-01
+    evaluated_by: RECONCILIATION           # заплановано в implementation-plan; на вході — за History і станом Story
+    triggers:
+      REC-01: У Story був Loopback або повернення, що перетнули Human Gate.
+      REC-02: Під час Story виконувався Foundation Change Request.
+      REC-03: Застосовні щонайменше дві стадії з API_DESIGN, DB_DESIGN, IMPACT_ANALYSIS.
+      REC-04: Для Story спрацював ліміт Repeated Failure або людина розширювала Retry Budget.
+      REC-05: Story Type — SECURITY.
+      REC-06: Людина вимагала повного Reconciliation.
+    basis_facts:
+      - події повернення через Human Gate             # REC-01
+      - події Foundation Change Request               # REC-02
+      - applicability-decision API_DESIGN, DB_DESIGN, IMPACT_ANALYSIS   # REC-03
+      - Retry Counters: Repeated Failure і розширення бюджету           # REC-04
+      - Story Type                                    # REC-05
+      - рішення людини щодо Reconciliation            # REC-06
+      - Changeset Content Identity
+    not_applicable_evidence: Для кожного тригера — чому він не виконується. Базова перевірка відповідності вимогам у VERIFICATION виконується все одно.
+    na_checked_by: VERIFICATION
