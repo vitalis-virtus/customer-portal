@@ -1,0 +1,238 @@
+# Stage I/O Map — Simplified Artifact Contracts MVP (APPROVED (MVP), 2026-11-17)
+#
+# Логічні входи й виходи кожної з 22 стадій docs/workflow/stage-map.yaml (revision 3).
+# Маршрути, verdicts, loopbacks, gates і Approval Scope визначає лише stage-map.yaml:
+# тут вони не повторюються.
+#
+# Значення ключів — з artifact-registry.yaml (artifacts, records, project, sources).
+#
+# Формат входу чи виходу:
+#   - <key>                          — обов'язковий
+#   - { key: <key>, when: <умова> }  — лише за умови
+# Умова "applicable" означає, що відповідна Optional Stage застосовна
+# (є applicability-decision з result APPLICABLE).
+#
+# Спільні правила (не повторюються нижче):
+#   R1  Входи — лише зареєстровані поточні версії з Currency CURRENT (artifact-rules.md, розділ 4).
+#   R2  На повторному вході producer-стадія замість нової версії може створити revalidation-record,
+#       якщо зміна upstream не вплинула на її артефакт. Review-стадії на повторному проходженні
+#       читають і revalidation-record.
+#   R3  Human gate і human action не створюють артефактів. Рішення записує Orchestrator:
+#       approval — у state.yaml → approvals, інше — в history.jsonl (workflow-state.md).
+#       CANCEL на будь-якій стадії → cancellation-record (Cancellation Protocol).
+#   R4  outputs_if_applicable створюються лише за result APPLICABLE; applicability-decision —
+#       завжди, на кожному вході Optional Stage.
+
+version: 1
+
+stages:
+
+  # ---------------- CLARIFICATION ----------------
+
+  CLARIFICATION:
+    inputs:
+      - story-source
+      - product-foundation
+      - { key: architecture-foundation, when: "Story Type TECHNICAL або INFRASTRUCTURE" }
+    outputs:
+      - clarification-record          # відповіді людини (CLARIFICATION_ANSWERS) потрапляють сюди
+
+  # ---------------- SPECIFICATION ----------------
+
+  SPECIFICATION:
+    inputs: [clarification-record, story-source, product-foundation]
+    outputs: [story-spec]
+
+  SPEC_REVIEW:
+    inputs: [story-spec, clarification-record, story-source, product-foundation]
+    outputs: [review-report]
+
+  HUMAN_SPEC_APPROVAL:
+    inputs: [clarification-record, story-spec, review-report]   # пакет рішення
+    outputs: []                                                  # R3
+
+  # ---------------- TECHNICAL_DESIGN ----------------
+
+  IMPACT_ANALYSIS:
+    inputs: [story-spec, codebase, architecture-foundation]
+    outputs: [applicability-decision]
+    outputs_if_applicable: [impact-analysis]
+
+  SOLUTION_DESIGN:
+    inputs:
+      - story-spec
+      - architecture-foundation
+      - { key: impact-analysis, when: applicable }
+    outputs: [solution-design]
+
+  API_DESIGN:
+    inputs: [story-spec, solution-design, architecture-foundation]
+    outputs: [applicability-decision]
+    outputs_if_applicable: [api-design]
+
+  DB_DESIGN:
+    inputs:
+      - story-spec
+      - solution-design
+      - architecture-foundation
+      - { key: api-design, when: applicable }
+      - { key: impact-analysis, when: applicable }
+    outputs: [applicability-decision]
+    outputs_if_applicable: [db-design]
+
+  DESIGN_REVIEW:
+    inputs:
+      - story-spec
+      - solution-design
+      - applicability-decision        # рішення IMPACT_ANALYSIS, API_DESIGN, DB_DESIGN (перевірка na_checked_by)
+      - architecture-foundation
+      - { key: impact-analysis, when: applicable }
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs: [review-report]
+
+  # ---------------- IMPLEMENTATION_PLANNING ----------------
+
+  IMPLEMENTATION_PLANNING:
+    inputs:
+      - story-spec
+      - solution-design
+      - review-report                 # DESIGN_REVIEW
+      - testing-strategy              # FG-01: документа ще немає
+      - { key: impact-analysis, when: applicable }
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs:
+      - implementation-plan
+      - applicability-decision        # PLANNED для SECURITY_REVIEW і RECONCILIATION
+
+  PLAN_REVIEW:
+    inputs:
+      - implementation-plan
+      - applicability-decision        # PLANNED
+      - story-spec
+      - solution-design
+      - testing-strategy
+      - { key: impact-analysis, when: applicable }
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs: [review-report]
+
+  HUMAN_TECHNICAL_APPROVAL:
+    inputs:                           # пакет рішення
+      - solution-design
+      - implementation-plan
+      - applicability-decision        # TECHNICAL_DESIGN і PLANNED
+      - review-report                 # DESIGN_REVIEW і PLAN_REVIEW
+      - { key: impact-analysis, when: applicable }
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs: []                       # R3
+
+  # ---------------- IMPLEMENTATION ----------------
+
+  IMPLEMENTATION:
+    inputs:
+      - implementation-plan
+      - story-spec
+      - solution-design
+      - architecture-foundation
+      - codebase
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs: [implementation-changeset]   # код і тести — commits у feature branch
+
+  CODE_REVIEW:
+    inputs:
+      - implementation-changeset
+      - implementation-plan
+      - solution-design
+      - architecture-foundation
+      - codebase
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs: [review-report]
+
+  # ---------------- VERIFICATION ----------------
+
+  SECURITY_REVIEW:
+    inputs:
+      - implementation-changeset
+      - solution-design
+      - review-report                 # DESIGN_REVIEW і CODE_REVIEW
+      - applicability-decision        # PLANNED
+      - architecture-foundation
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs: [applicability-decision] # ENTRY
+    outputs_if_applicable: [review-report]
+
+  RECONCILIATION:
+    inputs:
+      - story-spec
+      - solution-design
+      - implementation-plan
+      - implementation-changeset
+      - review-report                 # CODE_REVIEW і SECURITY_REVIEW
+      - applicability-decision        # PLANNED
+      - story-history                 # тригери REC-01…REC-04 читаються з history.jsonl
+      - { key: api-design, when: applicable }
+      - { key: db-design, when: applicable }
+    outputs: [applicability-decision] # ENTRY
+    outputs_if_applicable: [reconciliation-report]
+
+  VERIFICATION:
+    inputs:
+      - story-spec
+      - implementation-changeset
+      - implementation-plan
+      - testing-strategy
+      - review-report                 # CODE_REVIEW і SECURITY_REVIEW
+      - applicability-decision        # SECURITY_REVIEW і RECONCILIATION (na_checked_by)
+      - codebase                      # зокрема поточний стан target branch
+      - { key: reconciliation-report, when: applicable }
+    outputs: [verification-report]
+
+  # ---------------- DELIVERY ----------------
+
+  PR_PREPARATION:
+    inputs: [verification-report, review-report, story-spec, implementation-changeset]
+    outputs: [pull-request]
+
+  HUMAN_PR_APPROVAL:
+    inputs:                           # пакет рішення
+      - implementation-changeset
+      - review-report                 # CODE_REVIEW і SECURITY_REVIEW
+      - verification-report
+      - applicability-decision        # ENTRY від SECURITY_REVIEW і RECONCILIATION
+      - pull-request
+      - { key: reconciliation-report, when: applicable }
+    outputs: []                       # R3
+
+  MERGE_READINESS_CHECK:
+    inputs: [pull-request, verification-report, implementation-changeset, merge-protection-policy]
+    outputs: []                       # check: результат і Merge Protection Status — у state.yaml → git та History
+
+  HUMAN_MERGE:
+    inputs: [pull-request]
+    outputs: []                       # R3: CONFIRM_MERGED і merge commit — у History
+
+  INTEGRATION_CONFIRMATION:
+    inputs:
+      - pull-request
+      - verification-report
+      - implementation-changeset
+      - codebase                      # target branch після merge
+      - { key: implementation-plan, when: "Post-Merge Validation" }
+      - { key: testing-strategy, when: "Post-Merge Validation" }
+    outputs: [integration-record]
+    outputs_when:
+      post-merge-validation-record: "target branch змінилася після VERIFICATION"
+      backlog-entry: "кожен погоджений FOLLOW_UP"
+
+# Наскрізні виходи, не прив'язані до однієї стадії:
+#   foundation-change-request    — будь-яка стадія через BLOCKED (Foundation Change Required)
+#   revalidation-record          — стадія-власник артефакта на повторному вході (R2)
+#   risk-acceptance-record,
+#   foundation-exception-record  — Orchestrator за рішенням людини
+#   cancellation-record          — Orchestrator під час CANCEL (R3)
