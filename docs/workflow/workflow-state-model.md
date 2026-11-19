@@ -1,445 +1,445 @@
 # Workflow State Model — Workflow Definition
 
-**Статус документа:** `APPROVED` (revision 3). Погоджено людиною 2026-11-16 після фінального Review.
+**Document status:** `APPROVED` (revision 3). Approved by a human on 2026-11-16 after the final Review.
 
-## 1. Призначення
+## 1. Purpose
 
-Документ визначає логічну модель стану Story Workflow: з чого складається стан, як він змінюється, як працюють Recovery, Retry, валідність approvals, Staleness, History і відновлення після перерваної сесії.
+This document defines the logical model of the Story Workflow state: what the state consists of, how it changes, how Recovery, Retry, approval validity, Staleness, History and recovery after an interrupted session work.
 
-Маршрути переходів визначає [stage-map.yaml](stage-map.yaml). Опис стадій — [stages.md](stages.md). Політики — [workflow-policies.md](workflow-policies.md).
+Transition routes are defined by [stage-map.yaml](stage-map.yaml). Stage descriptions — [stages.md](stages.md). Policies — [workflow-policies.md](workflow-policies.md).
 
-### Що не входить
+### Out of Scope
 
-- Технічні схеми файлу поточного стану (YAML) і файлу історії (JSONL): поля, типи, шляхи, формат подій. Їх визначає етап Artifact Contracts.
-- Механізм обчислення версій артефактів і перевірки залежностей. Програмний Dependency Engine на цьому етапі не створюється.
-- Реалізація Orchestrator.
+- Technical schemas of the current state file (YAML) and the history file (JSONL): fields, types, paths, event format. They are defined by the Artifact Contracts stage.
+- The mechanism for computing artifact versions and checking dependencies. A software Dependency Engine is not created at this stage.
+- The Orchestrator implementation.
 
-Документ задає, **що** має зберігатися і **які** правила діють. Як саме це зберігається, визначають наступні етапи.
+The document defines **what** must be stored and **which** rules apply. How exactly it is stored is defined by the next stages.
 
-## 2. Складові Workflow State
+## 2. Components of the Workflow State
 
-Кожна Story має власний незалежний Workflow State (Q12).
+Each Story has its own independent Workflow State (Q12).
 
-| Складова | Значення |
+| Component | Meaning |
 |---|---|
-| Story Status | Загальний стан Story (розділ 4) |
-| Story Type | Тип Story зі `story_types` у `stage-map.yaml` (OD-14). Фіксується в `story-spec` |
-| Current Stage | Стадія зі `stage-map.yaml`, на якій перебуває Story |
-| Execution State | Стан поточної спроби виконання стадії (розділ 3) |
-| Last Stage Verdict | Останній verdict поточної стадії, якщо спробу завершено |
-| Pending Human Decision | Рішення, на яке чекає Story: gate, human action, Recovery, Loopback через gate, ескалація, відповіді на питання |
-| Artifact Registry | Контрольовані артефакти Story, їхні версії, Version Status, Currency і зафіксовані залежності (розділ 5) |
-| Evidence Records | Supporting-записи Story: `review-report`, `revalidation-record`, `applicability-decision` та інші (розділ 5) |
-| Approvals | Рішення Human Gates, прив'язані до Approved Content Identity артефактів Scope, і їхній Approval State (розділ 7) |
-| Optional Stage Applicability | Чинні `applicability-decision` для Optional Stages |
-| Retry Counters | Лічильники Retry Policy (розділ 10) |
-| Blocker | Причина `BLOCKED`, якщо Story заблокована (розділ 9) |
-| Execution Mode | Step Mode або Auto Mode поточного запуску ([workflow-policies.md](workflow-policies.md#11-step-mode-і-auto-mode)) |
-| Git Binding | Feature branch Story, Changeset Content Identity і Target Base Identity, до яких прив'язані перевірки та approval (OD-12) |
+| Story Status | The overall state of the Story (section 4) |
+| Story Type | The Story type from `story_types` in `stage-map.yaml` (OD-14). Recorded in `story-spec` |
+| Current Stage | The stage from `stage-map.yaml` at which the Story is |
+| Execution State | The state of the current attempt to execute the stage (section 3) |
+| Last Stage Verdict | The last verdict of the current stage, if the attempt is completed |
+| Pending Human Decision | The decision the Story is waiting for: a gate, a human action, Recovery, a Loopback through a gate, an escalation, answers to questions |
+| Artifact Registry | The Story's controlled artifacts, their versions, Version Status, Currency and recorded dependencies (section 5) |
+| Evidence Records | The Story's supporting records: `review-report`, `revalidation-record`, `applicability-decision` and others (section 5) |
+| Approvals | Human Gate decisions bound to the Approved Content Identity of the Scope artifacts, and their Approval State (section 7) |
+| Optional Stage Applicability | Valid `applicability-decision` records for Optional Stages |
+| Retry Counters | Retry Policy counters (section 10) |
+| Blocker | The reason for `BLOCKED`, if the Story is blocked (section 9) |
+| Execution Mode | Step Mode or Auto Mode of the current run ([workflow-policies.md](workflow-policies.md#11-step-mode-and-auto-mode)) |
+| Git Binding | The Story's feature branch, Changeset Content Identity and Target Base Identity to which checks and approval are bound (OD-12) |
 
-**Джерела істини (Q9, Q18):**
+**Sources of truth (Q9, Q18):**
 
-- Поточний стан зберігається у файлі стану Story у форматі YAML. Це канонічне джерело поточного стану.
-- Історія подій і переходів зберігається append-only у форматі JSONL. Це канонічне джерело того, що відбулося.
-- Погоджені рішення людини записуються в канонічні артефакти (наприклад, у `clarification-record`, approval у стані). Запис лише в History недостатній.
-- Історія чату та пам'ять сесії Claude Code не є джерелом стану, рішень чи вимог.
+- The current state is stored in the Story's state file in YAML format. This is the canonical source of the current state.
+- The history of events and transitions is stored append-only in JSONL format. This is the canonical source of what happened.
+- Approved human decisions are recorded in canonical artifacts (for example, in `clarification-record`, an approval in the state). A record only in History is insufficient.
+- Chat history and Claude Code session memory are not a source of state, decisions or requirements.
 
-**Хто змінює стан.** Workflow State і History змінює лише Orchestrator. Stage Skill повертає результат (verdict, виходи, пропозицію Loopback, обґрунтування), але не змінює стан напряму.
+**Who changes the state.** The Workflow State and History are changed only by the Orchestrator. A Stage Skill returns a result (verdict, outputs, a Loopback proposal, a justification), but does not change the state directly.
 
 ## 3. Execution State
 
-Execution State описує технічний перебіг однієї спроби виконання стадії. Він не є оцінкою результату (Q10).
+The Execution State describes the technical course of one attempt to execute a stage. It is not an assessment of the result (Q10).
 
-| Execution State | Значення |
+| Execution State | Meaning |
 |---|---|
-| `READY` | Стадія поточна, спробу ще не розпочато |
-| `RUNNING` | Спробу розпочато, результату ще немає |
-| `AWAITING_HUMAN` | Стадія або Orchestrator чекає на рішення чи відповідь людини |
-| `COMPLETED` | Спроба повернула прийнятий результат зі Stage Verdict |
-| `INTERRUPTED` | Спроба не повернула результату: сесію перервано, процес зупинено |
-| `FAILED` | Технічний збій інструмента або середовища під час спроби |
-| `INVALID_RESULT` | Результат повернуто, але Orchestrator його відхилив: бракує обов'язкових виходів, verdict недозволений для стадії, ціль Loopback не дозволена |
+| `READY` | The stage is current, the attempt has not yet started |
+| `RUNNING` | The attempt has started, there is no result yet |
+| `AWAITING_HUMAN` | The stage or the Orchestrator is waiting for a human's decision or answer |
+| `COMPLETED` | The attempt returned an accepted result with a Stage Verdict |
+| `INTERRUPTED` | The attempt did not return a result: the session was interrupted, the process was stopped |
+| `FAILED` | A technical failure of a tool or the environment during the attempt |
+| `INVALID_RESULT` | A result was returned, but the Orchestrator rejected it: mandatory outputs are missing, the verdict is not allowed for the stage, the Loopback target is not allowed |
 
-Правила:
+Rules:
 
-- `INTERRUPTED`, `FAILED` і `INVALID_RESULT` не є verdict `BLOCKED`. Вони обробляються як технічні спроби в межах Retry Policy (розділ 10).
-- Для `human_gate` і `human_action` Execution State — `AWAITING_HUMAN`, доки людина не ухвалить рішення.
-- Очікування відповідей людини під час CLARIFICATION — це `AWAITING_HUMAN`, а не `BLOCKED`.
+- `INTERRUPTED`, `FAILED` and `INVALID_RESULT` are not the `BLOCKED` verdict. They are handled as technical attempts within the Retry Policy (section 10).
+- For `human_gate` and `human_action`, the Execution State is `AWAITING_HUMAN` until the human makes a decision.
+- Waiting for the human's answers during CLARIFICATION is `AWAITING_HUMAN`, not `BLOCKED`.
 
-## 4. Stage Verdict і Story Status
+## 4. Stage Verdict and Story Status
 
 ### Stage Verdict
 
-Stage Verdict — оцінка результату стадії. Повертає агентна стадія після завершеної спроби (Q10).
+A Stage Verdict is an assessment of the stage result. It is returned by an agent stage after a completed attempt (Q10).
 
-| Verdict | Значення | Обов'язковий супровід |
+| Verdict | Meaning | Mandatory accompaniment |
 |---|---|---|
-| `PASS` | Стадія виконала відповідальність, обов'язкові виходи створено | Виходи стадії |
-| `CHANGES_REQUIRED` | Потрібні зміни в артефакті цієї стадії або upstream-стадії | Findings і пропонована ціль Loopback |
-| `BLOCKED` | Стадія не може продовжити без рішення чи дії людини | Причина блокування і що потрібно для відновлення |
-| `NOT_APPLICABLE` | Optional Stage незастосовна для цієї Story | Обґрунтування за умовою застосовності |
+| `PASS` | The stage fulfilled its responsibility, the mandatory outputs are created | The stage outputs |
+| `CHANGES_REQUIRED` | Changes are needed in an artifact of this stage or of an upstream stage | Findings and the proposed Loopback target |
+| `BLOCKED` | The stage cannot continue without a human's decision or action | The reason for blocking and what is needed for recovery |
+| `NOT_APPLICABLE` | The Optional Stage is not applicable for this Story | A justification according to the applicability condition |
 
-Правила:
+Rules:
 
-- `NOT_APPLICABLE` дозволений лише стадіям з `optional: true` у `stage-map.yaml`.
-- Рішення людини на Human Gate — це **Gate Decision**, а не Stage Verdict. Reviewer `PASS` не дорівнює Human Approval.
-- Producer-стадія повертає `CHANGES_REQUIRED`, коли виявила проблему в upstream-артефакті. Review-стадія — коли виявила BLOCKING findings у перевіреному артефакті чи вище.
+- `NOT_APPLICABLE` is allowed only for stages with `optional: true` in `stage-map.yaml`.
+- A human's decision at a Human Gate is a **Gate Decision**, not a Stage Verdict. A Reviewer `PASS` does not equal a Human Approval.
+- A producer stage returns `CHANGES_REQUIRED` when it has found a problem in an upstream artifact. A review stage — when it has found BLOCKING findings in the checked artifact or higher.
 
 ### Story Status
 
-| Story Status | Значення |
+| Story Status | Meaning |
 |---|---|
-| `ACTIVE` | Story може виконуватися без рішення людини |
-| `WAITING_FOR_HUMAN` | Story чекає на Gate Decision, human action, підтвердження Loopback через gate або відповіді людини |
-| `BLOCKED` | Story заблокована. Вийти можна лише через Recovery Protocol (розділ 9) |
-| `DONE` | Термінальний. Story завершена за Definition of Done |
-| `CANCELLED` | Термінальний. Story скасована рішенням людини |
+| `ACTIVE` | The Story can be executed without a human's decision |
+| `WAITING_FOR_HUMAN` | The Story is waiting for a Gate Decision, a human action, the confirmation of a Loopback through a gate or the human's answers |
+| `BLOCKED` | The Story is blocked. It can be exited only through the Recovery Protocol (section 9) |
+| `DONE` | Terminal. The Story is completed according to the Definition of Done |
+| `CANCELLED` | Terminal. The Story is cancelled by a human's decision |
 
-Story переходить у `BLOCKED` у таких випадках:
+The Story moves to `BLOCKED` in the following cases:
 
-- стадія повернула verdict `BLOCKED`;
-- вичерпано Retry Budget (розділ 10);
-- Orchestrator виявив порушення цілісності стану (розділ 12) або спрацював Review Binding Guard (`stage-map.yaml` RR-10);
-- потрібна ескалація або Foundation Change Request ([workflow-policies.md](workflow-policies.md));
-- INTEGRATION_CONFIRMATION виявила Integration Mismatch або Post-Merge Validation не пройшла.
+- a stage returned the `BLOCKED` verdict;
+- the Retry Budget is exhausted (section 10);
+- the Orchestrator detected a state integrity violation (section 12) or the Review Binding Guard fired (`stage-map.yaml` RR-10);
+- an escalation or a Foundation Change Request is needed ([workflow-policies.md](workflow-policies.md));
+- INTEGRATION_CONFIRMATION detected an Integration Mismatch or Post-Merge Validation did not pass.
 
-Для кожного блокування фіксується **джерело**: Stage Verdict чи Orchestrator. Так блокування стадії не плутається з технічною чи процесною зупинкою.
+For each blocking, the **source** is recorded: a Stage Verdict or the Orchestrator. This way a stage blocking is not confused with a technical or process stop.
 
 ## 5. Artifact Status
 
-### Класи артефактів (Q11)
+### Artifact Classes (Q11)
 
-- **Controlled artifacts** проходять погодження або можуть застарівати. Вони мають версії, Version Status, Currency і зафіксовані залежності від версій upstream-артефактів. Перелік — у [stages.md](stages.md#5-логічні-артефакти).
-- **Supporting artifacts** (`review-report`, `revalidation-record`, `applicability-decision`, `reconciliation-report`, `verification-report`, `pull-request`, `integration-record`, `post-merge-validation-record`, `risk-acceptance-record`, `foundation-exception-record`, `cancellation-record`) не мають власного Lifecycle. Це **незмінні записи**: після створення запис не редагується, а виправлення створює новий запис. Кожен запис прив'язаний до версій артефактів, які він перевіряв чи описував, і до версій upstream-артефактів, щодо яких виконано перевірку. Запис щодо однієї версії не зараховується для іншої.
+- **Controlled artifacts** go through approval or can become stale. They have versions, Version Status, Currency and recorded dependencies on the versions of upstream artifacts. The list is in [stages.md](stages.md#5-logical-artifacts).
+- **Supporting artifacts** (`review-report`, `revalidation-record`, `applicability-decision`, `reconciliation-report`, `verification-report`, `pull-request`, `integration-record`, `post-merge-validation-record`, `risk-acceptance-record`, `foundation-exception-record`, `cancellation-record`) do not have their own Lifecycle. They are **immutable records**: after creation, a record is not edited, and a correction creates a new record. Each record is bound to the versions of the artifacts it checked or described, and to the versions of the upstream artifacts against which the check was performed. A record regarding one version does not count for another.
 
-Product Foundation, Architecture Foundation і Workflow Definition — upstream-джерела для всіх Stories. Їхні версії враховуються в залежностях контрольованих артефактів, але змінюються вони лише через власні процеси погодження, а не через Story Workflow.
+The Product Foundation, Architecture Foundation and Workflow Definition are upstream sources for all Stories. Their versions are taken into account in the dependencies of controlled artifacts, but they change only through their own approval processes, not through the Story Workflow.
 
 ### Approved Content Identity (WF-03)
 
-**Інваріант:** кожен артефакт, на який поширюється Human Approval, має стабільну ідентичність погодженого вмісту — **Approved Content Identity**. Вона однозначно визначає вміст, який бачила людина, і дає змогу пізніше перевірити, що вміст не змінився, зокрема під час Git Integration.
+**Invariant:** every artifact covered by a Human Approval has a stable identity of the approved content — the **Approved Content Identity**. It uniquely determines the content the human saw and makes it possible to later verify that the content has not changed, in particular during Git Integration.
 
-- Для контрольованого артефакта Approved Content Identity — це його версія.
-- Для supporting-запису — ідентичність незмінного запису.
-- Для `implementation-changeset` — **Changeset Content Identity**: ідентичність змісту змін Story, незалежна від Git SHA окремих commits. Окремо фіксується **Target Base Identity** — версія target branch, щодо якої виконано перевірку (OD-12).
-- Для `pull-request` — репозиторій, ідентифікатор PR, source і target branch та Changeset Content Identity, яку PR містить. Метадані PR (заголовок, опис, мітки) до неї не входять (`stage-map.yaml` RR-12).
+- For a controlled artifact, the Approved Content Identity is its version.
+- For a supporting record — the identity of the immutable record.
+- For `implementation-changeset` — the **Changeset Content Identity**: the identity of the content of the Story's changes, independent of the Git SHA of individual commits. Separately, the **Target Base Identity** is recorded — the version of the target branch against which the check was performed (OD-12).
+- For `pull-request` — the repository, the PR identifier, the source and target branch and the Changeset Content Identity that the PR contains. PR metadata (title, description, labels) is not part of it (`stage-map.yaml` RR-12).
 
-Механізм забезпечення (immutable snapshot, content hash чи інший) визначає етап Artifact Contracts. Workflow вимагає лише, щоб identity була стабільною і перевірюваною.
+The enforcement mechanism (immutable snapshot, content hash or another) is defined by the Artifact Contracts stage. The Workflow only requires that the identity be stable and verifiable.
 
 ### Version Status
 
-Version Status описує факти про конкретну незмінну версію контрольованого артефакта.
+Version Status describes facts about a specific immutable version of a controlled artifact.
 
-| Version Status | Значення |
+| Version Status | Meaning |
 |---|---|
-| `DRAFT` | Версію створено, review для неї ще немає або review не пройдено |
-| `REVIEWED` | Відповідна review-стадія повернула `PASS` для цієї версії |
-| `APPROVED` | Людина погодила цю версію (APPROVE) на Human Gate |
-| `SUPERSEDED` | Існує новіша версія цього артефакта |
+| `DRAFT` | The version is created, there is no review for it yet or the review did not pass |
+| `REVIEWED` | The corresponding review stage returned `PASS` for this version |
+| `APPROVED` | A human approved this version (APPROVE) at a Human Gate |
+| `SUPERSEDED` | A newer version of this artifact exists |
 
 ### Currency
 
-Currency — окремий вимір актуальності версії щодо upstream-артефактів. Він не змінює Version Status.
+Currency is a separate dimension of the freshness of a version relative to upstream artifacts. It does not change the Version Status.
 
-| Currency | Значення |
+| Currency | Meaning |
 |---|---|
-| `CURRENT` | Кожна upstream-залежність версії або збігається з поточною версією upstream, або покрита `revalidation-record` для поточної версії upstream |
-| `STALE` | Хоча б одна upstream-залежність змінилася, а `revalidation-record` для нової версії upstream немає |
+| `CURRENT` | Each upstream dependency of the version either matches the current version of the upstream or is covered by a `revalidation-record` for the current version of the upstream |
+| `STALE` | At least one upstream dependency has changed, and there is no `revalidation-record` for the new version of the upstream |
 
-### Правила версіонування (WF-01)
+### Versioning Rules (WF-01)
 
-- **Незмінність версії.** Вміст версії і зафіксовані під час її створення залежності не змінюються ніколи. Будь-яка зміна вмісту створює нову версію зі статусом `DRAFT`, а попередня отримує `SUPERSEDED`.
-- **Revalidation не змінює версію.** Підтвердження актуальності незмінної версії щодо нових upstream-версій фіксується окремим `revalidation-record`. Історичний вміст і залежності погодженої версії при цьому не переписуються.
-- **Version Status і Currency незалежні.** Версія може бути `APPROVED` і `STALE` водночас. Це означає: людина погодила саме цей вміст, але його актуальність щодо змінених upstream ще не підтверджено.
-- **`SUPERSEDED` має пріоритет.** Для `SUPERSEDED` версії Currency не оцінюється. Її не можна використати як вхід чи підставу approval.
-- **Version Status не повертається назад.** Немає переходів `APPROVED` → `REVIEWED` чи `REVIEWED` → `DRAFT`. Чинність approval визначає Approval State (розділ 7), а не Version Status.
-- Артефакти без власного gate (`implementation-changeset` до HUMAN_PR_APPROVAL, `clarification-record` до HUMAN_SPEC_APPROVAL) отримують `APPROVED` через gate, у Scope якого вони входять.
-- Зміна артефакта поза Workflow (ручне редагування, зміна в Git без участі Orchestrator) виявляється як нова версія. Далі діє Rework Protocol (розділ 14).
+- **Version immutability.** The content of a version and the dependencies recorded at its creation never change. Any change of content creates a new version with the `DRAFT` status, and the previous one becomes `SUPERSEDED`.
+- **Revalidation does not change the version.** Confirmation of the freshness of an unchanged version relative to new upstream versions is recorded in a separate `revalidation-record`. The historical content and dependencies of the approved version are not rewritten.
+- **Version Status and Currency are independent.** A version can be `APPROVED` and `STALE` at the same time. This means: the human approved exactly this content, but its freshness relative to the changed upstream has not yet been confirmed.
+- **`SUPERSEDED` takes precedence.** For a `SUPERSEDED` version, Currency is not evaluated. It cannot be used as an input or as a basis for an approval.
+- **Version Status does not go backward.** There are no transitions `APPROVED` → `REVIEWED` or `REVIEWED` → `DRAFT`. The validity of an approval is determined by the Approval State (section 7), not by the Version Status.
+- Artifacts without their own gate (`implementation-changeset` before HUMAN_PR_APPROVAL, `clarification-record` before HUMAN_SPEC_APPROVAL) receive `APPROVED` through the gate whose Scope they are part of.
+- A change of an artifact outside the Workflow (manual editing, a change in Git without the Orchestrator's participation) is detected as a new version. Then the Rework Protocol applies (section 14).
 
-### Використання `STALE` артефактів
+### Use of `STALE` Artifacts
 
-- Звичайне виконання стадії не використовує `STALE` чи `SUPERSEDED` версії як чинні входи.
-- Процедура Revalidation (розділ 8) і Change Impact Assessment можуть читати `STALE` версію, її попередні upstream-версії та нові upstream-версії, щоб оцінити вплив. Результат такого читання — лише `revalidation-record` або нова версія, але не інші виходи стадії.
+- Regular execution of a stage does not use `STALE` or `SUPERSEDED` versions as valid inputs.
+- The Revalidation procedure (section 8) and the Change Impact Assessment may read a `STALE` version, its previous upstream versions and new upstream versions to assess the impact. The result of such reading is only a `revalidation-record` or a new version, but not other outputs of the stage.
 
 ## 6. Transitions
 
-Перехід виконує Orchestrator за такою процедурою:
+A transition is performed by the Orchestrator according to the following procedure:
 
-1. **Отримати результат** стадії або рішення людини.
-2. **Перевірити результат:** обов'язкові виходи наявні; verdict дозволений для типу й optionality стадії; для `NOT_APPLICABLE` є обґрунтування; для `CHANGES_REQUIRED` ціль Loopback входить до `loopbacks` поточної стадії.
-3. **Визначити маршрут** лише зі `stage-map.yaml`. Stage Skill пропонує ціль Loopback, але не визначає маршрут (Q13).
-4. **Перевірити передумови** цільової стадії: вхідні артефакти мають Currency `CURRENT` і не є `SUPERSEDED`; потрібні approvals мають стан `VALID`; для стадій після CODE_REVIEW виконується Review Binding Guard (`stage-map.yaml` RR-10); для маршрутів із `condition` умова підтверджена.
-5. **Застосувати перехід:** оновити Workflow State і записати подію в History. Якщо перехід є поверненням на попередню стадію, застосовується Rework Protocol (розділ 14).
+1. **Obtain the result** of the stage or the human's decision.
+2. **Check the result:** the mandatory outputs are present; the verdict is allowed for the type and optionality of the stage; for `NOT_APPLICABLE` there is a justification; for `CHANGES_REQUIRED` the Loopback target is in the `loopbacks` of the current stage.
+3. **Determine the route** only from `stage-map.yaml`. The Stage Skill proposes the Loopback target, but does not determine the route (Q13).
+4. **Check the preconditions** of the target stage: the input artifacts have Currency `CURRENT` and are not `SUPERSEDED`; the required approvals are in the `VALID` state; for stages after CODE_REVIEW, the Review Binding Guard is performed (`stage-map.yaml` RR-10); for routes with a `condition`, the condition is confirmed.
+5. **Apply the transition:** update the Workflow State and record an event in History. If the transition is a return to a previous stage, the Rework Protocol applies (section 14).
 
-Правила:
+Rules:
 
-- Недозволений перехід не виконується. Orchestrator записує подію відхилення, Execution State стає `INVALID_RESULT`.
-- Невиконаний Review Binding Guard не є `INVALID_RESULT` стадії: Story переходить у `BLOCKED` (Integrity Error), бо вміст змін не відповідає пройденим review.
-- Loopback з `crosses_gates` спершу переводить Story у `WAITING_FOR_HUMAN`. Перехід виконується лише після рішення людини, бо він змінює погоджений артефакт. Людина обирає одне з `loopback_confirmation_decisions` у `stage-map.yaml`: `ROUTE_BACK` (запропонована або інша дозволена ціль), `RESUME` (Loopback відхилено, нова спроба поточної стадії з урахуванням рішення) або `CANCEL`. Рішення фіксується в History.
-- Нова Story починає з `initial_state` у `stage-map.yaml`.
-- `applicability-decision` прив'язаний до **Applicability Basis** — усіх релевантних фактів, на яких ґрунтувалося рішення (WF-V2-02): версій артефактів, Changeset Content Identity, фактів Workflow State, релевантних подій History, Retry Counters, рішень людини, Story Risk Assessment. Які категорії фактів релевантні для кожної Optional Stage, визначає `basis_facts` у `stage-map.yaml`. Перед використанням рішення (на вході стадії, у перевірці `na_checked_by`, у Review Binding Guard, перед Human Gate) перевіряється, що жоден релевантний факт не змінився (AP-08). Якщо змінився, рішення переоцінюється, і попередній `NOT_APPLICABLE` автоматично не переноситься. Події поза `basis_facts` рішення не інвалідують (AP-09).
-- Після повернення Story проходить усі наступні стадії за порядком. Кожна стадія на повторному вході виконує Revalidation (розділ 8): або створює `revalidation-record` для незмінної версії, або створює нову версію.
-- Review-стадії на повторному вході перевіряють нові версії артефактів і `revalidation-record` для незмінних версій. Звіт щодо попередньої версії або щодо інших upstream-версій не зараховується.
+- A disallowed transition is not performed. The Orchestrator records a rejection event, and the Execution State becomes `INVALID_RESULT`.
+- A failed Review Binding Guard is not an `INVALID_RESULT` of the stage: the Story moves to `BLOCKED` (Integrity Error), because the content of the changes does not correspond to the passed reviews.
+- A Loopback with `crosses_gates` first moves the Story to `WAITING_FOR_HUMAN`. The transition is performed only after the human's decision, because it changes an approved artifact. The human chooses one of the `loopback_confirmation_decisions` in `stage-map.yaml`: `ROUTE_BACK` (the proposed or another allowed target), `RESUME` (the Loopback is rejected, a new attempt of the current stage taking the decision into account) or `CANCEL`. The decision is recorded in History.
+- A new Story starts from `initial_state` in `stage-map.yaml`.
+- An `applicability-decision` is bound to the **Applicability Basis** — all relevant facts on which the decision was based (WF-V2-02): artifact versions, Changeset Content Identity, Workflow State facts, relevant History events, Retry Counters, human decisions, the Story Risk Assessment. Which categories of facts are relevant for each Optional Stage is defined by `basis_facts` in `stage-map.yaml`. Before using a decision (on entry to the stage, in the `na_checked_by` check, in the Review Binding Guard, before a Human Gate), it is checked that no relevant fact has changed (AP-08). If one has changed, the decision is re-evaluated, and the previous `NOT_APPLICABLE` is not carried over automatically. Events outside `basis_facts` do not invalidate the decision (AP-09).
+- After a return, the Story goes through all subsequent stages in order. Each stage on re-entry performs Revalidation (section 8): it either creates a `revalidation-record` for an unchanged version or creates a new version.
+- Review stages on re-entry check new versions of artifacts and the `revalidation-record` for unchanged versions. A report regarding a previous version or regarding other upstream versions does not count.
 
 ## 7. Approval Validity
 
-Human Approval прив'язаний до Approved Content Identity кожного артефакта **Approval Scope** відповідного gate (`approval_scope` у `stage-map.yaml`) (Q16, WF-03).
+A Human Approval is bound to the Approved Content Identity of each artifact of the **Approval Scope** of the corresponding gate (`approval_scope` in `stage-map.yaml`) (Q16, WF-03).
 
 ### Approval State
 
-Approval State обчислюється відносно **Approval Basis** — версій upstream, чинних на момент останнього рішення людини щодо цього approval (APPROVE або RECONFIRM). Він не виводиться з Currency: `revalidation-record` робить артефакт `CURRENT`, але сам не відновлює approval.
+The Approval State is computed relative to the **Approval Basis** — the upstream versions valid at the moment of the human's last decision regarding this approval (APPROVE or RECONFIRM). It is not derived from Currency: a `revalidation-record` makes an artifact `CURRENT`, but does not by itself restore the approval.
 
-| Approval State | Умова | Наслідок |
+| Approval State | Condition | Consequence |
 |---|---|---|
-| `VALID` | Кожен артефакт Scope має погоджену Approved Content Identity, а upstream не змінився від Approval Basis | На approval можна спиратися для переходів |
-| `SUSPENDED` | Identity не змінилася, але хоча б один upstream змінився від Approval Basis | На approval не можна спиратися, доки людина не виконає RECONFIRM |
-| `INVALIDATED` | Хоча б один артефакт Scope отримав нову версію або новий запис замість погодженого, або Revalidation показала, що потрібна нова версія | Approval більше не чинний. Потрібне повне APPROVE нових версій |
+| `VALID` | Each artifact of the Scope has the approved Approved Content Identity, and the upstream has not changed since the Approval Basis | The approval can be relied on for transitions |
+| `SUSPENDED` | The identity has not changed, but at least one upstream has changed since the Approval Basis | The approval cannot be relied on until the human performs RECONFIRM |
+| `INVALIDATED` | At least one artifact of the Scope has received a new version or a new record instead of the approved one, or Revalidation has shown that a new version is needed | The approval is no longer valid. A full APPROVE of the new versions is needed |
 
-Правила:
+Rules:
 
-- Перейти з `SUSPENDED` у `VALID` можна лише через RECONFIRM людини. Після нього Approval Basis — поточні версії upstream, і це фіксує подія RECONFIRM.
+- Moving from `SUSPENDED` to `VALID` is possible only through the human's RECONFIRM. After it, the Approval Basis is the current upstream versions, and this is recorded by the RECONFIRM event.
 
-- `INVALIDATED` не повертається у `VALID`. Нове рішення людини створює новий approval.
-- Approval ніколи не стає чинним для зміненого вмісту без рішення людини APPROVE.
-- Рішення людини та його прив'язка до identity фіксуються в Workflow State і History.
+- `INVALIDATED` does not return to `VALID`. A new human decision creates a new approval.
+- An approval never becomes valid for changed content without the human's APPROVE decision.
+- The human's decision and its binding to the identity are recorded in the Workflow State and History.
 
 ### Reconfirmation (OD-06)
 
-Human Gate — обов'язкова точка зупинки під час кожного проходження. Під час повторного проходження gate людина обирає одне з двох рішень:
+A Human Gate is a mandatory stop point during every pass. During a repeated pass of a gate, the human chooses one of two decisions:
 
-- **APPROVE** — повне погодження. Обов'язкове, якщо хоча б один артефакт Scope має нову identity або approval має стан `INVALIDATED`.
-- **RECONFIRM** — скорочене повторне підтвердження. Доступне лише тоді, коли одночасно:
-  - для gate є попередній approval у стані `VALID` або `SUSPENDED`;
-  - кожен артефакт Scope має ту саму Approved Content Identity, що й під час попереднього APPROVE;
-  - кожна upstream-зміна після Approval Basis покрита `revalidation-record` для кожного зачепленого артефакта Scope, і review-стадія перевірила ці записи.
+- **APPROVE** — full approval. Mandatory if at least one artifact of the Scope has a new identity or the approval is in the `INVALIDATED` state.
+- **RECONFIRM** — a shortened re-confirmation. Available only when, simultaneously:
+  - there is a previous approval in the `VALID` or `SUSPENDED` state for the gate;
+  - each artifact of the Scope has the same Approved Content Identity as at the previous APPROVE;
+  - each upstream change after the Approval Basis is covered by a `revalidation-record` for each affected artifact of the Scope, and a review stage has checked these records.
 
-RECONFIRM фіксується окремою подією. Вона посилається на початковий approval і на `revalidation-record`, які людина прийняла. Початковий approval не замінюється, і RECONFIRM не вважається погодженням нового вмісту. Пакет рішення явно показує, що вміст не змінився, і які upstream-зміни перевірено.
+RECONFIRM is recorded as a separate event. It references the original approval and the `revalidation-record` items the human accepted. The original approval is not replaced, and RECONFIRM is not considered an approval of new content. The decision package explicitly shows that the content has not changed and which upstream changes have been checked.
 
-Auto Mode не виконує ні APPROVE, ні RECONFIRM.
+Auto Mode performs neither APPROVE nor RECONFIRM.
 
-**Approvals попередніх gates, які Story не проходитиме знову.** Якщо upstream змінився, коли Story вже пройшла gate (наприклад, Foundation Change Request під час IMPLEMENTATION), approval цього gate може стати `SUSPENDED`. Тоді:
+**Approvals of previous gates that the Story will not pass again.** If the upstream changed when the Story had already passed a gate (for example, a Foundation Change Request during IMPLEMENTATION), the approval of this gate may become `SUSPENDED`. Then:
 
-- потрібні `revalidation-record` створює Out-of-Stage Revalidation (розділ 8), не повертаючи Story на попередні стадії;
-- RECONFIRM для такого approval людина ухвалює в межах рішення Recovery чи Foundation Change Request, окремо для кожного approval, з тими самими умовами;
-- `RESUME` неможливий, поки хоча б один approval попередніх gates має стан `SUSPENDED` без RECONFIRM або стан `INVALIDATED`. Для `INVALIDATED` потрібен `ROUTE_BACK` на producer-стадію відповідного артефакта.
+- the required `revalidation-record` items are created by Out-of-Stage Revalidation (section 8), without returning the Story to previous stages;
+- the human makes the RECONFIRM for such an approval within a Recovery or Foundation Change Request decision, separately for each approval, with the same conditions;
+- `RESUME` is impossible as long as at least one approval of previous gates is in the `SUSPENDED` state without RECONFIRM or in the `INVALIDATED` state. For `INVALIDATED`, a `ROUTE_BACK` to the producer stage of the corresponding artifact is needed.
 
-**Target branch після merge (OD-16).** Після CONFIRM_MERGED зміни target branch, зокрема відмінність Target Base Identity на момент merge від перевіреної, обробляє лише Post-Merge Validation в INTEGRATION_CONFIRMATION. Вони не змінюють Currency `verification-report` і Approval State HUMAN_PR_APPROVAL. `post-merge-validation-record` не входить до жодного Approval Scope і не замінює `verification-report`. HUMAN_PR_APPROVAL лишається чинним, доки не змінилася Changeset Content Identity. До merge зміна target branch обробляється як завжди: MERGE_READINESS_CHECK → повторна VERIFICATION → новий `verification-report` → `INVALIDATED`.
+**The target branch after the merge (OD-16).** After CONFIRM_MERGED, changes to the target branch, in particular a difference of the Target Base Identity at the moment of the merge from the checked one, are handled only by Post-Merge Validation in INTEGRATION_CONFIRMATION. They do not change the Currency of `verification-report` and the Approval State of HUMAN_PR_APPROVAL. `post-merge-validation-record` is not part of any Approval Scope and does not replace `verification-report`. HUMAN_PR_APPROVAL remains valid as long as the Changeset Content Identity has not changed. Before the merge, a change of the target branch is handled as usual: MERGE_READINESS_CHECK → a repeated VERIFICATION → a new `verification-report` → `INVALIDATED`.
 
-## 8. Staleness і Revalidation
+## 8. Staleness and Revalidation
 
-### Залежності
+### Dependencies
 
-Кожна версія контрольованого артефакта фіксує версії upstream-артефактів, на яких вона ґрунтується (Q20). Наприклад, `solution-design` залежить від версії `story-spec`, а `implementation-plan` — від версій артефактів дизайну. Конкретний перелік залежностей кожного типу і спосіб їх запису визначає етап Artifact Contracts.
+Each version of a controlled artifact records the versions of the upstream artifacts on which it is based (Q20). For example, `solution-design` depends on a version of `story-spec`, and `implementation-plan` — on versions of the design artifacts. The specific list of dependencies of each type and the way they are recorded is defined by the Artifact Contracts stage.
 
-Залежності фіксуються під час створення версії і далі не змінюються (розділ 5). Supporting-записи також фіксують версії upstream, щодо яких виконано перевірку.
+Dependencies are recorded when a version is created and do not change afterward (section 5). Supporting records also record the upstream versions against which the check was performed.
 
 ### Staleness
 
-Коли upstream-артефакт отримує нову версію, кожна залежна версія, що посилається на попередню версію upstream і не має `revalidation-record` для нової, отримує Currency `STALE`. Version Status при цьому не змінюється. Approvals, у Scope яких входить `STALE` артефакт, переходять у `SUSPENDED`. Це позначка «потрібна перевірка», а не автоматичне скидання всіх approvals.
+When an upstream artifact receives a new version, each dependent version that references the previous version of the upstream and does not have a `revalidation-record` for the new one receives Currency `STALE`. The Version Status does not change. Approvals whose Scope includes a `STALE` artifact move to `SUSPENDED`. This is a "check needed" marker, not an automatic reset of all approvals.
 
-Review-звіт, виконаний щодо інших версій upstream, ніж поточні, не зараховується як `PASS` для подальших переходів.
+A review report performed against upstream versions other than the current ones does not count as `PASS` for further transitions.
 
-### Change Impact Assessment і Revalidation
+### Change Impact Assessment and Revalidation
 
-**Change Impact Assessment** — оцінка, як зміна upstream-артефакта впливає на залежні артефакти. Це процедура, а не стадія. Її не слід плутати зі стадією IMPACT_ANALYSIS, яка оцінює вплив Story на наявну систему.
+**Change Impact Assessment** is an assessment of how a change of an upstream artifact affects dependent artifacts. It is a procedure, not a stage. It should not be confused with the IMPACT_ANALYSIS stage, which assesses the Story's impact on the existing system.
 
-- Assessment виконує стадія, яка змінила upstream-артефакт, або Orchestrator у межах Foundation Change Request.
-- Результат Assessment входить до пакета найближчого рішення людини (gate, Recovery, Foundation Change Request). Тому людина бачить, які погоджені артефакти зачепила зміна.
+- The Assessment is performed by the stage that changed the upstream artifact, or by the Orchestrator within a Foundation Change Request.
+- The result of the Assessment is part of the package of the nearest human decision (gate, Recovery, Foundation Change Request). Therefore, the human sees which approved artifacts the change has affected.
 
-**Revalidation** виконує стадія-власник залежного артефакта під час повторного входу. Вона може читати `STALE` версію (розділ 5).
+**Revalidation** is performed by the owner stage of the dependent artifact during re-entry. It may read a `STALE` version (section 5).
 
-| Результат Revalidation | Наслідок |
+| Revalidation result | Consequence |
 |---|---|
-| Зміна не впливає на артефакт | Створюється `revalidation-record`: версія X лишається актуальною щодо upstream-версій Y′, з обґрунтуванням. Вміст, залежності й Version Status версії X не змінюються. Currency стає `CURRENT`. Approval State не змінюється: `SUSPENDED` approval стає `VALID` лише після RECONFIRM людини (розділ 7) |
-| Зміна впливає на артефакт | Стадія створює нову версію (`DRAFT`). Попередня стає `SUPERSEDED`. Approvals, у Scope яких входить попередня версія, стають `INVALIDATED` |
+| The change does not affect the artifact | A `revalidation-record` is created: version X remains current relative to upstream versions Y′, with a justification. The content, dependencies and Version Status of version X do not change. Currency becomes `CURRENT`. The Approval State does not change: a `SUSPENDED` approval becomes `VALID` only after the human's RECONFIRM (section 7) |
+| The change affects the artifact | The stage creates a new version (`DRAFT`). The previous one becomes `SUPERSEDED`. Approvals whose Scope includes the previous version become `INVALIDATED` |
 
-`revalidation-record` — незмінний supporting-запис. Його перевіряє review-стадія артефакта на повторному проходженні. Остаточно його бачить людина під час APPROVE чи RECONFIRM (розділ 7).
+A `revalidation-record` is an immutable supporting record. It is checked by the artifact's review stage on a repeated pass. Finally, the human sees it during APPROVE or RECONFIRM (section 7).
 
-**Supporting-записи в Approval Scope** (`review-report`, `applicability-decision`, `verification-report` та інші) підпорядковуються тому самому правилу. Якщо висновок незмінного запису лишається чинним щодо нових upstream-версій, автор запису (стадія, що його створила) фіксує це в `revalidation-record`, а не створює новий запис. Новий запис створюється лише тоді, коли висновок змінився, і тоді approval, у Scope якого був попередній запис, стає `INVALIDATED`.
+**Supporting records in the Approval Scope** (`review-report`, `applicability-decision`, `verification-report` and others) are subject to the same rule. If the conclusion of an immutable record remains valid relative to new upstream versions, the author of the record (the stage that created it) records this in a `revalidation-record` rather than creating a new record. A new record is created only when the conclusion has changed, and then the approval whose Scope included the previous record becomes `INVALIDATED`.
 
 ### Out-of-Stage Revalidation
 
-Коли upstream змінився, а Story перебуває на стадії після артефакта, який треба перевірити (наприклад, Foundation Change Request під час IMPLEMENTATION), Revalidation можна виконати без повернення Story:
+When the upstream has changed and the Story is at a stage after the artifact that needs to be checked (for example, a Foundation Change Request during IMPLEMENTATION), Revalidation can be performed without returning the Story:
 
-1. Роль-власник артефакта виконує Revalidation і створює `revalidation-record` або повідомляє, що потрібна нова версія.
-2. Review-роль цього артефакта перевіряє `revalidation-record`.
-3. Current Stage не змінюється. Подія фіксується в History.
+1. The artifact's owner role performs Revalidation and creates a `revalidation-record` or reports that a new version is needed.
+2. The review role of this artifact checks the `revalidation-record`.
+3. The Current Stage does not change. The event is recorded in History.
 
-Якщо потрібна нова версія, Out-of-Stage Revalidation завершується, а людина обирає `ROUTE_BACK` на producer-стадію цього артефакта. Out-of-Stage Revalidation запускається лише в межах рішення людини щодо Recovery або Foundation Change Request.
+If a new version is needed, Out-of-Stage Revalidation ends, and the human chooses `ROUTE_BACK` to the producer stage of this artifact. Out-of-Stage Revalidation is started only within a human's decision regarding Recovery or a Foundation Change Request.
 
-## 9. BLOCKED і Recovery Protocol
+## 9. BLOCKED and Recovery Protocol
 
-Кожен `BLOCKED` має визначений шлях відновлення (Q14).
+Each `BLOCKED` has a defined recovery path (Q14).
 
-### Причини блокування
+### Blocking Reasons
 
-| Причина | Приклад |
+| Reason | Example |
 |---|---|
-| Missing Information | Потрібна інформація, яку може дати лише людина, а стадія не може продовжити |
-| Escalation Required | Рішення з переліку ескалацій Controlled Autonomy ([workflow-policies.md](workflow-policies.md#2-controlled-autonomy)) |
-| Foundation Change Required | Story потребує зміни Product або Architecture Foundation |
-| External Dependency | Недоступна зовнішня система, доступ чи дозвіл |
-| Retry Budget Exhausted | Вичерпано ліміт спроб або Loopbacks (розділ 10) |
-| Upstream Changed | Під час Session Recovery або між запусками змінився upstream (Foundation, upstream-артефакт), і потрібна Revalidation, перш ніж Story продовжить |
-| Integrity Error | Стан, History або артефакти суперечать одне одному (розділ 12), або не виконано Review Binding Guard (`stage-map.yaml` RR-10) |
-| Integration Mismatch | Merge вніс у target branch не ті зміни, які погодила людина, або разом із ними непогоджений вміст |
-| Post-Merge Validation Failed | Target Base Identity змінилася до merge, а перевірка фактичного інтегрованого результату не пройшла (OD-16). Діагностика — у `post-merge-validation-record` |
-| Foundation Rule Violation | Порушено обов'язкове правило Foundation, яке не можна усунути через Risk Acceptance (WF-V2-01). Вирішення — виправлення, Foundation Change Request або дозволений виняток |
-| Merge Protection Unavailable | Механізм захисту підтримується, але об'єктивно недоступний (`merge_protection_statuses.UNAVAILABLE`, FR-02). Людина в Recovery погоджує допустимий порядок інтеграції |
-| Merge Protection Disabled | Механізм доступний і обов'язковий за Merge Protection Policy, але вимкнений (`merge_protection_statuses.DISABLED`, FR-02). `RESUME` лише після ввімкнення захисту або за чинним `foundation-exception-record` |
+| Missing Information | Information that only a human can provide is needed, and the stage cannot continue |
+| Escalation Required | A decision from the list of Controlled Autonomy escalations ([workflow-policies.md](workflow-policies.md#2-controlled-autonomy)) |
+| Foundation Change Required | The Story requires a change to the Product or Architecture Foundation |
+| External Dependency | An external system, access or permission is unavailable |
+| Retry Budget Exhausted | The limit of attempts or Loopbacks is exhausted (section 10) |
+| Upstream Changed | During Session Recovery or between runs, the upstream (Foundation, an upstream artifact) changed, and Revalidation is needed before the Story continues |
+| Integrity Error | The state, History or artifacts contradict each other (section 12), or the Review Binding Guard is not satisfied (`stage-map.yaml` RR-10) |
+| Integration Mismatch | The merge introduced into the target branch changes other than those approved by the human, or unapproved content together with them |
+| Post-Merge Validation Failed | The Target Base Identity changed before the merge, and the check of the actual integrated result did not pass (OD-16). Diagnostics — in `post-merge-validation-record` |
+| Foundation Rule Violation | A mandatory Foundation rule is violated that cannot be eliminated through Risk Acceptance (WF-V2-01). Resolution — a fix, a Foundation Change Request or an allowed exception |
+| Merge Protection Unavailable | The protection mechanism is supported but objectively unavailable (`merge_protection_statuses.UNAVAILABLE`, FR-02). The human in Recovery approves an acceptable integration order |
+| Merge Protection Disabled | The mechanism is available and mandatory under the Merge Protection Policy, but disabled (`merge_protection_statuses.DISABLED`, FR-02). `RESUME` only after protection is enabled or under a valid `foundation-exception-record` |
 
-Перелік причин — робочий. Остаточні назви визначає етап Artifact Contracts.
+The list of reasons is a working one. The final names are defined by the Artifact Contracts stage.
 
-### Дії Recovery
+### Recovery Actions
 
-| Дія | Наслідок |
+| Action | Consequence |
 |---|---|
-| `RESUME` | Story повертається в `ACTIVE` на тій самій стадії і починає нову спробу. Людина може водночас дозволити додаткові спроби понад Retry Budget і виконати RECONFIRM для `SUSPENDED` approvals (розділ 7) |
-| `ROUTE_BACK` | Story переходить на ціль із `recovery_route_back_targets` у `stage-map.yaml`. Рішення людини водночас є підтвердженням повернення через gates. Далі — Rework Protocol |
-| `CANCEL` | Story переходить у `CANCELLED` через Cancellation Protocol ([workflow-policies.md](workflow-policies.md#17-cancellation-protocol-od-13)) |
-| `KEEP_BLOCKED` | Story лишається `BLOCKED`. Рішення і причина фіксуються |
+| `RESUME` | The Story returns to `ACTIVE` at the same stage and starts a new attempt. The human may at the same time allow additional attempts beyond the Retry Budget and perform RECONFIRM for `SUSPENDED` approvals (section 7) |
+| `ROUTE_BACK` | The Story moves to a target from `recovery_route_back_targets` in `stage-map.yaml`. The human's decision is at the same time a confirmation of the return through gates. Then — the Rework Protocol |
+| `CANCEL` | The Story moves to `CANCELLED` through the Cancellation Protocol ([workflow-policies.md](workflow-policies.md#17-cancellation-protocol-od-13)) |
+| `KEEP_BLOCKED` | The Story remains `BLOCKED`. The decision and the reason are recorded |
 
-**Integration Mismatch і Post-Merge Validation Failed.** Агент не виконує автоматичного виправлення вже виконаного merge: ні merge, ні revert, ні force-push, ні нових commits у target branch. Людина обирає:
+**Integration Mismatch and Post-Merge Validation Failed.** The agent does not perform an automatic fix of an already performed merge: no merge, no revert, no force-push, no new commits in the target branch. The human chooses:
 
-| Дія | Коли |
+| Action | When |
 |---|---|
-| `RESUME` | Людина виправила target branch поза Story (сама або через іншу Story). INTEGRATION_CONFIRMATION повторює перевірки |
-| `KEEP_BLOCKED` | Корекція ще триває, наприклад через нову пов'язану BUG-Story |
-| `CANCEL` | `cancellation-record` фіксує, що зміни вже інтегровано і перевірку не пройдено |
+| `RESUME` | The human has fixed the target branch outside the Story (themselves or through another Story). INTEGRATION_CONFIRMATION repeats the checks |
+| `KEEP_BLOCKED` | The correction is still in progress, for example through a new related BUG Story |
+| `CANCEL` | `cancellation-record` records that the changes have already been integrated and the check has not passed |
 
-`ROUTE_BACK` можливий лише на HUMAN_MERGE (`recovery_route_back_targets`).
+`ROUTE_BACK` is possible only to HUMAN_MERGE (`recovery_route_back_targets`).
 
-Integration Match завжди оцінює результат merge, зафіксований останнім CONFIRM_MERGED, а не поточний стан target branch. Post-Merge Validation перевіряє поточний стан target branch. `RESUME` повторює перевірки для того самого merge. Повторний merge після корекції проходить через `ROUTE_BACK` → HUMAN_MERGE → новий CONFIRM_MERGED.
+Integration Match always evaluates the merge result recorded by the last CONFIRM_MERGED, not the current state of the target branch. Post-Merge Validation checks the current state of the target branch. `RESUME` repeats the checks for the same merge. A repeated merge after a correction goes through `ROUTE_BACK` → HUMAN_MERGE → a new CONFIRM_MERGED.
 
-**Завершення Story після зовнішнього виправлення (OD-17).** Зовнішнє виправлення саме по собі Story не завершує.
+**Completing the Story after an external fix (OD-17).** An external fix by itself does not complete the Story.
 
-- **Post-Merge Validation Failed.** Story може перейти в DONE лише тоді, коли одночасно:
-  1. первісний Integration Match = `PASS`;
-  2. причину невдачі виправила інша Story або людина;
-  3. людина дозволила `RESUME` через Recovery Protocol;
-  4. повторна Post-Merge Validation на поточному стані target branch = `PASS`;
-  5. виконано всі інші умови Definition of Done.
-- **Integration Mismatch.** Успішне виконання іншої Story не виправдовує первісної інтеграції. DONE можливий лише за доказу, що погоджена Changeset Content Identity цієї Story інтегрована належно, і за виконання всіх умов DoD. Таким доказом є новий merge саме погоджених змін після корекції людиною: `ROUTE_BACK` → HUMAN_MERGE → новий CONFIRM_MERGED → Integration Match `PASS`. `RESUME` для первісного невідповідного merge дає лише повторне `BLOCKED`. Якщо цього не можна підтвердити, Story лишається `BLOCKED` або завершується `CANCELLED` за рішенням людини.
+- **Post-Merge Validation Failed.** The Story can move to DONE only when, simultaneously:
+  1. the original Integration Match = `PASS`;
+  2. the cause of the failure was fixed by another Story or a human;
+  3. the human allowed `RESUME` through the Recovery Protocol;
+  4. the repeated Post-Merge Validation on the current state of the target branch = `PASS`;
+  5. all other conditions of the Definition of Done are met.
+- **Integration Mismatch.** A successful execution of another Story does not justify the original integration. DONE is possible only with proof that the approved Changeset Content Identity of this Story has been integrated properly, and with all DoD conditions met. Such proof is a new merge of exactly the approved changes after a correction by a human: `ROUTE_BACK` → HUMAN_MERGE → a new CONFIRM_MERGED → Integration Match `PASS`. `RESUME` for the original non-matching merge gives only a repeated `BLOCKED`. If this cannot be confirmed, the Story remains `BLOCKED` or ends as `CANCELLED` by a human's decision.
 
-Ці правила задає також `post_merge_validation.resume_rules` у `stage-map.yaml`.
+These rules are also set by `post_merge_validation.resume_rules` in `stage-map.yaml`.
 
-### Процедура
+### Procedure
 
-1. **Зафіксувати блокування:** причина, джерело (Stage Verdict / Orchestrator), докази, що потрібно для відновлення.
-2. **Отримати рішення людини** з переліку дій Recovery. Агент не ухвалює рішення Recovery сам.
-3. **Перевірити передумови:** для `RESUME` — причину блокування усунено або рішення ескалації зафіксоване в канонічному джерелі, Review Binding Guard виконується для поточної стадії, а approvals, на які спирається поточна стадія, мають стан `VALID` (після RECONFIRM, якщо потрібно); для `ROUTE_BACK` — ціль дозволена `recovery_route_back_targets`.
-4. **Змінити стан** згідно з дією.
-5. **Записати подію** Recovery в History: рішення, хто його ухвалив, обґрунтування.
+1. **Record the blocking:** the reason, the source (Stage Verdict / Orchestrator), evidence, what is needed for recovery.
+2. **Obtain the human's decision** from the list of Recovery actions. The agent does not make the Recovery decision itself.
+3. **Check the preconditions:** for `RESUME` — the cause of the blocking is eliminated or the escalation decision is recorded in the canonical source, the Review Binding Guard is satisfied for the current stage, and the approvals on which the current stage relies are in the `VALID` state (after RECONFIRM, if needed); for `ROUTE_BACK` — the target is allowed by `recovery_route_back_targets`.
+4. **Change the state** according to the action.
+5. **Record the Recovery event** in History: the decision, who made it, the justification.
 
-Якщо передумова не виконується, дія не застосовується, а Story лишається `BLOCKED`.
+If a precondition is not met, the action is not applied, and the Story remains `BLOCKED`.
 
 ## 10. Retry Policy
 
-Retry Budget не може бути нескінченним (Q15). Retry Policy конфігурована (OD-08). Погоджені початкові значення конфігурації задає `retry_policy` у `stage-map.yaml`: Technical Attempts — 3, Quality Loops — 3, Repeated Failure — 3. Це не незмінні глобальні константи: їх можна змінити лише зміною Workflow Definition, яку погоджує людина.
+The Retry Budget cannot be infinite (Q15). The Retry Policy is configurable (OD-08). The approved initial configuration values are set by `retry_policy` in `stage-map.yaml`: Technical Attempts — 3, Quality Loops — 3, Repeated Failure — 3. These are not immutable global constants: they can be changed only by a change of the Workflow Definition approved by a human.
 
-### Облік
+### Accounting
 
-| Лічильник | Що рахує | Ключ обліку |
+| Counter | What it counts | Accounting key |
 |---|---|---|
-| Technical Attempts | Послідовні спроби стадії, що завершилися `INTERRUPTED`, `FAILED` або `INVALID_RESULT` | Стадія |
-| Quality Loops | Повернення через `CHANGES_REQUIRED` від агентних стадій | Окремо: producer-стадія-ціль і стадія-ініціатор повернення. Ліміт діє для кожного ключа |
-| Repeated Failure | Кількість появ тієї самої **Finding Identity**. Ліміт 3 досягається на третій появі проблеми, тобто на другому повторенні після того, як її позначили виправленою | Finding Identity в межах усієї Story, незалежно від стадії, яка його виявила |
+| Technical Attempts | Consecutive attempts of a stage that ended with `INTERRUPTED`, `FAILED` or `INVALID_RESULT` | The stage |
+| Quality Loops | Returns through `CHANGES_REQUIRED` from agent stages | Separately: the target producer stage and the initiator stage of the return. The limit applies to each key |
+| Repeated Failure | The number of occurrences of the same **Finding Identity**. The limit of 3 is reached at the third occurrence of the problem, that is, at the second repetition after it was marked as fixed | The Finding Identity within the whole Story, regardless of the stage that detected it |
 
-**Finding Identity** — логічна ідентичність проблеми: що порушено (Acceptance Criterion, правило, вимога дизайну) і де. Формат визначає етап Artifact Contracts. Та сама проблема, виявлена іншою стадією або після повернення на іншу стадію, має ту саму Finding Identity. Однакова технічна помилка (той самий тип збою тієї самої стадії) обліковується так само.
+**Finding Identity** is the logical identity of a problem: what is violated (an Acceptance Criterion, a rule, a design requirement) and where. The format is defined by the Artifact Contracts stage. The same problem detected by another stage or after a return to another stage has the same Finding Identity. An identical technical error (the same type of failure of the same stage) is accounted for in the same way.
 
-Облік за двома ключами Quality Loops не дає обійти ліміт: review-стадія, що повертає Story на різні producer-стадії, вичерпує ліміт стадії-ініціатора, а producer-стадія, на яку повертають різні review, — ліміт цілі.
+Accounting by two Quality Loops keys makes it impossible to bypass the limit: a review stage that returns the Story to different producer stages exhausts the initiator stage's limit, and a producer stage to which different reviews return the Story exhausts the target's limit.
 
-### Скидання
+### Reset
 
-- Technical Attempts скидається, коли стадія повертає прийнятий результат (`COMPLETED`).
-- Quality Loops для producer-стадій, артефакти яких входять до Approval Scope gate, і для review-стадій перед цим gate скидаються лише повним рішенням людини APPROVE на цьому gate.
-- Repeated Failure не скидається в межах Story.
-- RECONFIRM, `RESUME`, `ROUTE_BACK`, REQUEST_CHANGES і нова сесія лічильників не скидають.
+- Technical Attempts is reset when the stage returns an accepted result (`COMPLETED`).
+- Quality Loops for producer stages whose artifacts are part of a gate's Approval Scope, and for review stages before this gate, are reset only by the human's full APPROVE decision at this gate.
+- Repeated Failure is not reset within a Story.
+- RECONFIRM, `RESUME`, `ROUTE_BACK`, REQUEST_CHANGES and a new session do not reset counters.
 
-### Вичерпання і розширення
+### Exhaustion and Extension
 
-- Після вичерпання будь-якого ліміту Story переходить у `BLOCKED` з причиною Retry Budget Exhausted. Повторення Finding Identity до ліміту Repeated Failure веде до ранньої ескалації, не чекаючи вичерпання Quality Loops.
-- Агент не збільшує бюджет. Розширення можливе лише рішенням людини через Recovery: `RESUME` з указаною кількістю додаткових спроб для конкретного лічильника або `ROUTE_BACK` на інший маршрут. Розширення фіксується в History.
-- Очікування рішення людини не витрачає Retry Budget.
-- Рішення людини REQUEST_CHANGES на gate не зараховується до агентних лічильників. Наступні повернення від агентних стадій зараховуються як звичайно.
-- Зміна значень за замовчуванням — це зміна Workflow Definition, яку погоджує людина.
-- Історія спроб, лічильників і розширень бюджету не видаляється. Скидання лічильника — це подія в History, а не видалення попередніх записів.
+- After any limit is exhausted, the Story moves to `BLOCKED` with the reason Retry Budget Exhausted. Repetition of a Finding Identity up to the Repeated Failure limit leads to an early escalation, without waiting for Quality Loops to be exhausted.
+- The agent does not increase the budget. An extension is possible only by a human's decision through Recovery: `RESUME` with a specified number of additional attempts for a specific counter or `ROUTE_BACK` to another route. The extension is recorded in History.
+- Waiting for a human's decision does not consume the Retry Budget.
+- The human's REQUEST_CHANGES decision at a gate does not count toward the agent counters. Subsequent returns from agent stages count as usual.
+- A change of the default values is a change of the Workflow Definition approved by a human.
+- The history of attempts, counters and budget extensions is not deleted. A counter reset is an event in History, not a deletion of previous records.
 
 ## 11. Event History
 
-History — append-only журнал подій Story (Q9). Подію не змінюють і не видаляють.
+History is an append-only log of Story events (Q9). An event is not changed or deleted.
 
-Події фіксуються для:
+Events are recorded for:
 
-- створення Story і зміни Execution Mode;
-- початку, завершення, переривання, збою та відхилення результату спроби стадії;
-- застосованих і відхилених переходів та Loopbacks;
-- запитів і рішень Human Gates (APPROVE, RECONFIRM, REQUEST_CHANGES, CANCEL), human actions і підтверджень Loopback через gate;
-- кожного входу в Rework Protocol: механізм, джерело, ціль, причина (розділ 14);
-- створення версій контрольованих артефактів, зміни Currency, `revalidation-record`, змін Approval State;
-- `applicability-decision` і їхньої повторної оцінки;
-- спрацювання Review Binding Guard і змін метаданих PR;
-- блокувань, рішень Recovery, вичерпання і розширення Retry Budget;
-- Foundation Change Request і його вирішення;
-- перевірки перед merge (зокрема Merge Protection Status), підтвердження merge людиною та результату INTEGRATION_CONFIRMATION, зокрема `post-merge-validation-record`;
-- `risk-acceptance-record` і `foundation-exception-record`;
-- створення `backlog-entry` для FOLLOW_UP;
-- відновлення сесії та виявлених порушень цілісності;
-- завершення (`DONE`) і скасування (`CANCELLED`) Story, зокрема `cancellation-record`.
+- Story creation and Execution Mode changes;
+- the start, completion, interruption, failure and result rejection of a stage attempt;
+- applied and rejected transitions and Loopbacks;
+- Human Gate requests and decisions (APPROVE, RECONFIRM, REQUEST_CHANGES, CANCEL), human actions and confirmations of a Loopback through a gate;
+- each entry into the Rework Protocol: mechanism, source, target, reason (section 14);
+- the creation of versions of controlled artifacts, Currency changes, `revalidation-record`, Approval State changes;
+- `applicability-decision` records and their re-evaluation;
+- the Review Binding Guard firing and PR metadata changes;
+- blockings, Recovery decisions, Retry Budget exhaustion and extension;
+- a Foundation Change Request and its resolution;
+- the check before merge (in particular the Merge Protection Status), the confirmation of the merge by a human and the result of INTEGRATION_CONFIRMATION, in particular `post-merge-validation-record`;
+- `risk-acceptance-record` and `foundation-exception-record`;
+- the creation of a `backlog-entry` for FOLLOW_UP;
+- session recovery and detected integrity violations;
+- the completion (`DONE`) and cancellation (`CANCELLED`) of the Story, in particular `cancellation-record`.
 
-Кожна подія Gate Decision і Recovery фіксує, хто ухвалив рішення і щодо яких Approved Content Identity. Склад полів подій визначає етап Artifact Contracts.
+Each Gate Decision and Recovery event records who made the decision and regarding which Approved Content Identity. The set of event fields is defined by the Artifact Contracts stage.
 
 ## 12. Session Recovery
 
-Стан процесу не залежить від сесії Claude Code (Q9). Нова сесія відновлює роботу лише з Workflow State, History і канонічних артефактів.
+The process state does not depend on the Claude Code session (Q9). A new session resumes work only from the Workflow State, History and canonical artifacts.
 
-Під час відновлення Orchestrator:
+During recovery, the Orchestrator:
 
-1. **Завантажує стан** обраної Story.
-2. **Перевіряє цілісність:** стан узгоджений з останніми подіями History; артефакти, на які посилається стан, існують і мають записані версії; feature branch відповідає Git Binding. Розбіжність не виправляється автоматично: Story переходить у `BLOCKED` з причиною Integrity Error.
-3. **Обробляє незавершену спробу:** якщо Execution State — `RUNNING`, але результату немає, спроба отримує `INTERRUPTED`. Це не verdict `BLOCKED`. Часткові результати перерваної спроби не вважаються завершеними виходами. Нова спроба може використати їх лише після перевірки.
-4. **Перевіряє Staleness і зміни поза Workflow:** чи змінилися з останнього запуску Foundation, upstream-артефакти, вміст артефактів, Changeset Content Identity чи Target Base Identity. Виявлені зміни обробляє Rework Protocol (розділ 14).
-5. **Продовжує роботу** згідно з Execution Mode: нова спроба стадії в межах Technical Attempts або очікування рішення людини.
+1. **Loads the state** of the selected Story.
+2. **Checks integrity:** the state is consistent with the latest History events; the artifacts referenced by the state exist and have recorded versions; the feature branch corresponds to the Git Binding. A discrepancy is not fixed automatically: the Story moves to `BLOCKED` with the reason Integrity Error.
+3. **Handles an incomplete attempt:** if the Execution State is `RUNNING`, but there is no result, the attempt receives `INTERRUPTED`. This is not the `BLOCKED` verdict. Partial results of an interrupted attempt are not considered completed outputs. A new attempt may use them only after a check.
+4. **Checks Staleness and changes outside the Workflow:** whether the Foundation, upstream artifacts, the content of artifacts, the Changeset Content Identity or the Target Base Identity have changed since the last run. Detected changes are handled by the Rework Protocol (section 14).
+5. **Continues work** according to the Execution Mode: a new attempt of the stage within Technical Attempts or waiting for a human's decision.
 
-## 13. Що визначають наступні етапи
+## 13. What the Next Stages Define
 
-| Тема | Етап |
+| Topic | Stage |
 |---|---|
-| Схеми файлу стану і файлу History, шляхи, ідентифікатори подій | Artifact Contracts |
-| Спосіб версіонування артефактів і запису залежностей | Artifact Contracts |
-| Механізм Approved Content Identity, Changeset Content Identity, Target Base Identity | Artifact Contracts |
-| Формат Finding Identity, Applicability Basis, `revalidation-record`, `applicability-decision`, `post-merge-validation-record`, `risk-acceptance-record`, `foundation-exception-record`, `cancellation-record` | Artifact Contracts |
-| Виявлення змін Applicability Basis, Merge Protection Status | Story Orchestrator, Stage Skills |
-| Перелік залежностей для кожного типу артефакта | Artifact Contracts |
-| Порядок запису стану і History та виявлення розбіжностей | Story Orchestrator |
-| Блокування одночасної роботи кількох сесій з однією Story | Story Orchestrator |
-| Обчислення Currency, Approval State і Review Binding Guard | Story Orchestrator |
-| Тести переходів, gates, Recovery, Retry, Staleness, Session Recovery, Review Binding Guard | Harness Validation |
+| Schemas of the state file and the History file, paths, event identifiers | Artifact Contracts |
+| The way artifacts are versioned and dependencies are recorded | Artifact Contracts |
+| The mechanism of Approved Content Identity, Changeset Content Identity, Target Base Identity | Artifact Contracts |
+| The format of Finding Identity, Applicability Basis, `revalidation-record`, `applicability-decision`, `post-merge-validation-record`, `risk-acceptance-record`, `foundation-exception-record`, `cancellation-record` | Artifact Contracts |
+| Detection of changes of the Applicability Basis, Merge Protection Status | Story Orchestrator, Stage Skills |
+| The list of dependencies for each artifact type | Artifact Contracts |
+| The order of writing the state and History and the detection of discrepancies | Story Orchestrator |
+| Locking of concurrent work of several sessions with one Story | Story Orchestrator |
+| Computation of Currency, Approval State and the Review Binding Guard | Story Orchestrator |
+| Tests of transitions, gates, Recovery, Retry, Staleness, Session Recovery, Review Binding Guard | Harness Validation |
 
 ## 14. Rework Protocol
 
-Rework Protocol — єдина процедура для будь-якого повернення Story на попередню стадію або повторної перевірки після змін (WF-04, `stage-map.yaml` RR-11). Окремі механізми не мають власних правил інвалідації.
+The Rework Protocol is the single procedure for any return of the Story to a previous stage or a repeated check after changes (WF-04, `stage-map.yaml` RR-11). Individual mechanisms do not have their own invalidation rules.
 
-### Процедура
+### Procedure
 
-1. **Перевірити маршрут** для механізму: ціль дозволена `stage-map.yaml` (loopbacks, decisions gate, `recovery_route_back_targets`), а `condition` маршруту виконується.
-2. **Отримати рішення людини**, якщо повернення перетинає Human Gate або механізм за визначенням є рішенням людини.
-3. **Записати подію** входу в Rework Protocol: механізм, джерело, ціль, причина, хто ухвалив рішення.
-4. **Перейти на ціль.** Стадія-ціль виконує роботу. Якщо вона створює нову версію артефакта, попередня стає `SUPERSEDED`.
-5. **Оновити Currency** залежних версій: ті, що посилаються на попередню версію upstream і не мають `revalidation-record` для нової, стають `STALE` (розділ 8).
-6. **Оновити Approval State:** approvals, у Scope яких входить `SUPERSEDED` версія або замінений supporting-запис, стають `INVALIDATED`; approvals, для яких upstream змінився від Approval Basis, стають `SUSPENDED` (розділ 7).
-7. **Пройти наступні стадії** за порядком. Кожна стадія виконує Revalidation (розділ 8). Review-стадії перевіряють нові версії й нові `revalidation-record`. Optional Stages заново оцінюють застосовність, якщо змінився будь-який релевантний факт Applicability Basis (розділ 6), зокрема через саме це повернення, рішення людини чи зміну Retry Counters. Review Binding Guard діє для стадій після CODE_REVIEW.
-8. **На кожному Human Gate** людина ухвалює APPROVE (якщо approval `INVALIDATED`) або може ухвалити RECONFIRM (якщо виконуються умови розділу 7). Auto Mode зупиняється.
+1. **Check the route** for the mechanism: the target is allowed by `stage-map.yaml` (loopbacks, gate decisions, `recovery_route_back_targets`), and the route's `condition` is met.
+2. **Obtain the human's decision** if the return crosses a Human Gate or the mechanism is by definition a human's decision.
+3. **Record the event** of entry into the Rework Protocol: mechanism, source, target, reason, who made the decision.
+4. **Move to the target.** The target stage performs the work. If it creates a new version of an artifact, the previous one becomes `SUPERSEDED`.
+5. **Update the Currency** of dependent versions: those that reference the previous version of the upstream and do not have a `revalidation-record` for the new one become `STALE` (section 8).
+6. **Update the Approval State:** approvals whose Scope includes a `SUPERSEDED` version or a replaced supporting record become `INVALIDATED`; approvals for which the upstream has changed since the Approval Basis become `SUSPENDED` (section 7).
+7. **Go through the subsequent stages** in order. Each stage performs Revalidation (section 8). Review stages check new versions and new `revalidation-record` items. Optional Stages re-evaluate applicability if any relevant fact of the Applicability Basis has changed (section 6), in particular through this very return, a human's decision or a change of Retry Counters. The Review Binding Guard applies to stages after CODE_REVIEW.
+8. **At each Human Gate**, the human makes APPROVE (if the approval is `INVALIDATED`) or may make RECONFIRM (if the conditions of section 7 are met). Auto Mode stops.
 
-### Застосування до механізмів
+### Application to Mechanisms
 
-| Механізм | Кроки 1–2 (маршрут і рішення людини) | Кроки 3–8 |
+| Mechanism | Steps 1–2 (route and human decision) | Steps 3–8 |
 |---|---|---|
-| Stage Loopback (`CHANGES_REQUIRED`) | Ціль із `loopbacks`. Людина — якщо є `crosses_gates` | Однаково |
-| REQUEST_CHANGES на Human Gate | Ціль із decisions gate. Рішення людини | Однаково |
-| REQUEST_CHANGES на HUMAN_MERGE | Ціль із decisions HUMAN_MERGE. Рішення людини | Однаково |
-| `loopback_confirmation` ROUTE_BACK | Ціль із `loopbacks`. Рішення людини | Однаково |
-| Recovery ROUTE_BACK | Ціль із `recovery_route_back_targets`. Рішення людини | Однаково |
-| Recovery RESUME | Ціль — поточна стадія. Рішення людини. Передумови розділу 9 | Кроки 5–6 для змін, що сталися під час блокування. Для approvals попередніх gates — Out-of-Stage Revalidation і RECONFIRM у межах рішення Recovery (розділи 7, 8) |
-| Відновлення після Foundation Change Request | `RESUME` або `ROUTE_BACK` за результатом Change Impact Assessment. Рішення людини | Однаково. Foundation — upstream для всіх артефактів. Для `RESUME` — Out-of-Stage Revalidation і RECONFIRM |
-| Staleness, виявлена під час Session Recovery | Orchestrator фіксує зміну. Story переходить у `BLOCKED` (Upstream Changed), далі — Recovery | Кроки 5–6 одразу, далі — однаково |
-| Зміна артефакта поза Workflow | Виявляється як нова версія або нова Changeset Content Identity. Story переходить у `BLOCKED` (Integrity Error). Рішення людини через Recovery | Однаково. Нова Changeset Content Identity потребує ROUTE_BACK на IMPLEMENTATION або раніше (RR-10) |
+| Stage Loopback (`CHANGES_REQUIRED`) | Target from `loopbacks`. A human — if there are `crosses_gates` | The same |
+| REQUEST_CHANGES at a Human Gate | Target from the gate's decisions. The human's decision | The same |
+| REQUEST_CHANGES at HUMAN_MERGE | Target from the HUMAN_MERGE decisions. The human's decision | The same |
+| `loopback_confirmation` ROUTE_BACK | Target from `loopbacks`. The human's decision | The same |
+| Recovery ROUTE_BACK | Target from `recovery_route_back_targets`. The human's decision | The same |
+| Recovery RESUME | Target — the current stage. The human's decision. The preconditions of section 9 | Steps 5–6 for changes that occurred during the blocking. For approvals of previous gates — Out-of-Stage Revalidation and RECONFIRM within the Recovery decision (sections 7, 8) |
+| Recovery after a Foundation Change Request | `RESUME` or `ROUTE_BACK` according to the result of the Change Impact Assessment. The human's decision | The same. The Foundation is upstream for all artifacts. For `RESUME` — Out-of-Stage Revalidation and RECONFIRM |
+| Staleness detected during Session Recovery | The Orchestrator records the change. The Story moves to `BLOCKED` (Upstream Changed), then — Recovery | Steps 5–6 immediately, then — the same |
+| A change of an artifact outside the Workflow | Detected as a new version or a new Changeset Content Identity. The Story moves to `BLOCKED` (Integrity Error). The human's decision through Recovery | The same. A new Changeset Content Identity requires a ROUTE_BACK to IMPLEMENTATION or earlier (RR-10) |
