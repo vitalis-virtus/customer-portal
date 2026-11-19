@@ -203,7 +203,7 @@ Logout and revocation after a password change are not defined (P1, P2, [section 
 - **Login after Unblock** adds a new `sid` to the index next to the stale records. The next blocking will find and delete the new session.
 - **Unblock** has no Redis action ([Architecture §7](architecture.md#access-state-operations)) and does not clean the index.
 
-**Trade-off — accumulation of stale records.** Cleanup is best-effort and is not a scheduled background task, so the index size is **not guaranteed to be bounded**. Stale records accumulate if cleanup fails or is not run. For example, the index of a user who no longer logs in remains forever, because the key has no TTL. The cost is Redis memory and a longer blocking (more `DEL` of non-existent keys). For the MVP, this is accepted deliberately: the correctness of BR-007 is more important than the compactness of the index. If accumulation becomes a problem, a limiting mechanism requires a separate decision.
+**Trade-off — accumulation of stale records.** Cleanup is best-effort and is not a scheduled background task, so the index size is **not guaranteed to be bounded**. Stale records accumulate if cleanup fails or is not run. For example, the index of a user who no longer logs in remains forever, because the key has no TTL. The cost is increased Redis memory usage and higher latency for the Block User operation (more DEL commands for non-existent keys). For the MVP, this is accepted deliberately: the correctness of BR-007 is more important than the compactness of the index. If accumulation becomes a problem, a limiting mechanism requires a separate decision.
 
 ### Redis Requirement
 
