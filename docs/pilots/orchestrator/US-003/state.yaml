@@ -1,0 +1,58 @@
+# PILOT — поза зареєстрованим Workflow. Не зареєстрована і не погоджена Story.
+story_id: US-003
+story_type: FEATURE
+story_status: ACTIVE
+current_stage: IMPACT_ANALYSIS
+execution_state: READY
+last_stage_verdict: PASS
+execution_mode: STEP                # Auto Mode не підтримується
+updated_at: 2026-11-19T17:29:12Z
+
+artifacts:
+  clarification-record:
+    version: 1
+    status: APPROVED
+    currency: CURRENT
+  story-spec:
+    version: 2
+    status: APPROVED
+    currency: CURRENT
+
+records:
+  review-report:
+    SPEC_REVIEW: review-report/0002
+  applicability-decision: {}
+  revalidation-record: []
+
+approvals:
+  HUMAN_SPEC_APPROVAL:
+    decision: APPROVE
+    decided_by: "owner"
+    decided_at: 2026-11-19T17:29:12Z
+    scope:                                   # усі елементи approval_scope gate, точні версії
+      - { type: clarification-record, version: 1 }
+      - { type: story-spec, version: 2 }
+    package: [review-report/0002]            # review-report SPEC_REVIEW: переглянуто, не входить до Scope
+    comment: null
+    approval_state: VALID
+    previous: []
+
+pending_human_decision: null
+
+blocker: null
+
+retry:
+  technical_attempts: {}
+  quality_loops:
+    target: {}
+    initiator: {}
+  repeated_failure:
+    F-001: 1
+  extensions: []
+
+git:                                # пілот не має feature branch; іменування гілок не визначене
+  feature_branch: null
+  target_branch: null
+  changeset_commit: null
+  verified_target_base: null
+  merge_protection_status: null
