@@ -1,12 +1,12 @@
 ---
 name: story-orchestrator
-description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increment 8.3.2). Ініціалізує пілотну Story поза зареєстрованим Workflow, показує її статус з перевіркою State і History, виконує одну стадію за запуск (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW і IMPACT_ANALYSIS у subagent) у Step Mode до SOLUTION_DESIGN, застосовує рішення людини на HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL) і на підтвердженні Loopback від IMPACT_ANALYSIS (RESUME, CANCEL). Запускається лише вручну з mode=pilot.
+description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4). Ініціалізує пілотну Story поза зареєстрованим Workflow, показує її статус з перевіркою State і History, виконує одну стадію за запуск (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS і SOLUTION_DESIGN у subagent) у Step Mode до API_DESIGN, підтримує повторний вхід в IMPACT_ANALYSIS після Loopback від SOLUTION_DESIGN, застосовує рішення людини на HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL) і на підтвердженні Loopback від IMPACT_ANALYSIS та SOLUTION_DESIGN (RESUME, CANCEL). Запускається лише вручну з mode=pilot.
 argument-hint: "init|status|next story=<ID> mode=pilot | decide story=<ID> mode=pilot decision=APPROVE|REQUEST_CHANGES|CANCEL|RESUME|ROUTE_BACK by=<id> [target=<stage>] [reason=\"...\"] [comment=\"...\"]"
 disable-model-invocation: true
 user-invocable: true
 ---
 
-# Story Orchestrator — MVP (increments 6.4.1–6.4.3, 7.4.1–7.4.2, 8.3.2)
+# Story Orchestrator — MVP (increments 6.4.1–6.4.3, 7.4.1–7.4.2, 8.3.2, 8.4)
 
 ## 1. Purpose
 
@@ -16,14 +16,18 @@ Skill працює в основній сесії.
 
 **Межі.** Команди: `init`, `status`, `next`, `decide`.
 
-- `next` виконує одну стадію за запуск (Step Mode): CLARIFICATION, SPECIFICATION, SPEC_REVIEW або IMPACT_ANALYSIS.
+- `next` виконує одну стадію за запуск (Step Mode): CLARIFICATION, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS або SOLUTION_DESIGN.
 - Після `PASS` SPEC_REVIEW Story зупиняється на HUMAN_SPEC_APPROVAL і чекає на рішення людини.
-- Після `PASS` або `NOT_APPLICABLE` IMPACT_ANALYSIS Story переходить на SOLUTION_DESIGN. Цю стадію `next` ще не виконує.
+- Після `PASS` або `NOT_APPLICABLE` IMPACT_ANALYSIS Story переходить на SOLUTION_DESIGN.
+- Після `PASS` SOLUTION_DESIGN Story переходить на API_DESIGN. Цю стадію `next` ще не виконує.
 - `decide` застосовує рішення людини:
   - `APPROVE`, `REQUEST_CHANGES` або `CANCEL` на HUMAN_SPEC_APPROVAL (розділ 8);
-  - `RESUME` або `CANCEL` на підтвердженні Loopback (`LOOPBACK_CONFIRMATION`), коли IMPACT_ANALYSIS повернула `CHANGES_REQUIRED` (розділ 8.7). `ROUTE_BACK` відхиляється без змін (розділ 8.7.2).
-- Повторний вхід після повернення (loopback від SPEC_REVIEW або REQUEST_CHANGES на gate) підтримується лише для SPECIFICATION (розділ 7.3.1). `REQUEST_CHANGES` з `target=CLARIFICATION` відхиляється без змін (розділ 8.4.1).
-- Не реалізовано: виконання інших стадій, повторний вхід у CLARIFICATION чи IMPACT_ANALYSIS з новою версією, інші Human Gates, RECONFIRM, Loopback через gate (`ROUTE_BACK`), Recovery і Auto Mode. Якщо людина просить щось інше — поясни, що цього ще немає, і зупинись.
+  - `RESUME` або `CANCEL` на підтвердженні Loopback (`LOOPBACK_CONFIRMATION`), коли IMPACT_ANALYSIS чи SOLUTION_DESIGN повернула `CHANGES_REQUIRED` з ціллю через gate (розділ 8.7). `ROUTE_BACK` відхиляється без змін (розділ 8.7.2).
+- Повторний вхід після повернення підтримується:
+  - для SPECIFICATION — після loopback від SPEC_REVIEW або REQUEST_CHANGES на gate (розділ 7.3.1);
+  - для IMPACT_ANALYSIS — після loopback від SOLUTION_DESIGN (розділ 7.3.2).
+- `REQUEST_CHANGES` з `target=CLARIFICATION` відхиляється без змін (розділ 8.4.1).
+- Не реалізовано: виконання інших стадій, повторний вхід у CLARIFICATION і SOLUTION_DESIGN з новою версією, інші Human Gates, RECONFIRM, Loopback через gate (`ROUTE_BACK`), Recovery і Auto Mode. Якщо людина просить щось інше — поясни, що цього ще немає, і зупинись.
 
 ## 2. Inputs
 
@@ -138,7 +142,7 @@ git:                                # пілот не має feature branch; і�
 4. **Покажи:**
    - Story ID і позначку «PILOT — не зареєстрована в офіційному Workflow і офіційно не погоджена. Рішення Human Gates у пілоті симульовані»;
    - `story_status`, `current_stage`, `execution_state`, `last_stage_verdict`, `execution_mode`, `story_type`, `updated_at`. Для `CANCELLED` — «скасовано в пілоті» і `records.cancellation-record`;
-   - поточні версії артефактів зі `status` і `currency`, чинні записи з `records`, зокрема `applicability-decision` за стадіями з їхнім `result`. Біля `APPROVED` — «у пілоті»;
+   - поточні версії артефактів зі `status` і `currency`, чинні записи з `records`, зокрема `applicability-decision` за стадіями з їхнім `result`. Біля `APPROVED` — «у пілоті». Якщо чинне рішення IMPACT_ANALYSIS — `NOT_APPLICABLE`, а `impact-analysis` зареєстровано, познач його «історична версія, не є входом» (розділ 7.1);
    - `approvals` під заголовком «Рішення пілоту (симульований Human Gate), не офіційне погодження Workflow»: для кожного gate — `decision`, `decided_by`, `decided_at`, `scope`, `approval_state`;
    - `pending_human_decision`, `blocker`, ненульові `retry.technical_attempts` і `retry.quality_loops`. Для `kind: LOOPBACK_CONFIRMATION` — також запропоновану ціль (`loopback_target` останньої події `stage.completed`), `crosses_gates` і доступні в MVP рішення (`RESUME`, `CANCEL`; розділ 8.7);
    - кількість подій History і останню подію (`ts`, `event`, `stage`);
@@ -204,32 +208,57 @@ git:                                # пілот не має feature branch; і�
 | `SPECIFICATION` | `.claude/skills/specification/SKILL.md` | окремий subagent `general-purpose` | `story-spec` | `clarification-record` |
 | `SPEC_REVIEW` | `.claude/skills/spec-review/SKILL.md` | окремий subagent `general-purpose` | запис `review-report` | `story-spec`, `clarification-record` |
 | `IMPACT_ANALYSIS` | `.claude/skills/impact-analysis/SKILL.md` | окремий subagent `general-purpose` | запис `applicability-decision` (завжди, коли оцінку завершено) і `impact-analysis` (лише `PASS`) | `story-spec` |
+| `SOLUTION_DESIGN` | `.claude/skills/solution-design/SKILL.md` | окремий subagent `general-purpose` | `solution-design` | `story-spec`; `impact-analysis` — лише якщо IMPACT_ANALYSIS застосовна (розділ 7.2, крок 7) |
 
-Вихід і власник — з `artifact-registry.yaml` (`produced_by`), входи — з `stage-io-map.yaml`. SPEC_REVIEW перевіряє обидва входи (`stage-map.yaml` → `reviews: [CLARIFICATION, SPECIFICATION]`). `codebase` і `architecture-foundation` для IMPACT_ANALYSIS — джерела, а не зареєстровані артефакти: їх читає сам Stage Skill (`impact-analysis/SKILL.md` §2). Дозволені verdicts і маршрути — лише зі `stage-map.yaml` (розділ 7.6).
+Вихід і власник — з `artifact-registry.yaml` (`produced_by`), входи — з `stage-io-map.yaml`. SPEC_REVIEW перевіряє обидва входи (`stage-map.yaml` → `reviews: [CLARIFICATION, SPECIFICATION]`). `codebase`, `architecture-foundation` і `product-foundation` для IMPACT_ANALYSIS і SOLUTION_DESIGN — джерела, а не зареєстровані артефакти: їх читає сам Stage Skill (`impact-analysis/SKILL.md` §2, `solution-design/SKILL.md` §2). Дозволені verdicts і маршрути — лише зі `stage-map.yaml` (розділ 7.6).
+
+**Умовний вхід `impact-analysis`.** Умову `when: applicable` (`stage-io-map.yaml`) визначає чинний `applicability-decision` стадії, тобто `records.applicability-decision.IMPACT_ANALYSIS.ENTRY` з `result: APPLICABLE`, а не наявність артефакта. Якщо чинне рішення — `NOT_APPLICABLE`, зареєстрована раніше версія `impact-analysis` лишається в `artifacts` як історична, але входом жодної стадії не є, і Orchestrator її не передає (розділ 7.2, крок 7).
 
 ### 7.2. Перевірка перед запуском
 
 1. **Перевір аргументи** і узгодженість (розділ 6). Розбіжність — зупинись, як у `status`.
-2. **`story_status` має бути `ACTIVE`.** Інакше — покажи стан і зупинись. Для `pending_human_decision.kind: GATE` на HUMAN_SPEC_APPROVAL і для `kind: LOOPBACK_CONFIRMATION` на IMPACT_ANALYSIS скажи, що рішення людина ухвалює командою `decide` (розділи 8, 8.7). Для `CANCELLED` — Story скасована в пілоті, стан термінальний і повторно не відкривається. Інші рішення людини і Recovery ще не реалізовано.
+2. **`story_status` має бути `ACTIVE`.** Інакше — покажи стан і зупинись. Для `pending_human_decision.kind: GATE` на HUMAN_SPEC_APPROVAL і для `kind: LOOPBACK_CONFIRMATION` на IMPACT_ANALYSIS чи SOLUTION_DESIGN скажи, що рішення людина ухвалює командою `decide` (розділи 8, 8.7). Для `CANCELLED` — Story скасована в пілоті, стан термінальний і повторно не відкривається. Інші рішення людини і Recovery ще не реалізовано.
    Окремий випадок — `WAITING_FOR_HUMAN` з `pending_human_decision.kind: CLARIFICATION_ANSWERS`: новий запуск `next` означає, що інтерв'ю цієї спроби перервалося разом із сесією. **Обмеження MVP:** продовження інтерв'ю в новій сесії не підтримується, а контракт не визначає переходу з `AWAITING_HUMAN` у `INTERRUPTED` під час відновлення сесії (`workflow-state-model.md` §12 описує лише `RUNNING`). Нічого не змінюй: поясни це людині і зупинись.
 3. **`current_stage` має бути в таблиці 7.1.** Інша стадія — «ще не підтримується», зупинись.
 4. **`execution_state`:**
    - `READY`, `INTERRUPTED`, `FAILED`, `INVALID_RESULT` — можна починати нову спробу;
    - `RUNNING` — попередню спробу перервано без результату (`workflow-state-model.md` §12, крок 3). Запиши невдачу `INTERRUPTED` (розділ 7.7) і зупинись. Нову спробу людина запускає наступним `next`;
    - інше — зупинись і поясни.
-5. **Входи-артефакти** (`stage-io-map.yaml`, правило R1). Для кожного входу з таблиці 7.1:
+5. **Входи-артефакти** (`stage-io-map.yaml`, правило R1). Для кожного входу з таблиці 7.1 (умовний `impact-analysis` — лише якщо його передають за кроком 7):
    - тип зареєстровано в `state.yaml` → `artifacts`, `currency: CURRENT`, файл поточної версії існує;
    - кожен upstream-артефакт з його `inputs` (`type`, `version`, тип відмінний від типу самого входу) — поточна версія цього типу в `artifacts` (`artifact-rules.md` §4);
    - посилання на попередню версію того самого типу — це lineage, а не upstream-залежність (`artifact-rules.md` §3): дозволене лише для `version > 1`, лише на `version - 1`, і файл цієї версії існує за шляхом пілоту. Бути поточною вона не мусить: вона `SUPERSEDED`;
    - кожне джерело з його `inputs` (`source`, `path`, `commit`) досі має той самий `git log -1 --format=%h -- <path>` (`artifact-rules.md` §4).
 
    Невиконано — нічого не змінюй, поясни людині і зупинись. **Обмеження MVP:** подію `staleness.detected` і перехід у `BLOCKED` (Upstream Changed) поточна версія Skill не записує.
-6. **Погодження входу (лише IMPACT_ANALYSIS).** Передумова стадії — погоджений `story-spec` (`stages.md`, IMPACT_ANALYSIS; `workflow-state-model.md` §6, крок 4):
+6. **Погодження і тригер входу (IMPACT_ANALYSIS і SOLUTION_DESIGN).** Передумова обох стадій — погоджений `story-spec` (`stages.md`, IMPACT_ANALYSIS і SOLUTION_DESIGN; `workflow-state-model.md` §6, крок 4):
    - `approvals.HUMAN_SPEC_APPROVAL` не `null`, `decision: APPROVE`, `approval_state: VALID`;
    - поточна версія `story-spec` в `artifacts` має `status: APPROVED` і збігається з версією `story-spec` у `approvals.HUMAN_SPEC_APPROVAL.scope`;
-   - `artifacts.impact-analysis` відсутній. Якщо він є, потрібен повторний вхід з новою версією, а цього MVP не підтримує (`impact-analysis/SKILL.md` §3, крок 1).
+   - **тригер входу** — остання подія History з `details.to_stage`, як у розділі 7.3.1. Її `to_stage` має дорівнювати `current_stage`. Дозволені тригери:
+
+     | Стадія | Тригер |
+     |---|---|
+     | IMPACT_ANALYSIS | `human_decision.applied` HUMAN_SPEC_APPROVAL з `decision: APPROVE` (перший вхід); `stage.completed` SOLUTION_DESIGN з `verdict: CHANGES_REQUIRED` і `loopback_target: IMPACT_ANALYSIS` (повторний вхід, розділ 7.3.2); `human_decision.applied` IMPACT_ANALYSIS з `decision: RESUME` (розділ 8.7.3) |
+     | SOLUTION_DESIGN | `stage.completed` IMPACT_ANALYSIS з `verdict: PASS` або `NOT_APPLICABLE`; `human_decision.applied` SOLUTION_DESIGN з `decision: RESUME` |
+
+     Інший тригер означає маршрут, якого цей MVP не виконує;
+   - SOLUTION_DESIGN: `artifacts.solution-design` відсутній. Повторного входу в SOLUTION_DESIGN з новою версією MVP не підтримує (`solution-design/SKILL.md` §3, крок 1).
 
    Невиконано — нічого не змінюй, поясни людині і зупинись.
+7. **Застосовність IMPACT_ANALYSIS (лише SOLUTION_DESIGN).** Визначає, чи передається `impact-analysis` (розділ 7.1, «Умовний вхід»):
+   - `records.applicability-decision.IMPACT_ANALYSIS.ENTRY` є, а файл запису існує;
+   - його `subjects` — поточна версія `story-spec`;
+   - остання подія `stage.completed` стадії IMPACT_ANALYSIS має `refs` з цим `<record_id>` і `verdict`, узгоджений із `result` запису: `PASS` ⇔ `APPLICABLE`, `NOT_APPLICABLE` ⇔ `NOT_APPLICABLE`;
+   - **`APPLICABLE`:**
+     - `artifacts.impact-analysis` є;
+     - `refs` тієї самої події містять `impact-analysis@<version>` поточної версії в `artifacts`, тобто артефакт створено тим самим оцінюванням;
+     - крок 5 для нього виконано (`currency: CURRENT`, файл існує);
+     - `impact` = шлях цієї версії;
+   - **`NOT_APPLICABLE`:**
+     - `impact` не передається;
+     - якщо `artifacts.impact-analysis` є (історична версія з попереднього застосовного оцінювання), він не є входом: не передавай і не перевіряй його за кроком 5.
+
+   Будь-яка інша комбінація — розбіжність стану. Нічого не змінюй, поясни людині, що саме не збігається (файл, поле, подія), і зупинись.
 
 ### 7.3. Параметри спроби
 
@@ -240,12 +269,13 @@ git:                                # пілот не має feature branch; і�
 | `attempt` | Кількість подій `stage.started` для `current_stage` у History + 1 |
 | `version` | Для документа: поточна версія вихідного типу в `artifacts` + 1; якщо його немає — `1` |
 | `record_id` | Для запису: `<record_type>/<NNNN>`, де `record_type` — `review-report` (SPEC_REVIEW) або `applicability-decision` (IMPACT_ANALYSIS), а `NNNN` — наступний номер типу в Story (`artifact-rules.md` §2): найбільший номер `<record_type>/…` у `refs` подій `stage.completed` History + 1, чотири цифри; якщо таких немає — `0001` |
-| `output` | Шлях вихідного типу за реєстром із префіксом пілоту (розділ 3). Для SPEC_REVIEW — запис `records/review-report/<NNNN>.md`. Для IMPACT_ANALYSIS — документ `artifacts/impact-analysis/v<version>.md` |
+| `output` | Шлях вихідного типу за реєстром із префіксом пілоту (розділ 3). Для SPEC_REVIEW — запис `records/review-report/<NNNN>.md`. Для IMPACT_ANALYSIS — документ `artifacts/impact-analysis/v<version>.md`. Для SOLUTION_DESIGN — `artifacts/solution-design/v<version>.md` |
 | `record_output` | Лише IMPACT_ANALYSIS: `records/applicability-decision/<NNNN>.md` під коренем пілоту |
-| `clarification`, `spec` | Шляхи поточних версій `clarification-record` і `story-spec` (для SPECIFICATION — лише `clarification`; для IMPACT_ANALYSIS — лише `spec`) |
+| `clarification`, `spec` | Шляхи поточних версій `clarification-record` і `story-spec` (для SPECIFICATION — лише `clarification`; для IMPACT_ANALYSIS і SOLUTION_DESIGN — лише `spec`) |
+| `impact` | Лише SOLUTION_DESIGN і лише за розділом 7.2, крок 7 (`APPLICABLE`): шлях поточної версії `impact-analysis` |
 | `previous_reports` | Для SPEC_REVIEW: шляхи попередніх `review-report` цієї стадії з History (`stage.completed` стадії SPEC_REVIEW); немає — не передавай |
-| `previous`, `reason` | SPECIFICATION: лише для `version > 1` — за розділом 7.3.1 |
-| `reason` (IMPACT_ANALYSIS) | Лише якщо остання подія History з `details.to_stage` — `human_decision.applied` стадії `IMPACT_ANALYSIS` з `details.decision: RESUME` (розділ 8.7.3). Значення — `details.reason` цієї події дослівно. Інакше не передавай. `previous` не передається: `version` завжди `1` (розділ 7.2, крок 6) |
+| `previous`, `reason` | SPECIFICATION: лише для `version > 1` — за розділом 7.3.1. IMPACT_ANALYSIS — за розділом 7.3.2 |
+| `reason` (SOLUTION_DESIGN) | Лише якщо тригер входу (розділ 7.2, крок 6) — `human_decision.applied` стадії `SOLUTION_DESIGN` з `details.decision: RESUME` (розділ 8.7.3). Значення — `details.reason` цієї події дослівно. Інакше не передавай. `version` завжди `1` |
 
 `focus` для SPEC_REVIEW не передається: Orchestrator не підказує гіпотез чи findings.
 
@@ -271,6 +301,30 @@ git:                                # пілот не має feature branch; і�
 
 Findings — діагностика reviewer, а причина людини — вказівка, що виправити. Ні те, ні інше не є джерелом продуктових рішень: вони й далі беруться лише з `clarification-record` (D-03).
 
+#### 7.3.2. IMPACT_ANALYSIS: перший і повторний вхід (D-4)
+
+Кожен вхід в IMPACT_ANALYSIS — нова оцінка застосовності і новий `applicability-decision` (AP-04, AP-08; `impact-analysis/SKILL.md` §3). Повторний вхід — повернення від SOLUTION_DESIGN: автоматичний Loopback без `crosses_gates` (розділ 7.8).
+
+**`version`, `previous` і `output`** — за загальним правилом документа:
+
+| Стан `artifacts.impact-analysis` | `version` | `previous` |
+|---|---|---|
+| немає (перший вхід або всі попередні оцінки — `NOT_APPLICABLE`) | `1` | не передається |
+| є версія `N`, чинна чи історична (розділ 7.1, «Умовний вхід») | `N+1` | шлях `v<N>`. Вона не змінюється |
+
+`output` — `artifacts/impact-analysis/v<version>.md`. Файл створюється лише для `PASS`. Інакше `version` наступної спроби лишається тим самим.
+
+**`reason`** — причини поточного входу, дослівно, кожна окремим рядком у порядку History. Збираються від останньої події, яка привела Story в IMPACT_ANALYSIS з іншої стадії (тригер з розділу 7.2, крок 6, — APPROVE або loopback від SOLUTION_DESIGN), до останньої події з `to_stage: IMPACT_ANALYSIS`:
+
+| Подія | Рядок `reason` |
+|---|---|
+| `stage.completed` SOLUTION_DESIGN з `verdict: CHANGES_REQUIRED`, `loopback_target: IMPACT_ANALYSIS` | `"SOLUTION_DESIGN CHANGES_REQUIRED (attempt <N>, <ts>): <details.summary дослівно>"` |
+| `human_decision.applied` IMPACT_ANALYSIS з `decision: RESUME` | `"LOOPBACK_CONFIRMATION RESUME (<actor.id>, <ts>): <details.reason дослівно>"` |
+
+Якщо рядків немає (перший вхід після APPROVE без `RESUME`), `reason` не передається. Findings SOLUTION_DESIGN — діагностика, а не джерело вимог (D-03).
+
+Попередні версії артефакта, записи і події History не змінюються. Повторний вхід лічильників не змінює: Quality Loops враховано під час `CHANGES_REQUIRED` SOLUTION_DESIGN (розділ 7.8). Approval HUMAN_SPEC_APPROVAL не зачіпається, бо `story-spec` і `clarification-record` не змінюються.
+
 **Незареєстрований Working Draft.** Перед стартом будь-якої спроби перевір, чи існує файл `output` (для IMPACT_ANALYSIS — також `record_output`), якого немає в `state.yaml` → `artifacts` чи `records`. Якщо існує — це Working Draft попередньої спроби (`artifact-rules.md` §3, п. 1). Не перезаписуй, не видаляй і не реєструй його. Нічого не змінюй у стані: покажи шлях, поясни, що знайдено незареєстрований Working Draft, і зупинись. Рішення ухвалює людина поза Skill.
 
 > **Тимчасове обмеження MVP.** Контракт дозволяє повторній спробі перезаписати Working Draft. Цей Skill свідомо цього не робить, доки не реалізовано Recovery. Контракт Working Draft не змінюється.
@@ -286,7 +340,7 @@ Findings — діагностика reviewer, а причина людини —
 {"ts":"<date -u>","story_id":"US-001","actor":{"kind":"orchestrator","id":"story-orchestrator"},"event":"stage.started","stage":"SPECIFICATION","refs":["clarification-record@1"],"details":{"attempt":1,"version":1,"output":"docs/pilots/orchestrator/US-001/artifacts/story-spec/v1.md","mode":"pilot"}}
 ```
 
-`refs` — входи-артефакти спроби (`<type>@<version>`); для CLARIFICATION — `[]`. Для SPEC_REVIEW у `details` замість `version` — `record_id`. Для IMPACT_ANALYSIS `refs: [story-spec@<N>]`, а `details` містять `version`, `output`, `record_id` і `record_output`. Якщо є `reason` (розділ 7.3), його теж додають у `details`. Для повторного входу (7.3.1) `refs` додатково містять попередню версію (`story-spec@1`), а для loopback від SPEC_REVIEW — і запис-тригер (`review-report/0001`). `details` містять `previous` і `reason`. Для тригера «рішення людини» запису немає: рішення ідентифікує `reason` (`actor.id`, `ts`).
+`refs` — входи-артефакти спроби (`<type>@<version>`); для CLARIFICATION — `[]`. Для SPEC_REVIEW у `details` замість `version` — `record_id`. Для IMPACT_ANALYSIS `refs: [story-spec@<N>]`, а для повторного входу з `version > 1` — ще й `impact-analysis@<N-1>`. `details` містять `version`, `output`, `record_id` і `record_output`, а також `previous` і `reason`, якщо вони є (розділ 7.3.2). Для SOLUTION_DESIGN `refs` складаються з `story-spec@<N>`, `impact-analysis@<M>` (лише якщо передано `impact`) і чинного `applicability-decision` IMPACT_ANALYSIS, який визначив вхід. `details` містять `version`, `output` і `reason`, якщо він є. Для повторного входу в SPECIFICATION (7.3.1) `refs` додатково містять попередню версію (`story-spec@1`), а для loopback від SPEC_REVIEW — і запис-тригер (`review-report/0001`). `details` містять `previous` і `reason`. Для тригера «рішення людини» запису немає: рішення ідентифікує `reason` (`actor.id`, `ts`).
 
 ### 7.5. Виконання стадії
 
@@ -330,7 +384,7 @@ Stage Skills мають `disable-model-invocation: true`, тому їх не в�
 
 Якщо людина зупиняє інтерв'ю на очікуванні, спершу `pending_human_decision: null` і `story_status: ACTIVE`, далі — невдача `INTERRUPTED` за розділом 7.7.
 
-#### 7.5.3. SPECIFICATION, SPEC_REVIEW і IMPACT_ANALYSIS — subagent
+#### 7.5.3. SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS і SOLUTION_DESIGN — subagent
 
 1. Перед запуском запам'ятай `git status --porcelain --untracked-files=all` (знімок А) і `git hash-object` кожного зареєстрованого файлу артефакта чи запису пілоту (файли пілоту не відстежуються Git, тож їхні зміни `git status` не покаже).
 2. Запусти **рівно один** subagent для поточної стадії інструментом Agent з `subagent_type: general-purpose`. Середовище може запускати subagent у фоні. Це не змінює порядку: виконання послідовне (кроки 3–5). Prompt — лише текст нижче для стадії, без контексту основної сесії (чат, інтерв'ю, міркування й самооцінка producer-стадії, думка Orchestrator про артефакти не передаються).
@@ -366,10 +420,24 @@ Stage Skills мають `disable-model-invocation: true`, тому їх не в�
    ```text
    Ти виконуєш стадію IMPACT_ANALYSIS пілотної Story поза зареєстрованим Workflow.
    Прочитай .claude/skills/impact-analysis/SKILL.md повністю і виконай його точно.
-   Аргументи: story=<ID> spec=<spec> output=<output> version=<version> record_output=<record_output> record_id=<record_id> attempt=<attempt> mode=pilot [reason="<reason>"]
+   Аргументи: story=<ID> spec=<spec> output=<output> version=<version> record_output=<record_output> record_id=<record_id> attempt=<attempt> mode=pilot [previous=<previous>] [reason="<reason>"]
    Людини в цьому контексті немає: нічого не питай.
-   [Якщо є reason:] reason — дослівна причина, з якою людина відхилила запропонований Loopback (RESUME). Вона не є джерелом вимог: не вигадуй вимог, яких немає в story-spec.
+   [Якщо є reason:] reason — причини цього входу: findings SOLUTION_DESIGN і/або дослівна причина людини, з якою вона відхилила запропонований Loopback (RESUME). Це не джерело вимог: не вигадуй вимог, яких немає в story-spec. Застосовність оціни заново.
+   [Якщо є previous:] previous — попередня версія impact-analysis. Не змінюй її; для PASS створи нову версію в output.
    Пиши лише файл record_output і, лише для PASS, файл output. Не змінюй state.yaml, history.jsonl, story-spec, код та інші файли. Bash — лише git log, git status, git ls-files і date. Не запускай інші Skills чи subagents.
+   Останнім у відповіді поверни result envelope — YAML-блок `result:` за розділом 6 Stage Skill.
+   ```
+
+   SOLUTION_DESIGN:
+
+   ```text
+   Ти виконуєш стадію SOLUTION_DESIGN пілотної Story поза зареєстрованим Workflow.
+   Прочитай .claude/skills/solution-design/SKILL.md повністю і виконай його точно.
+   Аргументи: story=<ID> spec=<spec> [impact=<impact>] output=<output> version=<version> attempt=<attempt> mode=pilot [reason="<reason>"]
+   Людини в цьому контексті немає: нічого не питай.
+   [Якщо impact не передано:] IMPACT_ANALYSIS для цієї Story незастосовна. Не шукай і не використовуй impact-analysis, навіть якщо такий файл існує.
+   [Якщо є reason:] reason — дослівна причина, з якою людина відхилила запропонований Loopback (RESUME). Вона не є джерелом вимог: не вигадуй вимог, яких немає в story-spec.
+   Пиши лише файл output і лише для PASS. Не змінюй state.yaml, history.jsonl, story-spec, impact-analysis, код та інші файли. Bash — лише git log, git status, git ls-files і date. Не запускай інші Skills чи subagents.
    Останнім у відповіді поверни result envelope — YAML-блок `result:` за розділом 6 Stage Skill.
    ```
 
@@ -377,7 +445,7 @@ Stage Skills мають `disable-model-invocation: true`, тому їх не в�
    - не обробляй його результат і не вгадуй його;
    - не змінюй `state.yaml`, `history.jsonl` і файли пілоту;
    - не запускай інших subagents і стадій.
-4. Лише після завершення знову візьми `git status --porcelain --untracked-files=all` (знімок Б) і `git hash-object` тих самих файлів. Різниця А→Б має складатися рівно з нових файлів, що відповідають елементам `outputs` envelope; якщо `outputs` порожні — різниці немає. Для SPECIFICATION і SPEC_REVIEW це файл `output`. Для IMPACT_ANALYSIS `{ record: <record_id> }` відповідає `record_output`, а `{ type: impact-analysis, version }` — `output`. Хеші зареєстрованих файлів не змінюються (`artifact-rules.md` §3, п. 2). Інша зміна — результат відхилено (`INVALID_RESULT`) з переліком файлів. Нічого не відкочуй: рішення ухвалює людина.
+4. Лише після завершення знову візьми `git status --porcelain --untracked-files=all` (знімок Б) і `git hash-object` тих самих файлів. Різниця А→Б має складатися рівно з нових файлів, що відповідають елементам `outputs` envelope; якщо `outputs` порожні — різниці немає. Для SPECIFICATION, SPEC_REVIEW і SOLUTION_DESIGN це файл `output`. Для IMPACT_ANALYSIS `{ record: <record_id> }` відповідає `record_output`, а `{ type: impact-analysis, version }` — `output`. Хеші зареєстрованих файлів не змінюються (`artifact-rules.md` §3, п. 2). Інша зміна — результат відхилено (`INVALID_RESULT`) з переліком файлів. Нічого не відкочуй: рішення ухвалює людина.
 5. Envelope — останній блок `result:` у відповіді subagent. Збій інструмента Agent — `FAILED`. Відповідь без envelope — `INVALID_RESULT`.
 
 ### 7.6. Перевірка result envelope
@@ -386,8 +454,8 @@ Orchestrator приймає результат, лише коли виконан
 
 - є блок `result` з полями `story_id`, `stage`, `attempt`, `verdict`, `outputs`, `loopback_target`, `blocker`, `summary`;
 - `story_id`, `stage`, `attempt` збігаються з параметрами спроби;
-- `verdict` дозволений для стадії за `stage-map.yaml`: `optional: false` → не `NOT_APPLICABLE`; `CHANGES_REQUIRED` — лише якщо `loopbacks` стадії не порожні. CLARIFICATION: `PASS | BLOCKED`. SPECIFICATION і SPEC_REVIEW: `PASS | CHANGES_REQUIRED | BLOCKED`. IMPACT_ANALYSIS (`optional: true`): `PASS | NOT_APPLICABLE | CHANGES_REQUIRED | BLOCKED`;
-- `loopback_target`: для `CHANGES_REQUIRED` — ціль із `loopbacks` стадії (SPECIFICATION → `CLARIFICATION`; SPEC_REVIEW → `SPECIFICATION` або `CLARIFICATION`; IMPACT_ANALYSIS → `SPECIFICATION` або `CLARIFICATION`, обидві з `crosses_gates`); інакше `null`;
+- `verdict` дозволений для стадії за `stage-map.yaml`: `optional: false` → не `NOT_APPLICABLE`; `CHANGES_REQUIRED` — лише якщо `loopbacks` стадії не порожні. CLARIFICATION: `PASS | BLOCKED`. SPECIFICATION і SPEC_REVIEW: `PASS | CHANGES_REQUIRED | BLOCKED`. IMPACT_ANALYSIS (`optional: true`): `PASS | NOT_APPLICABLE | CHANGES_REQUIRED | BLOCKED`. SOLUTION_DESIGN (`optional: false`): `PASS | CHANGES_REQUIRED | BLOCKED`;
+- `loopback_target`: для `CHANGES_REQUIRED` — ціль із `loopbacks` стадії (SPECIFICATION → `CLARIFICATION`; SPEC_REVIEW → `SPECIFICATION` або `CLARIFICATION`; IMPACT_ANALYSIS → `SPECIFICATION` або `CLARIFICATION`, обидві з `crosses_gates`; SOLUTION_DESIGN → `IMPACT_ANALYSIS` без `crosses_gates` або `SPECIFICATION` чи `CLARIFICATION` з `crosses_gates`); інакше `null`;
 - для SPEC_REVIEW — розділ 7.6.1, для IMPACT_ANALYSIS — розділ 7.6.2 замість правил документа нижче;
 - для `PASS`: `blocker: null`; `outputs` — рівно `[{ type: <вихідний тип>, version: <version> }]`; файл `output` існує; його front matter (`artifact-rules.md` §1):
   - `artifact_type`, `story_id`, `version` збігаються;
@@ -395,7 +463,13 @@ Orchestrator приймає результат, лише коли виконан
   - `created_at` — ISO-8601 UTC;
   - `inputs` не порожні, кожне джерело має `source`, `path`, `commit`;
   - для SPECIFICATION: `inputs` містить `{ type: clarification-record, version: <поточна версія> }`; `story_type` — одне зі `story_types`; `acceptance_criteria` — непорожній список, і кожен ID є в тілі;
-  - якщо `version > 1`: є `revision_reason`, а `inputs` містить `{ type: story-spec, version: <N-1> }` (`artifact-rules.md` §1, `specification/SKILL.md` §5). `revision_reason` посилається на кожен `BLOCKING` finding звіту-тригера (loopback від SPEC_REVIEW) або на рішення людини `HUMAN_SPEC_APPROVAL REQUEST_CHANGES` (тригер — рішення людини; посилань на findings не вимагається, розділ 7.3.1);
+  - для SOLUTION_DESIGN (`solution-design/SKILL.md` §5):
+    - `inputs` містить `{ type: story-spec, version: <поточна версія> }`;
+    - `{ type: impact-analysis, version: <версія з impact> }` є в `inputs` тоді й лише тоді, коли передано `impact` (розділ 7.2, крок 7). Посилання на будь-яку іншу версію `impact-analysis`, зокрема історичну після `NOT_APPLICABLE`, — порушення;
+    - `source` кожного джерела — ключ із `sources` реєстру (`architecture-foundation`, `product-foundation`, `codebase`); `path` — не `.` (D-3);
+    - кожен ID `AC-NN` з `acceptance_criteria` поточної `story-spec` є в тілі (трасування AC);
+    - `version: 1`, тож `revision_reason` немає;
+  - для SPECIFICATION, якщо `version > 1`: є `revision_reason`, а `inputs` містить `{ type: story-spec, version: <N-1> }` (`artifact-rules.md` §1, `specification/SKILL.md` §5). `revision_reason` посилається на кожен `BLOCKING` finding звіту-тригера (loopback від SPEC_REVIEW) або на рішення людини `HUMAN_SPEC_APPROVAL REQUEST_CHANGES` (тригер — рішення людини; посилань на findings не вимагається, розділ 7.3.1);
   - немає статусу, Currency чи approval;
   - перший рядок тіла — пілотний рядок Stage Skill;
 - для `CHANGES_REQUIRED`: `outputs: []`, `blocker: null`;
@@ -450,7 +524,9 @@ Orchestrator приймає результат, лише коли виконан
 
 - `artifact_type: impact-analysis`, `story_id`, `version` збігаються; `produced_by: { stage: IMPACT_ANALYSIS, attempt: <attempt> }`; `created_at` — ISO-8601 UTC;
 - `inputs` містить `{ type: story-spec, version: <поточна версія> }`. Кожне джерело має `source`, `path` і `commit`; `path` — не `.` (D-3);
-- `revision_reason` немає (`version: 1`); статусу, Currency чи approval немає;
+- `version: 1` — `revision_reason` немає, і посилань на інші версії `impact-analysis` в `inputs` немає;
+- `version > 1` (розділ 7.3.2) — є непорожній `revision_reason`, а `inputs` містить рівно одне посилання на тип `impact-analysis`: `{ type: impact-analysis, version: <N-1> }` (lineage, `artifact-rules.md` §1, §3);
+- статусу, Currency чи approval немає;
 - перший рядок тіла — пілотний рядок Stage Skill.
 
 ### 7.7. Невдача спроби
@@ -505,39 +581,50 @@ Orchestrator приймає результат, лише коли виконан
 
 **`PASS`** і **`NOT_APPLICABLE`** IMPACT_ANALYSIS → `SOLUTION_DESIGN` (`next` стадії; для `NOT_APPLICABLE` — RR-02):
 
-- для `PASS`: `artifacts.impact-analysis: { version: <version>, status: DRAFT, currency: CURRENT }`. Для `NOT_APPLICABLE` `artifacts` не змінюються;
+- для `PASS`: `artifacts.impact-analysis: { version: <version>, status: DRAFT, currency: CURRENT }`. На повторному вході попередня версія стає `SUPERSEDED` без окремого запису, а її файл лишається без змін;
+- для `NOT_APPLICABLE` `artifacts` не змінюються. Якщо там є `impact-analysis` з попереднього застосовного оцінювання, він лишається як історична версія без зміни `status` і `currency`. Входом він більше не є, бо чинне рішення — `NOT_APPLICABLE` (розділ 7.1, «Умовний вхід»);
 - запис — за правилом «Запис IMPACT_ANALYSIS» вище;
 - `last_stage_verdict: <verdict>`;
 - `current_stage: SOLUTION_DESIGN`, `execution_state: READY`, `story_status: ACTIVE`;
 - `artifacts` інших типів, `approvals` і `retry.quality_loops` не змінюються;
 - подія `stage.completed` з `refs` — виходи (`impact-analysis@<version>`, якщо є, і `<record_id>`), `details: { attempt, verdict, outputs, to_stage: SOLUTION_DESIGN, summary, mode }`.
 
-Наступний `next` зупиниться на кроці 7.2, п. 3: SOLUTION_DESIGN ще не підтримується.
+Наступний `next` виконає SOLUTION_DESIGN.
 
-**`CHANGES_REQUIRED`** IMPACT_ANALYSIS. Обидві цілі мають `crosses_gates: [HUMAN_SPEC_APPROVAL]`, тож Loopback виконується лише після рішення людини (RR-04, `workflow-state-model.md` §6). Orchestrator його не виконує, лише просить підтвердження (D-1):
+**`PASS`** SOLUTION_DESIGN → `API_DESIGN` (`next` стадії):
 
-- запис — за правилом «Запис IMPACT_ANALYSIS» вище;
+- `artifacts.solution-design: { version: <version>, status: DRAFT, currency: CURRENT }`;
+- `last_stage_verdict: PASS`;
+- `current_stage: API_DESIGN`, `execution_state: READY`, `story_status: ACTIVE`;
+- `artifacts` інших типів, `records`, `approvals` і `retry.quality_loops` не змінюються;
+- подія `stage.completed` з `refs: [solution-design@<version>]`, `details: { attempt, verdict: PASS, outputs, to_stage: API_DESIGN, summary, mode }`.
+
+Наступний `next` зупиниться на кроці 7.2, п. 3: API_DESIGN ще не підтримується.
+
+**`CHANGES_REQUIRED`** IMPACT_ANALYSIS і **`CHANGES_REQUIRED`** SOLUTION_DESIGN з `loopback_target` `SPECIFICATION` чи `CLARIFICATION`. Ці цілі мають `crosses_gates: [HUMAN_SPEC_APPROVAL]`, тож Loopback виконується лише після рішення людини (RR-04, `workflow-state-model.md` §6). Orchestrator його не виконує, лише просить підтвердження (D-1). Нижче `<stage>` — `IMPACT_ANALYSIS` або `SOLUTION_DESIGN`:
+
+- для IMPACT_ANALYSIS: запис — за правилом «Запис IMPACT_ANALYSIS» вище. SOLUTION_DESIGN записів не створює;
 - `last_stage_verdict: CHANGES_REQUIRED`; `artifacts` і `approvals` не змінюються;
 - `retry.quality_loops` і `retry.repeated_failure` не змінюються. Quality Loops рахують повернення, а повернення ще немає (`workflow-state-model.md` §10). У MVP облік виконає `ROUTE_BACK`, коли його буде реалізовано; `RESUME` поверненням не є (рішення D-1);
-- `current_stage` не змінюється (`IMPACT_ANALYSIS`); `story_status: WAITING_FOR_HUMAN`, `execution_state: AWAITING_HUMAN`;
+- `current_stage` не змінюється (`<stage>`); `story_status: WAITING_FOR_HUMAN`, `execution_state: AWAITING_HUMAN`;
 - `pending_human_decision` (`workflow-state.md` §3):
   ```yaml
   pending_human_decision:
     kind: LOOPBACK_CONFIRMATION
-    stage: IMPACT_ANALYSIS
+    stage: <stage>
     options: [ROUTE_BACK, RESUME, CANCEL]          # loopback_confirmation_decisions; ROUTE_BACK у MVP відхиляється (розділ 8.7.2)
     package:
       - { type: story-spec, version: <N> }        # погоджений артефакт, який змінив би Loopback
-      - { record: <record_id> }                   # applicability-decision цієї спроби
+      - { record: <record_id> }                   # лише IMPACT_ANALYSIS: applicability-decision цієї спроби
     requested_at: <date -u>
   ```
 - події:
   - `stage.completed` з `details: { attempt, verdict: CHANGES_REQUIRED, outputs, loopback_target, crosses_gates: [HUMAN_SPEC_APPROVAL], summary, mode }`, без `to_stage`;
-  - `human_decision.requested` (`stage: IMPACT_ANALYSIS`, `refs` — елементи `package`, `details: { kind: LOOPBACK_CONFIRMATION, options, loopback_target, mode }`).
+  - `human_decision.requested` (`stage: <stage>`, `refs` — елементи `package`, `details: { kind: LOOPBACK_CONFIRMATION, options, loopback_target, mode }`).
 
 Далі `next` зупиняється на кроці 7.2 (`story_status` не `ACTIVE`). Рішення ухвалює людина командою `decide` (розділ 8.7).
 
-**`CHANGES_REQUIRED`** (SPECIFICATION або SPEC_REVIEW) → `loopback_target`. Ці loopbacks не мають `crosses_gates`, тож рішення людини не потрібне (`stage-map.yaml` RR-03, RR-04):
+**`CHANGES_REQUIRED`** SPECIFICATION, SPEC_REVIEW і SOLUTION_DESIGN з `loopback_target: IMPACT_ANALYSIS` → `loopback_target`. Ці loopbacks не мають `crosses_gates`, тож рішення людини не потрібне (`stage-map.yaml` RR-03, RR-04):
 
 - `last_stage_verdict: CHANGES_REQUIRED`; Version Status артефактів не змінюється;
 - `retry.quality_loops.target.<loopback_target>` + 1 і `retry.quality_loops.initiator.<stage>` + 1 (`workflow-state-model.md` §10);
@@ -545,7 +632,7 @@ Orchestrator приймає результат, лише коли виконан
 - якщо будь-який лічильник досяг відповідного значення `retry_policy.defaults` (`quality_loops`, `repeated_failure`) — `story_status: BLOCKED`, `blocker: { reason: "Retry Budget Exhausted", source: ORCHESTRATOR, details, needed }`, `execution_state: COMPLETED`, `current_stage` не змінюється, події `stage.completed` і `story.blocked`;
 - інакше `current_stage: <loopback_target>`, `execution_state: READY`, `story_status: ACTIVE`, подія `stage.completed` з `details: { attempt, verdict, loopback_target, to_stage, summary, mode }`.
 
-Стадію-ціль не запускай. Наступний `next` виконає її повторний вхід за розділом 7.3.1, якщо це SPECIFICATION. Для CLARIFICATION він зупиниться (обмеження MVP, 7.3.1).
+Стадію-ціль не запускай. Наступний `next` виконає її повторний вхід за розділом 7.3.1, якщо це SPECIFICATION, або за розділом 7.3.2, якщо це IMPACT_ANALYSIS. Для CLARIFICATION він зупиниться (обмеження MVP, 7.3.1).
 
 Повторний вхід лічильники не змінює: Quality Loops уже враховано під час `CHANGES_REQUIRED`.
 
@@ -582,7 +669,9 @@ Orchestrator приймає результат, лише коли виконан
 | `pending_human_decision.kind` | Стадія | Рішення в MVP | Розділи |
 |---|---|---|---|
 | `GATE` | HUMAN_SPEC_APPROVAL | `APPROVE`, `REQUEST_CHANGES`, `CANCEL` | 8.2–8.5 |
-| `LOOPBACK_CONFIRMATION` | IMPACT_ANALYSIS | `RESUME`, `CANCEL`; `ROUTE_BACK` відхиляється без змін | 8.2, 8.5, 8.7 | Рішення ухвалює людина, а Orchestrator лише перевіряє і застосовує його (`workflow-state.md` §1).
+| `LOOPBACK_CONFIRMATION` | IMPACT_ANALYSIS, SOLUTION_DESIGN | `RESUME`, `CANCEL`; `ROUTE_BACK` відхиляється без змін | 8.2, 8.5, 8.7 |
+
+Рішення ухвалює людина, а Orchestrator лише перевіряє і застосовує його (`workflow-state.md` §1).
 
 Команда неінтерактивна: рішення, ідентифікатор людини, ціль, причина і коментар приходять лише з аргументів. Orchestrator не веде діалогу про зміст артефактів, нічого не уточнює і не пропонує рішень. Gate погоджує наявні версії, а не створює нових продуктових рішень (D-03).
 
@@ -721,9 +810,9 @@ IMPACT_ANALYSIS не запускай. Її виконає наступний `n
 
 Cancellation Protocol (`workflow-policies.md` §17, `stage-map.yaml` RR-08). `CANCELLED` — термінальний стан: Story повторно не відкривається.
 
-Процедура однакова для обох видів очікування: `GATE` на HUMAN_SPEC_APPROVAL і `LOOPBACK_CONFIRMATION` на IMPACT_ANALYSIS (`loopback_confirmation_decisions.CANCEL`). Приклади нижче наведено для gate. Для `LOOPBACK_CONFIRMATION`:
-- місце стадії в записі й подіях займає `current_stage` (`IMPACT_ANALYSIS`);
-- `subjects`, `artifacts` і `refs` беруться з поточного стану і `package`, зокрема `applicability-decision`;
+Процедура однакова для обох видів очікування: `GATE` на HUMAN_SPEC_APPROVAL і `LOOPBACK_CONFIRMATION` на IMPACT_ANALYSIS чи SOLUTION_DESIGN (`loopback_confirmation_decisions.CANCEL`). Приклади нижче наведено для gate. Для `LOOPBACK_CONFIRMATION`:
+- місце стадії в записі й подіях займає `current_stage` (`IMPACT_ANALYSIS` або `SOLUTION_DESIGN`);
+- `subjects`, `artifacts` і `refs` беруться з поточного стану і `package`, зокрема `applicability-decision` та `impact-analysis`, якщо вони є;
 - маршрут — `loopback_confirmation_decisions.CANCEL` замість `decisions.CANCEL` gate.
 
 #### 8.5.1. Перевірка
@@ -789,7 +878,7 @@ Story <ID> скасовано рішенням людини на HUMAN_SPEC_APPR
   - `COMPLETED` у State Model описано як завершену спробу зі Stage Verdict, а gate спроб і verdict не має.
 
   `COMPLETED` обрано як найближче значення: роботу на поточній стадії завершено і нових спроб не буде. Уточнення — справа майбутньої зміни контракту;
-- `current_stage` не змінюється (`HUMAN_SPEC_APPROVAL` або `IMPACT_ANALYSIS`): `CANCELLED` — термінальний стан, а не Stage ID (`stage-map.yaml` → `terminal_states`). Наслідок рішення видно в `story_status` (`workflow-state.md` §4);
+- `current_stage` не змінюється (`HUMAN_SPEC_APPROVAL`, `IMPACT_ANALYSIS` або `SOLUTION_DESIGN`): `CANCELLED` — термінальний стан, а не Stage ID (`stage-map.yaml` → `terminal_states`). Наслідок рішення видно в `story_status` (`workflow-state.md` §4);
 - `records.cancellation-record: <record_id>` — реєстрація нового запису (`workflow-state.md` §7, крок 3);
 - `last_stage_verdict`, `artifacts`, `approvals`, `retry`, `blocker`, `git` не змінюються.
 
@@ -800,7 +889,7 @@ Story <ID> скасовано рішенням людини на HUMAN_SPEC_APPR
 {"ts":"<date -u>","story_id":"US-001","actor":{"kind":"orchestrator","id":"story-orchestrator"},"event":"story.cancelled","stage":"HUMAN_SPEC_APPROVAL","refs":["cancellation-record/0001"],"details":{"story_status":"CANCELLED","execution_state":"COMPLETED","mode":"pilot"}}
 ```
 
-Для `LOOPBACK_CONFIRMATION` в обох подіях `stage: IMPACT_ANALYSIS`, `refs` першої — елементи `package`, а `details` першої містять також `kind: LOOPBACK_CONFIRMATION`.
+Для `LOOPBACK_CONFIRMATION` в обох подіях `stage` — `current_stage`, `refs` першої — елементи `package`, а `details` першої містять також `kind: LOOPBACK_CONFIRMATION`.
 
 Подальші стадії не запускаються. `next` і `decide` для `CANCELLED` зупиняються (розділ 7.2, крок 2; розділ 8.2, крок 2).
 
@@ -808,24 +897,24 @@ Story <ID> скасовано рішенням людини на HUMAN_SPEC_APPR
 
 Після 8.3.2, 8.4.2, 8.5.3 або 8.7.3 зупинись і покажи підсумок командою `status`. Наступну стадію не запускай.
 
-### 8.7. LOOPBACK_CONFIRMATION (IMPACT_ANALYSIS)
+### 8.7. LOOPBACK_CONFIRMATION (IMPACT_ANALYSIS, SOLUTION_DESIGN)
 
-Підтвердження Loopback через gate (`stage-map.yaml` RR-04, `loopback_confirmation_decisions`; `workflow-state-model.md` §6). У MVP його створює лише `CHANGES_REQUIRED` IMPACT_ANALYSIS (розділ 7.8). Рішення ухвалює людина, Orchestrator лише перевіряє і застосовує його. Рішення в пілоті — симуляція, як і на gate.
+Підтвердження Loopback через gate (`stage-map.yaml` RR-04, `loopback_confirmation_decisions`; `workflow-state-model.md` §6). У MVP його створює `CHANGES_REQUIRED` IMPACT_ANALYSIS або SOLUTION_DESIGN з ціллю `SPECIFICATION` чи `CLARIFICATION` (розділ 7.8). Нижче `<stage>` — `current_stage`. Рішення ухвалює людина, Orchestrator лише перевіряє і застосовує його. Рішення в пілоті — симуляція, як і на gate.
 
 #### 8.7.1. Перевірка
 
 Замість кроків 3–4 розділу 8.2. Перше порушення — поясни і зупинись, нічого не змінюючи.
 
 1. **Стан:**
-   - `current_stage: IMPACT_ANALYSIS`, `pending_human_decision.kind: LOOPBACK_CONFIRMATION`, `pending_human_decision.stage: IMPACT_ANALYSIS`;
+   - `current_stage` — `IMPACT_ANALYSIS` або `SOLUTION_DESIGN`; `pending_human_decision.kind: LOOPBACK_CONFIRMATION`, `pending_human_decision.stage` = `current_stage`;
    - `last_stage_verdict: CHANGES_REQUIRED`;
    - `decision` є в `pending_human_decision.options` і в `loopback_confirmation_decisions` у `stage-map.yaml`.
 2. **Пакет.** `pending_human_decision.package` містить рівно:
    - `{ type: story-spec, version: <поточна версія> }`;
-   - `{ record: <record_id> }`, де `<record_id>` — `records.applicability-decision.IMPACT_ANALYSIS.ENTRY`.
+   - лише для IMPACT_ANALYSIS — `{ record: <record_id> }`, де `<record_id>` — `records.applicability-decision.IMPACT_ANALYSIS.ENTRY`.
 
    `refs` останньої події `human_decision.requested` збігаються з `package`.
-3. **Причина Loopback.** Остання подія `stage.completed` має `stage: IMPACT_ANALYSIS`, `verdict: CHANGES_REQUIRED`, `loopback_target` з `loopbacks` стадії з `crosses_gates`, а її `refs` містять `<record_id>`.
+3. **Причина Loopback.** Остання подія `stage.completed` має `stage: <stage>`, `verdict: CHANGES_REQUIRED`, `loopback_target` з `loopbacks` стадії з `crosses_gates` і без `to_stage`. Для IMPACT_ANALYSIS її `refs` містять `<record_id>`.
 4. **Approval не змінився** (лише для `RESUME`; `CANCEL` доступний з будь-якого нетермінального стану, RR-08). `approvals.HUMAN_SPEC_APPROVAL` має `approval_state: VALID`, а версія `story-spec` у його `scope` — поточна (розділ 7.2, крок 6).
 
 Далі — за `decision`: `ROUTE_BACK` → 8.7.2, `RESUME` → 8.7.3, `CANCEL` → розділ 8.5.
@@ -834,7 +923,7 @@ Story <ID> скасовано рішенням людини на HUMAN_SPEC_APPR
 
 Відхили команду після перевірки 8.7.1, **до будь-яких змін**: `state.yaml`, `history.jsonl` і файли не змінюються. Story лишається в `WAITING_FOR_HUMAN` з тим самим `pending_human_decision`. Поясни людині таке:
 
-- маршрут `ROUTE_BACK` оголошено в авторитетному Workflow (`loopback_confirmation_decisions`, `loopbacks` IMPACT_ANALYSIS), але цей Orchestrator MVP його не виконує;
+- маршрут `ROUTE_BACK` оголошено в авторитетному Workflow (`loopback_confirmation_decisions`, `loopbacks` стадії `<stage>`), але цей Orchestrator MVP його не виконує;
 - для нього потрібен повний Rework Protocol (`workflow-state-model.md` §14), зокрема:
   - повторний вхід у SPECIFICATION чи CLARIFICATION після Loopback через gate;
   - інвалідація `HUMAN_SPEC_APPROVAL` після нової версії `story-spec`;
@@ -846,7 +935,7 @@ Story <ID> скасовано рішенням людини на HUMAN_SPEC_APPR
 
 #### 8.7.3. RESUME
 
-Loopback відхилено: Story лишається на IMPACT_ANALYSIS і починає нову спробу з урахуванням рішення людини (`loopback_confirmation_decisions.RESUME`).
+Loopback відхилено: Story лишається на `<stage>` і починає нову спробу з урахуванням рішення людини (`loopback_confirmation_decisions.RESUME`).
 
 **Перевірка:**
 
@@ -856,7 +945,7 @@ Loopback відхилено: Story лишається на IMPACT_ANALYSIS і п
 **`state.yaml`:**
 
 - `story_status: ACTIVE`, `execution_state: READY`, `pending_human_decision: null`, `updated_at`;
-- `current_stage` не змінюється (`IMPACT_ANALYSIS`);
+- `current_stage` не змінюється (`<stage>`);
 - `last_stage_verdict` не змінюється (`CHANGES_REQUIRED`): рішення людини не є Stage Verdict (`workflow-state-model.md` §4);
 - `artifacts`, `records`, `approvals`, `retry`, `blocker`, `git` не змінюються. `story-spec` лишається погодженим. Лічильники `RESUME` не змінює і не скидає (`workflow-state-model.md` §10, рішення D-1).
 
@@ -866,9 +955,10 @@ Loopback відхилено: Story лишається на IMPACT_ANALYSIS і п
 {"ts":"<date -u>","story_id":"US-003","actor":{"kind":"human","id":"<by>"},"event":"human_decision.applied","stage":"IMPACT_ANALYSIS","refs":["story-spec@2","applicability-decision/0001"],"details":{"decision":"RESUME","kind":"LOOPBACK_CONFIRMATION","to_stage":"IMPACT_ANALYSIS","rejected_loopback_target":"SPECIFICATION","reason":"<reason дослівно>","mode":"pilot"}}
 ```
 
+- `stage` і `to_stage` — `<stage>`. Для SOLUTION_DESIGN `refs` — `package`, тобто лише `story-spec@<N>`;
 - `rejected_loopback_target` — `loopback_target` події з кроку 3 розділу 8.7.1.
 
-IMPACT_ANALYSIS не запускай. Наступний `next` виконає нову спробу і дослівно передасть `reason` (розділ 7.3). `version` лишається `1`, бо `impact-analysis` не реєструвався. `record_id` — наступний номер. Попередній `applicability-decision` замінить новий запис після прийнятого результату (розділ 7.8).
+Стадію не запускай. Наступний `next` виконає нову спробу і передасть `reason`: для IMPACT_ANALYSIS — за розділом 7.3.2, для SOLUTION_DESIGN — дослівно за розділом 7.3. `version` не змінюється, бо артефакт цієї спроби не реєструвався. Для IMPACT_ANALYSIS `record_id` — наступний номер, а попередній `applicability-decision` замінить новий запис після прийнятого результату (розділ 7.8).
 
 ## 9. Constraints
 
@@ -878,7 +968,7 @@ IMPACT_ANALYSIS не запускай. Наступний `next` виконає 
 - Не вигадуй статусів, подій, полів стану чи правил переходів. Чого бракує в контрактах — повідом людині.
 - History лише доповнюється: рядки не змінюються і не видаляються.
 - Не виправляй стан мовчки і не відновлюй його автоматично.
-- Запускай лише стадії з таблиці 7.1: CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW і IMPACT_ANALYSIS — кожну в одному subagent `general-purpose`. Не запускай інші стадії і додаткові subagents.
+- Запускай лише стадії з таблиці 7.1: CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS і SOLUTION_DESIGN — кожну в одному subagent `general-purpose`. Історичну версію `impact-analysis` після `NOT_APPLICABLE` не передавай як вхід (розділ 7.1). Не запускай інші стадії і додаткові subagents.
 - Рішення людини застосовуй лише в `decide` (розділ 8), за рішенням людини з аргументів команди. Не імітуй і не вгадуй рішень людини, не підставляй `by`. Не застосовуй рішень інших gates, RECONFIRM і `ROUTE_BACK`. Loopback через gate не виконуй автоматично.
 - Рішення в пілоті — симуляція Human Gate. Не подавай їх як погодження чи скасування Story в офіційному Workflow.
 - Stage Skills не викликай інструментом Skill.
