@@ -1,89 +1,89 @@
 # Business Glossary — Customer Portal
 
-## Призначення
+## Purpose
 
-Business Glossary задає єдину бізнес-термінологію Customer Portal. Коли агенти й люди описують продукт, вони мають використовувати терміни саме в значеннях, наведених тут.
+The Business Glossary defines a single business terminology for Customer Portal. When agents and people describe the product, they must use the terms exactly in the meanings given here.
 
-Канонічні джерела продуктового контексту:
+Canonical sources of product context:
 
-- [Product Vision](product-vision.md) визначає продуктову концепцію та scope.
-- [Personas](personas.md) описує потреби користувачів.
-- Business Glossary є канонічним джерелом значень продуктових термінів.
+- [Product Vision](product-vision.md) defines the product concept and scope.
+- [Personas](personas.md) describes user needs.
+- The Business Glossary is the canonical source of the meanings of product terms.
 
-Якщо між цими документами виникає суперечність, агент має повідомити про неї. Автоматично віддавати перевагу одному з документів не можна.
+If a contradiction arises between these documents, the agent must report it. The agent must not automatically prefer one of the documents.
 
-Глосарій визначає лише значення термінів. Бізнес-правил, технічних моделей і зв'язків між поняттями понад ті, що вже є в джерелах, він не встановлює.
+The glossary defines only the meanings of terms. It does not establish business rules, technical models, or relationships between concepts beyond those already present in the sources.
 
-## Учасники
+## Participants
 
 ### Customer Portal
 
-Продукт: платформа, через яку користувачі отримують доступ до порталу та керують своїм обліковим записом, а адміністратори керують користувачами.
+The product: a platform through which users gain access to the portal and manage their account, and administrators manage users.
 
 ### User
 
-Людина, яка користується Customer Portal або проходить процес створення облікового запису для користування ним.
+A person who uses Customer Portal or is going through the account creation process in order to use it.
 
-> Адміністратор також належить до загального поняття User. Щоб розрізнити ролі, кажуть «користувач із роллю `user`».
+> An administrator also belongs to the general concept of User. To distinguish the roles, people say "a user with the `user` role".
 
 ### Administrator
 
-Користувач, відповідальний за керування користувачами платформи. Скорочення — **Admin**.
+A user responsible for managing the platform's users. Abbreviation — **Admin**.
 
-> Administrator — це людина. `admin` — це роль (Role), яка надає їй адміністративні можливості.
+> Administrator is a person. `admin` is a role (Role) that grants that person administrative capabilities.
 
-## Обліковий запис
+## Accounts
 
 ### Account
 
-Обліковий запис користувача. Через нього користувач отримує доступ до порталу.
+A user's account. Through it, the user gains access to the portal.
 
 ### Email
 
-Адреса електронної пошти, яка однозначно відповідає одному користувачу Customer Portal.
+An email address that uniquely corresponds to one Customer Portal user.
 
-> Унікальність email закріплена правилом [BR-003](business-rules.md#br-003--unique-email).
+> Email uniqueness is established by rule [BR-003](business-rules.md#br-003--unique-email).
 
 ### Profile
 
-Дані користувача, які він може самостійно переглядати та змінювати.
+User data that the user can view and change on their own.
 
-> Склад даних профілю продуктовими документами не визначено.
+> The composition of profile data is not defined by the product documents.
 
 ### Password
 
-Секретні облікові дані, пов'язані з Account, які користувач може змінювати.
+Secret credentials associated with an Account that the user can change.
 
-## Доступ
+## Access
 
 ### Registration
 
-Створення нового облікового запису користувачем.
+Creation of a new account by a user.
 
 ### Authentication
 
-Вхід користувача в систему.
+A user logging in to the system.
 
 ### Role
 
-Ознака користувача, яка визначає доступні йому можливості порталу. У MVP є дві ролі: `user` та `admin`.
+A user attribute that determines which portal capabilities are available to the user. The MVP has two roles: `user` and `admin`.
 
-> Role відрізняється від Persona. Persona описує людину, її цілі та потреби (див. [Personas](personas.md)). Role описує можливості в продукті.
+> Role differs from Persona. A Persona describes a person, their goals and needs (see [Personas](personas.md)). A Role describes capabilities in the product.
 
 ### Authorization
 
-Розмежування можливостей порталу відповідно до ролі користувача. Зокрема, адміністративні можливості доступні лише користувачам із роллю `admin`.
+Separation of portal capabilities according to the user's role. In particular, administrative capabilities are available only to users with the `admin` role.
 
-> Authentication відповідає на питання «хто увійшов». Authorization — на питання «що йому доступно».
+> Authentication answers the question "who has logged in". Authorization answers the question "what is available to them".
 
-## Адміністрування
+## Administration
 
 ### User Blocking
 
-Адміністративна дія, яка обмежує доступ користувача до його облікового запису.
+An administrative action that restricts a user's access to their account.
 
-> Поведінку блокування визначає правило [BR-007](business-rules.md#br-007--blocked-user-access).
+> Blocking behavior is defined by rule [BR-007](business-rules.md#br-007--blocked-user-access).
 
 ### User Unblocking
 
-Дія адміністратора, якою він скасовує блокування користувача.
+An administrator action by which the administrator cancels a user's blocking.

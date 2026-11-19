@@ -1,87 +1,87 @@
 # Business Rules — Customer Portal
 
-## Призначення
+## Purpose
 
-Документ містить глобальні бізнес-правила Customer Portal. Це продуктові правила та інваріанти, які діють незалежно від конкретної User Story.
+This document contains the global business rules of Customer Portal. These are product rules and invariants that apply regardless of any specific User Story.
 
-Сюди потрапляють лише правила, які мають одне з двох обґрунтувань:
+Only rules that have one of two justifications are included here:
 
-- вони прямо випливають із погоджених джерел: [Product Vision](product-vision.md), [Personas](personas.md), [Business Glossary](business-glossary.md);
-- їх явно погодив власник продукту. У полі «Джерела» такого правила вказано «Рішення власника продукту» з датою.
+- they follow directly from approved sources: [Product Vision](product-vision.md), [Personas](personas.md), [Business Glossary](business-glossary.md);
+- they were explicitly approved by the product owner. The "Sources" field of such a rule states "Product owner decision" with a date.
 
-Терміни в правилах вживаються у значеннях із [Business Glossary](business-glossary.md).
+Terms in the rules are used in the meanings from the [Business Glossary](business-glossary.md).
 
-Ідентифікатори правил стабільні. Ідентифікатор не змінюється і не використовується повторно, навіть якщо правило змінено або скасовано.
+Rule identifiers are stable. An identifier does not change and is not reused, even if the rule is changed or retired.
 
 ## Rules
 
 ### BR-001 — Admin-Only Capabilities
 
-Адміністративні можливості доступні лише користувачам із роллю `admin`. У MVP це блокування та розблокування користувачів.
+Administrative capabilities are available only to users with the `admin` role. In the MVP, these are blocking and unblocking users.
 
-**Джерела:**
+**Sources:**
 
-- [Product Vision — Критерії успіху MVP](product-vision.md#критерії-успіху-mvp)
+- [Product Vision — MVP Success Criteria](product-vision.md#mvp-success-criteria)
 - [Product Vision — Target Users](product-vision.md#target-users)
-- [Personas — Адміністратор платформи](personas.md#persona-2-адміністратор-платформи)
+- [Personas — Platform Administrator](personas.md#persona-2-platform-administrator)
 
 ### BR-002 — Own Account Self-Service
 
-Керування профілем і зміна пароля, доступні користувачу, стосуються лише його власного Account.
+Profile management and password change available to a user apply only to that user's own Account.
 
-**Джерела:**
+**Sources:**
 
-- [Product Vision — MVP Scope](product-vision.md#mvp-scope): «Керування власним профілем», «Зміна пароля власного облікового запису»
-- [Personas — Користувач порталу](personas.md#persona-1-користувач-порталу)
+- [Product Vision — MVP Scope](product-vision.md#mvp-scope): "Own profile management", "Changing the password of one's own account"
+- [Personas — Portal User](personas.md#persona-1-portal-user)
 
 ### BR-003 — Unique Email
 
-Email однозначно відповідає одному користувачу Customer Portal. Двоє користувачів не можуть мати однаковий email.
+An email uniquely corresponds to one Customer Portal user. Two users cannot have the same email.
 
-**Джерела:**
+**Sources:**
 
-- Рішення власника продукту (2026-11-10)
+- Product owner decision (2026-11-10)
 
 ### BR-004 — Open Registration
 
-Зареєструватися в Customer Portal може будь-хто. Реєстрація має відповідати іншим бізнес-правилам із цього документа.
+Anyone can register in Customer Portal. Registration must comply with the other business rules in this document.
 
-**Джерела:**
+**Sources:**
 
-- Рішення власника продукту (2026-11-10)
-- [Product Vision — Цілі продукту](product-vision.md#цілі-продукту), ціль 1
+- Product owner decision (2026-11-10)
+- [Product Vision — Product Goals](product-vision.md#product-goals), goal 1
 
 ### BR-005 — Default Role on Registration
 
-Користувач, який зареєструвався, отримує роль `user`.
+A user who has registered receives the `user` role.
 
-**Джерела:**
+**Sources:**
 
-- Рішення власника продукту (2026-11-10)
+- Product owner decision (2026-11-10)
 
 ### BR-006 — Single Role
 
-Користувач не може мати більше однієї ролі одночасно.
+A user cannot have more than one role at the same time.
 
-**Джерела:**
+**Sources:**
 
-- Рішення власника продукту (2026-11-10)
+- Product owner decision (2026-11-10)
 
 ### BR-007 — Blocked User Access
 
-Заблокований користувач негайно втрачає доступ до свого Account: жоден його запит, надісланий після завершення блокування, не виконується. Після розблокування доступ відновлюється.
+A blocked user immediately loses access to their Account: none of their requests sent after the blocking is completed is executed. After unblocking, access is restored.
 
-**Джерела:**
+**Sources:**
 
-- Рішення власника продукту (2026-11-10)
-- Рішення власника продукту (2026-11-13): уточнено, що втрата доступу негайна
-- Рішення власника продукту (2026-11-13): уточнено, що гарантія стосується запитів, надісланих після завершення блокування
-- [Business Glossary — User Blocking, User Unblocking](business-glossary.md#адміністрування)
+- Product owner decision (2026-11-10)
+- Product owner decision (2026-11-13): clarified that the loss of access is immediate
+- Product owner decision (2026-11-13): clarified that the guarantee applies to requests sent after the blocking is completed
+- [Business Glossary — User Blocking, User Unblocking](business-glossary.md#administration)
 
 ### BR-008 — Administrators Cannot Be Blocked
 
-Адміністратор не може заблокувати користувача з роллю `admin`. Це стосується і самого себе. Блокувати можна лише користувачів із роллю `user`.
+An administrator cannot block a user with the `admin` role. This also applies to the administrator themselves. Only users with the `user` role can be blocked.
 
-**Джерела:**
+**Sources:**
 
-- Рішення власника продукту (2026-11-10)
+- Product owner decision (2026-11-10)

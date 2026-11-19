@@ -1,22 +1,22 @@
 # Non-Functional Requirements — Customer Portal
 
-## Призначення
+## Purpose
 
-Документ містить нефункціональні вимоги (NFR) до Customer Portal. Це вимоги до якісних характеристик продукту, а не до його можливостей.
+This document contains the non-functional requirements (NFRs) for Customer Portal. These are requirements for the product's quality attributes, not for its capabilities.
 
-Сюди потрапляють лише вимоги, які мають одне з двох обґрунтувань:
+Only requirements that have one of two justifications are included here:
 
-- вони обґрунтовано випливають із погоджених джерел: [Product Vision](product-vision.md), [Personas](personas.md), [Business Glossary](business-glossary.md), [Business Rules](business-rules.md);
-- їх явно погодив власник продукту. У полі Source такої вимоги вказано «Рішення власника продукту» з датою.
+- they reasonably follow from approved sources: [Product Vision](product-vision.md), [Personas](personas.md), [Business Glossary](business-glossary.md), [Business Rules](business-rules.md);
+- they were explicitly approved by the product owner. The Source field of such a requirement states "Product owner decision" with a date.
 
-NFR не повторюють Business Rules і не визначають технічних рішень.
+NFRs do not repeat Business Rules and do not define technical decisions.
 
-Ідентифікатори стабільні. Ідентифікатор не змінюється і не використовується повторно, навіть якщо вимогу змінено або вилучено.
+Identifiers are stable. An identifier does not change and is not reused, even if the requirement is changed or removed.
 
-### Статуси
+### Statuses
 
-- `APPROVED` — вимогу погоджено, вона має об'єктивний критерій перевірки.
-- `NEEDS_CLARIFICATION` — вимога підтверджена джерелами, але критерії перевірки ще не визначено. Їх треба визначити до реалізації відповідної функціональності.
+- `APPROVED` — the requirement is approved and has an objective verification criterion.
+- `NEEDS_CLARIFICATION` — the requirement is supported by sources, but its verification criteria have not yet been defined. They must be defined before the corresponding functionality is implemented.
 
 ## Requirements
 
@@ -24,30 +24,30 @@ NFR не повторюють Business Rules і не визначають тех
 
 - **Status:** `NEEDS_CLARIFICATION`
 - **Category:** Security
-- **Requirement:** Вхід користувача в систему має бути безпечним.
-- **Verification:** Не визначено. Що саме вважається безпечною автентифікацією, треба визначити до реалізації автентифікації.
+- **Requirement:** A user's login to the system must be secure.
+- **Verification:** Not defined. What exactly counts as secure authentication must be defined before authentication is implemented.
 - **Source:**
-  - [Product Vision — Product Vision](product-vision.md#product-vision): «безпечно входити в систему»
-  - [Product Vision — Цілі продукту](product-vision.md#цілі-продукту), ціль 2
-  - [Personas — Користувач порталу, Needs](personas.md#needs)
+  - [Product Vision — Product Vision](product-vision.md#product-vision): "log in to the system securely"
+  - [Product Vision — Product Goals](product-vision.md#product-goals), goal 2
+  - [Personas — Portal User, Needs](personas.md#needs)
 
 ### NFR-002 — Password Confidentiality
 
 - **Status:** `APPROVED`
 - **Category:** Security
-- **Requirement:** Система не повинна зберігати паролі у відкритому або відновлюваному вигляді. Збережені облікові дані не повинні дозволяти отримати початкове значення пароля. Паролі не повинні розкриватися у відповідях системи або логах.
+- **Requirement:** The system must not store passwords in plain text or in a recoverable form. Stored credentials must not allow the original password value to be obtained. Passwords must not be disclosed in system responses or logs.
 - **Verification:**
-  - Збережені облікові дані не містять пароля у відкритому вигляді, і з них неможливо отримати початкове значення пароля.
-  - Жодна відповідь системи не містить пароля.
-  - Жоден лог не містить пароля.
+  - Stored credentials do not contain the password in plain text, and the original password value cannot be obtained from them.
+  - No system response contains a password.
+  - No log contains a password.
 - **Source:**
-  - Рішення власника продукту (2026-11-10)
-  - [Business Glossary — Password](business-glossary.md#password): «секретні облікові дані»
+  - Product owner decision (2026-11-10)
+  - [Business Glossary — Password](business-glossary.md#password): "secret credentials"
 
 ## Retired
 
-Ідентифікатори вилучених вимог зарезервовано. Повторно їх не використовують.
+Identifiers of removed requirements are reserved. They are not reused.
 
-| ID | Назва | Причина вилучення |
+| ID | Name | Reason for removal |
 |---|---|---|
-| NFR-003 | Foundation for Future Domains | Дублює стратегічний намір із [Product Vision](product-vision.md#product-vision) і не має критеріїв перевірки |
+| NFR-003 | Foundation for Future Domains | Duplicates the strategic intent from the [Product Vision](product-vision.md#product-vision) and has no verification criteria |
