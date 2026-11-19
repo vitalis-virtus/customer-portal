@@ -1,27 +1,27 @@
 # Stage I/O Map — Simplified Artifact Contracts MVP (APPROVED (MVP), 2026-11-17)
 #
-# Логічні входи й виходи кожної з 22 стадій docs/workflow/stage-map.yaml (revision 3).
-# Маршрути, verdicts, loopbacks, gates і Approval Scope визначає лише stage-map.yaml:
-# тут вони не повторюються.
+# Logical inputs and outputs of each of the 22 stages of docs/workflow/stage-map.yaml (revision 3).
+# Routes, verdicts, loopbacks, gates and the Approval Scope are defined only by stage-map.yaml:
+# they are not repeated here.
 #
-# Значення ключів — з artifact-registry.yaml (artifacts, records, project, sources).
+# Key values — from artifact-registry.yaml (artifacts, records, project, sources).
 #
-# Формат входу чи виходу:
-#   - <key>                          — обов'язковий
-#   - { key: <key>, when: <умова> }  — лише за умови
-# Умова "applicable" означає, що відповідна Optional Stage застосовна
-# (є applicability-decision з result APPLICABLE).
+# Input or output format:
+#   - <key>                          — mandatory
+#   - { key: <key>, when: <condition> }  — only under the condition
+# The condition "applicable" means that the corresponding Optional Stage is applicable
+# (there is an applicability-decision with result APPLICABLE).
 #
-# Спільні правила (не повторюються нижче):
-#   R1  Входи — лише зареєстровані поточні версії з Currency CURRENT (artifact-rules.md, розділ 4).
-#   R2  На повторному вході producer-стадія замість нової версії може створити revalidation-record,
-#       якщо зміна upstream не вплинула на її артефакт. Review-стадії на повторному проходженні
-#       читають і revalidation-record.
-#   R3  Human gate і human action не створюють артефактів. Рішення записує Orchestrator:
-#       approval — у state.yaml → approvals, інше — в history.jsonl (workflow-state.md).
-#       CANCEL на будь-якій стадії → cancellation-record (Cancellation Protocol).
-#   R4  outputs_if_applicable створюються лише за result APPLICABLE; applicability-decision —
-#       завжди, на кожному вході Optional Stage.
+# Common rules (not repeated below):
+#   R1  Inputs — only registered current versions with Currency CURRENT (artifact-rules.md, section 4).
+#   R2  On re-entry, a producer stage may create a revalidation-record instead of a new version
+#       if the upstream change did not affect its artifact. Review stages on a repeated pass
+#       also read revalidation-record.
+#   R3  A human gate and a human action do not create artifacts. The decision is recorded by the Orchestrator:
+#       an approval — in state.yaml → approvals, anything else — in history.jsonl (workflow-state.md).
+#       CANCEL at any stage → cancellation-record (Cancellation Protocol).
+#   R4  outputs_if_applicable are created only with result APPLICABLE; applicability-decision —
+#       always, on every entry of an Optional Stage.
 
 version: 1
 
@@ -33,9 +33,9 @@ stages:
     inputs:
       - story-source
       - product-foundation
-      - { key: architecture-foundation, when: "Story Type TECHNICAL або INFRASTRUCTURE" }
+      - { key: architecture-foundation, when: "Story Type TECHNICAL or INFRASTRUCTURE" }
     outputs:
-      - clarification-record          # відповіді людини (CLARIFICATION_ANSWERS) потрапляють сюди
+      - clarification-record          # the human's answers (CLARIFICATION_ANSWERS) go here
 
   # ---------------- SPECIFICATION ----------------
 
@@ -48,7 +48,7 @@ stages:
     outputs: [review-report]
 
   HUMAN_SPEC_APPROVAL:
-    inputs: [clarification-record, story-spec, review-report]   # пакет рішення
+    inputs: [clarification-record, story-spec, review-report]   # the decision package
     outputs: []                                                  # R3
 
   # ---------------- TECHNICAL_DESIGN ----------------
@@ -84,7 +84,7 @@ stages:
     inputs:
       - story-spec
       - solution-design
-      - applicability-decision        # рішення IMPACT_ANALYSIS, API_DESIGN, DB_DESIGN (перевірка na_checked_by)
+      - applicability-decision        # decisions of IMPACT_ANALYSIS, API_DESIGN, DB_DESIGN (the na_checked_by check)
       - architecture-foundation
       - { key: impact-analysis, when: applicable }
       - { key: api-design, when: applicable }
@@ -98,13 +98,13 @@ stages:
       - story-spec
       - solution-design
       - review-report                 # DESIGN_REVIEW
-      - testing-strategy              # FG-01: документа ще немає
+      - testing-strategy              # FG-01: the document does not exist yet
       - { key: impact-analysis, when: applicable }
       - { key: api-design, when: applicable }
       - { key: db-design, when: applicable }
     outputs:
       - implementation-plan
-      - applicability-decision        # PLANNED для SECURITY_REVIEW і RECONCILIATION
+      - applicability-decision        # PLANNED for SECURITY_REVIEW and RECONCILIATION
 
   PLAN_REVIEW:
     inputs:
@@ -119,11 +119,11 @@ stages:
     outputs: [review-report]
 
   HUMAN_TECHNICAL_APPROVAL:
-    inputs:                           # пакет рішення
+    inputs:                           # the decision package
       - solution-design
       - implementation-plan
-      - applicability-decision        # TECHNICAL_DESIGN і PLANNED
-      - review-report                 # DESIGN_REVIEW і PLAN_REVIEW
+      - applicability-decision        # TECHNICAL_DESIGN and PLANNED
+      - review-report                 # DESIGN_REVIEW and PLAN_REVIEW
       - { key: impact-analysis, when: applicable }
       - { key: api-design, when: applicable }
       - { key: db-design, when: applicable }
@@ -140,7 +140,7 @@ stages:
       - codebase
       - { key: api-design, when: applicable }
       - { key: db-design, when: applicable }
-    outputs: [implementation-changeset]   # код і тести — commits у feature branch
+    outputs: [implementation-changeset]   # code and tests — commits in the feature branch
 
   CODE_REVIEW:
     inputs:
@@ -159,7 +159,7 @@ stages:
     inputs:
       - implementation-changeset
       - solution-design
-      - review-report                 # DESIGN_REVIEW і CODE_REVIEW
+      - review-report                 # DESIGN_REVIEW and CODE_REVIEW
       - applicability-decision        # PLANNED
       - architecture-foundation
       - { key: api-design, when: applicable }
@@ -173,9 +173,9 @@ stages:
       - solution-design
       - implementation-plan
       - implementation-changeset
-      - review-report                 # CODE_REVIEW і SECURITY_REVIEW
+      - review-report                 # CODE_REVIEW and SECURITY_REVIEW
       - applicability-decision        # PLANNED
-      - story-history                 # тригери REC-01…REC-04 читаються з history.jsonl
+      - story-history                 # triggers REC-01…REC-04 are read from history.jsonl
       - { key: api-design, when: applicable }
       - { key: db-design, when: applicable }
     outputs: [applicability-decision] # ENTRY
@@ -187,9 +187,9 @@ stages:
       - implementation-changeset
       - implementation-plan
       - testing-strategy
-      - review-report                 # CODE_REVIEW і SECURITY_REVIEW
-      - applicability-decision        # SECURITY_REVIEW і RECONCILIATION (na_checked_by)
-      - codebase                      # зокрема поточний стан target branch
+      - review-report                 # CODE_REVIEW and SECURITY_REVIEW
+      - applicability-decision        # SECURITY_REVIEW and RECONCILIATION (na_checked_by)
+      - codebase                      # in particular the current state of the target branch
       - { key: reconciliation-report, when: applicable }
     outputs: [verification-report]
 
@@ -200,39 +200,39 @@ stages:
     outputs: [pull-request]
 
   HUMAN_PR_APPROVAL:
-    inputs:                           # пакет рішення
+    inputs:                           # the decision package
       - implementation-changeset
-      - review-report                 # CODE_REVIEW і SECURITY_REVIEW
+      - review-report                 # CODE_REVIEW and SECURITY_REVIEW
       - verification-report
-      - applicability-decision        # ENTRY від SECURITY_REVIEW і RECONCILIATION
+      - applicability-decision        # ENTRY from SECURITY_REVIEW and RECONCILIATION
       - pull-request
       - { key: reconciliation-report, when: applicable }
     outputs: []                       # R3
 
   MERGE_READINESS_CHECK:
     inputs: [pull-request, verification-report, implementation-changeset, merge-protection-policy]
-    outputs: []                       # check: результат і Merge Protection Status — у state.yaml → git та History
+    outputs: []                       # check: the result and the Merge Protection Status — in state.yaml → git and History
 
   HUMAN_MERGE:
     inputs: [pull-request]
-    outputs: []                       # R3: CONFIRM_MERGED і merge commit — у History
+    outputs: []                       # R3: CONFIRM_MERGED and the merge commit — in History
 
   INTEGRATION_CONFIRMATION:
     inputs:
       - pull-request
       - verification-report
       - implementation-changeset
-      - codebase                      # target branch після merge
+      - codebase                      # the target branch after the merge
       - { key: implementation-plan, when: "Post-Merge Validation" }
       - { key: testing-strategy, when: "Post-Merge Validation" }
     outputs: [integration-record]
     outputs_when:
-      post-merge-validation-record: "target branch змінилася після VERIFICATION"
-      backlog-entry: "кожен погоджений FOLLOW_UP"
+      post-merge-validation-record: "the target branch changed after VERIFICATION"
+      backlog-entry: "each approved FOLLOW_UP"
 
-# Наскрізні виходи, не прив'язані до однієї стадії:
-#   foundation-change-request    — будь-яка стадія через BLOCKED (Foundation Change Required)
-#   revalidation-record          — стадія-власник артефакта на повторному вході (R2)
+# Cross-cutting outputs not bound to a single stage:
+#   foundation-change-request    — any stage through BLOCKED (Foundation Change Required)
+#   revalidation-record          — the owner stage of the artifact on re-entry (R2)
 #   risk-acceptance-record,
-#   foundation-exception-record  — Orchestrator за рішенням людини
-#   cancellation-record          — Orchestrator під час CANCEL (R3)
+#   foundation-exception-record  — the Orchestrator by a human's decision
+#   cancellation-record          — the Orchestrator during CANCEL (R3)
