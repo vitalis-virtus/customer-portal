@@ -1,0 +1,50 @@
+# PILOT — поза зареєстрованим Workflow. Не зареєстрована і не погоджена Story.
+story_id: US-001
+story_type: FEATURE
+story_status: ACTIVE
+current_stage: SPECIFICATION
+execution_state: READY
+last_stage_verdict: CHANGES_REQUIRED
+execution_mode: STEP                # Auto Mode не підтримується
+updated_at: 2026-11-19T11:49:54Z
+
+artifacts:
+  clarification-record:
+    version: 1
+    status: DRAFT
+    currency: CURRENT
+  story-spec:
+    version: 2
+    status: DRAFT
+    currency: CURRENT
+
+records:
+  review-report:
+    SPEC_REVIEW: review-report/0002
+  applicability-decision: {}
+  revalidation-record: []
+
+approvals: {}
+
+pending_human_decision: null
+
+blocker: null
+
+retry:
+  technical_attempts: {}
+  quality_loops:
+    target:
+      SPECIFICATION: 2
+    initiator:
+      SPEC_REVIEW: 2
+  repeated_failure:
+    F-001: 1
+    F-003: 1
+  extensions: []
+
+git:                                # пілот не має feature branch; іменування гілок не визначене
+  feature_branch: null
+  target_branch: null
+  changeset_commit: null
+  verified_target_base: null
+  merge_protection_status: null
