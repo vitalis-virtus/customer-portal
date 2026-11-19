@@ -1,7 +1,7 @@
 ---
 name: solution-design
-description: Stage Skill стадії SOLUTION_DESIGN. Перетворює погоджену story-spec (і impact-analysis, якщо IMPACT_ANALYSIS застосовна) на solution-design — Domain, Application, Integration і Infrastructure Design у межах Architecture Foundation, з трасуванням AC, security-рішеннями, класифікацією залежностей і наміром змін інтерфейсу та даних — і повертає result envelope. Інтерв'ю не веде, API і схему даних не проєктує. Запускається лише вручну з готовими шляхами, версією і номером спроби.
-argument-hint: "story=<ID> spec=<шлях> [impact=<шлях>] output=<шлях до solution-design v1.md> version=1 attempt=<N> [mode=pilot] [reason=\"<рішення людини після RESUME>\"]"
+description: Stage Skill of the SOLUTION_DESIGN stage. Turns the approved story-spec (and impact-analysis, if IMPACT_ANALYSIS is applicable) into a solution-design — Domain, Application, Integration and Infrastructure Design within the Architecture Foundation, with AC traceability, security decisions, dependency classification and the intent of interface and data changes — and returns a result envelope. Does not conduct an interview and does not design the API or the data schema. Started only manually with ready paths, version and attempt number.
+argument-hint: "story=<ID> spec=<path> [impact=<path>] output=<path to solution-design v1.md> version=1 attempt=<N> [mode=pilot] [reason=\"<the human's decision after RESUME>\"]"
 disable-model-invocation: true
 user-invocable: true
 ---
@@ -10,177 +10,179 @@ user-invocable: true
 
 ## 1. Purpose
 
-Визначити загальну технічну структуру рішення Story в тому обсязі, який їй потрібен. Skill виконує стадію SOLUTION_DESIGN за `docs/workflow/stages.md` (розділ 8) і `docs/workflow/stage-map.yaml`. Ці файли й `docs/contracts/` авторитетні. Якщо вони розходяться з цим Skill, діють вони.
+Define the overall technical structure of the Story's solution to the extent it needs. The Skill executes the SOLUTION_DESIGN stage according to `docs/workflow/stages.md` (section 8) and `docs/workflow/stage-map.yaml`. These files and `docs/contracts/` are authoritative. If they diverge from this Skill, they apply.
 
-Стадія обов'язкова (`optional: false`, OD-01). Обсяг дизайну може бути мінімальним, але `NOT_APPLICABLE` вона не повертає.
+The stage is mandatory (`optional: false`, OD-01). The scope of the design may be minimal, but it does not return `NOT_APPLICABLE`.
 
-**Межі стадії:**
-- **API_DESIGN:** конкретні маршрути, методи, формати запиту й відповіді, коди статусів і помилок, заголовки. SOLUTION_DESIGN фіксує лише намір змін зовнішнього інтерфейсу (розділ 5, п. 8).
-- **DB_DESIGN:** таблиці, колонки, типи, обмеження, індекси, ключі Redis, міграції. SOLUTION_DESIGN фіксує лише намір змін збережених даних (розділ 5, п. 9).
-- Застосовність API_DESIGN і DB_DESIGN оцінюють самі ці стадії, а не SOLUTION_DESIGN.
-- Код не пишеться. Імена типів і файлів — лише ілюстративні, з позначкою «наприклад».
-- Вимоги не змінюються: продуктові рішення живуть у погодженій `story-spec`.
+**Stage boundaries:**
+- **API_DESIGN:** specific routes, methods, request and response formats, status and error codes, headers. SOLUTION_DESIGN records only the intent of external interface changes (section 5, item 8).
+- **DB_DESIGN:** tables, columns, types, constraints, indexes, Redis keys, migrations. SOLUTION_DESIGN records only the intent of persisted data changes (section 5, item 9).
+- The applicability of API_DESIGN and DB_DESIGN is assessed by these stages themselves, not by SOLUTION_DESIGN.
+- No code is written. Names of types and files are only illustrative, marked with "for example".
+- Requirements do not change: product decisions live in the approved `story-spec`.
 
-Результат перевіряє DESIGN_REVIEW (`reviewed_by`).
+The result is checked by DESIGN_REVIEW (`reviewed_by`).
+
+**Language** (`AGENTS.md`): `solution-design` is written in English. The human's reason passed in `reason` is quoted verbatim in its original language.
 
 ## 2. Inputs
 
-Аргументи (`$ARGUMENTS`):
+Arguments (`$ARGUMENTS`):
 
-| Аргумент | Обов'язковий | Значення |
+| Argument | Required | Meaning |
 |---|---|---|
-| `story` | так | ID Story, наприклад `US-003` |
-| `spec` | так | Готовий шлях поточної погодженої версії `story-spec`. Її номер версії бери з front matter |
-| `impact` | ні | Готовий шлях поточної версії `impact-analysis`. Його передає Orchestrator лише тоді, коли IMPACT_ANALYSIS застосовна. Якщо аргументу немає, стадія незастосовна: `impact-analysis` не шукай, не вимагай і не використовуй, навіть якщо в директорії Story є його файли (наприклад, історична версія після повторної оцінки `NOT_APPLICABLE`) |
-| `output` | так | Готовий шлях файлу `solution-design`. Skill не обчислює шлях сам |
-| `version` | так | Версія `solution-design`, збігається з `v<N>` в `output`. У цьому інкременті — лише `1` |
-| `attempt` | так | Номер спроби стадії |
-| `mode=pilot` | ні | Пілот поза зареєстрованим Workflow |
-| `reason` | ні | Дослівна причина рішення людини `RESUME` після `CHANGES_REQUIRED` цієї стадії |
+| `story` | yes | Story ID, for example `US-003` |
+| `spec` | yes | A ready path of the current approved version of `story-spec`. Take its version number from the front matter |
+| `impact` | no | A ready path of the current version of `impact-analysis`. The Orchestrator passes it only when IMPACT_ANALYSIS is applicable. If the argument is absent, the stage is not applicable: do not search for, require or use `impact-analysis`, even if its files exist in the Story directory (for example, a historical version after a repeated `NOT_APPLICABLE` assessment) |
+| `output` | yes | A ready path of the `solution-design` file. The Skill does not compute the path itself |
+| `version` | yes | The version of `solution-design`, matches `v<N>` in `output`. In this increment — only `1` |
+| `attempt` | yes | The stage attempt number |
+| `mode=pilot` | no | A pilot outside the registered Workflow |
+| `reason` | no | The verbatim reason of the human's `RESUME` decision after a `CHANGES_REQUIRED` of this stage |
 
-Людини в контексті немає: Skill нічого не питає. Якщо бракує обов'язкового аргументу або вхід не читається, verdict — `BLOCKED` (розділ 6).
+There is no human in the context: the Skill asks nothing. If a mandatory argument is missing or an input cannot be read, the verdict is `BLOCKED` (section 6).
 
-`reason` — це рішення людини щодо попереднього Loopback, а не джерело вимог. Воно може пояснити, чому людина відхилила повернення. Нових вимог воно не додає.
+`reason` is the human's decision regarding the previous Loopback, not a source of requirements. It may explain why the human rejected the return. It does not add new requirements.
 
-Логічні входи — `docs/contracts/stage-io-map.yaml` → `SOLUTION_DESIGN`, шляхи — `docs/contracts/artifact-registry.yaml`:
-- `story-spec` — `REQ`, `AC` з Verification Method, scope, Story Type, «Відкрито для Technical Design»;
-- `impact-analysis` (лише якщо передано) — зачеплені області, вплив, ризики регресії, «Відкрито для Solution Design»;
+Logical inputs — `docs/contracts/stage-io-map.yaml` → `SOLUTION_DESIGN`, paths — `docs/contracts/artifact-registry.yaml`:
+- `story-spec` — `REQ`, `AC` with a Verification Method, scope, Story Type, "Open for Technical Design";
+- `impact-analysis` (only if passed) — affected areas, impact, regression risks, "Open for Solution Design";
 - `architecture-foundation`:
-  - мінімум `docs/architecture/architecture.md` (стиль, модулі, наскрізні аспекти, інваріанти AR-) і `docs/architecture/package-map.md` (модулі, шари, порти, імпорти);
-  - за потреби — `api-conventions.md`, `persistence-conventions.md` (зокрема §10 Consistency Analysis), `security-conventions.md`, лише розділи, яких стосується Story.
+  - at minimum `docs/architecture/architecture.md` (style, modules, cross-cutting concerns, AR- invariants) and `docs/architecture/package-map.md` (modules, layers, ports, imports);
+  - as needed — `api-conventions.md`, `persistence-conventions.md` (in particular §10 Consistency Analysis), `security-conventions.md`, only the sections the Story concerns.
 
-За потреби (`stages.md`, SOLUTION_DESIGN → «За потреби»):
-- наявний код зачеплених модулів — конкретні шляхи;
-- документи Product Foundation, на правила яких (BR-, NFR-) прямо посилається `story-spec`, — лише щоб зрозуміти зміст цих правил і розмістити їх у дизайні. Це не нове джерело вимог.
+As needed (`stages.md`, SOLUTION_DESIGN → "As needed"):
+- the existing code of the affected modules — specific paths;
+- Product Foundation documents whose rules (BR-, NFR-) `story-spec` directly references — only to understand the content of these rules and to place them in the design. This is not a new source of requirements.
 
-Історія чату і `clarification-record` не є входами. Читай лише потрібні документи (Progressive Context Loading).
+Chat history and `clarification-record` are not inputs. Read only the documents you need (Progressive Context Loading).
 
 ## 3. Procedure
 
-1. **Перевір аргументи.**
-   - У `mode=pilot` `output` не може лежати в `docs/stories/`.
-   - `version` має бути `1`, інакше розділ 6.
-   - Якщо файл `output` уже існує, verdict — `BLOCKED`. Файл не перезаписуй.
-2. **Прочитай `story-spec`.** Виділи `REQ`, `AC`, scope, Story Type, розділ «Відкрито для Technical Design» і правила Foundation, на які він посилається.
-3. **Якщо передано `impact`, прочитай `impact-analysis`.** Кожна зачеплена область, ризик регресії і пункт «Відкрито для Solution Design» має отримати місце в дизайні або явне обґрунтування, чому дизайн його не зачіпає.
-4. **Прочитай Foundation** (розділ 2): мінімум, далі — лише потрібні розділи конвенцій.
-5. **Спроєктуй рішення** за розділом 3.1.
-6. **Перевір межі** (розділ 3.2) і критерії якості (розділ 4).
-7. **Визнач verdict** (розділ 6). Поки verdict не визначено, тримай дизайн у пам'яті, а не у файлі.
-8. **Лише для `PASS` запиши `solution-design`** в `output` (розділ 5). Для інших verdicts файл не створюй навіть частково: незареєстрований Working Draft зупинить наступну спробу.
-9. **Поверни envelope** (розділ 6).
+1. **Check the arguments.**
+   - In `mode=pilot`, `output` cannot lie in `docs/stories/`.
+   - `version` must be `1`, otherwise section 6.
+   - If the `output` file already exists, the verdict is `BLOCKED`. Do not overwrite the file.
+2. **Read `story-spec`.** Identify `REQ`, `AC`, scope, Story Type, the section "Open for Technical Design" and the Foundation rules it references.
+3. **If `impact` is passed, read `impact-analysis`.** Each affected area, regression risk and item of "Open for Solution Design" must get a place in the design or an explicit justification of why the design does not touch it.
+4. **Read the Foundation** (section 2): the minimum, then only the needed sections of the conventions.
+5. **Design the solution** according to section 3.1.
+6. **Check the boundaries** (section 3.2) and the quality criteria (section 4).
+7. **Determine the verdict** (section 6). Until the verdict is determined, keep the design in memory, not in a file.
+8. **Only for `PASS`, write `solution-design`** to `output` (section 5). For other verdicts, do not create the file, not even partially: an unregistered Working Draft will stop the next attempt.
+9. **Return the envelope** (section 6).
 
-### 3.1. Рівні дизайну
+### 3.1. Design Levels
 
-Для кожного рівня — рішення в обсязі Story або позначка «не зачеплено» з коротким обґрунтуванням (`stages.md`, OD-01):
+For each level — decisions to the extent of the Story or the marker "not affected" with a short justification (`stages.md`, OD-01):
 
-- **Domain** — сутності, value objects, інваріанти; у якому модулі й шарі живе кожне бізнес-правило (`architecture.md` §4, «Розміщення бізнес-правил»).
-- **Application** — use cases з входом, результатом і категоріями помилок; порти; межі транзакцій; узгодженість даних між сховищами; хто діє і як перевіряється право на дію.
-- **Integration** — взаємодія модулів через публічні контракти (`package-map.md` §6), зовнішні системи, напрямки імпортів (§7).
-- **Infrastructure** — конфігурація, середовища, runtime-компоненти, composition root, запуск і відкат, якщо Story їх змінює.
+- **Domain** — entities, value objects, invariants; in which module and layer each business rule lives (`architecture.md` §4, "Business Rule Placement").
+- **Application** — use cases with input, result and error categories; ports; transaction boundaries; data consistency between stores; who is acting and how the permission to act is checked.
+- **Integration** — interaction of modules through public contracts (`package-map.md` §6), external systems, import directions (§7).
+- **Infrastructure** — configuration, environments, runtime components, the composition root, startup and rollback, if the Story changes them.
 
-Посилайся на правила Foundation за ID чи розділом. Не переписуй їх.
+Reference Foundation rules by ID or section. Do not rewrite them.
 
-### 3.2. Межі з API_DESIGN і DB_DESIGN
+### 3.2. Boundaries with API_DESIGN and DB_DESIGN
 
-| SOLUTION_DESIGN | Не SOLUTION_DESIGN |
+| SOLUTION_DESIGN | Not SOLUTION_DESIGN |
 |---|---|
-| які use cases змінюють видиму клієнту поведінку; категорії помилок use case | маршрути, методи, DTO, коди статусів, Problem Details, заголовки → API_DESIGN |
-| які дані зберігаються, змінюються чи читаються і в якому сховищі; межі транзакцій; узгодженість | таблиці, колонки, типи, обмеження, індекси, ключі Redis, TTL, міграції → DB_DESIGN |
-| розміщення в модулях, шарах і портах | код, імена файлів і типів, крім ілюстративних |
+| which use cases change client-visible behavior; error categories of the use case | routes, methods, DTOs, status codes, Problem Details, headers → API_DESIGN |
+| which data is stored, changed or read and in which store; transaction boundaries; consistency | tables, columns, types, constraints, indexes, Redis keys, TTL, migrations → DB_DESIGN |
+| placement in modules, layers and ports | code, names of files and types, except illustrative ones |
 
-Якщо рішення неможливо ухвалити без деталей API чи схеми, винеси питання в «Відкрито для API_DESIGN і DB_DESIGN». Не вирішуй його тут.
+If a decision cannot be made without API or schema details, move the question to "Open for API and DB Design". Do not resolve it here.
 
-### 3.3. Security і залежності
+### 3.3. Security and Dependencies
 
-- **Security на рівні архітектури** — для кожної Story, незалежно від того, чи буде застосовна SECURITY_REVIEW (OD-05). Описуються автентифікація, авторизація й «хто діє», межі довіри, чутливі дані в логах і відповідях, сесії й облікові дані, якщо Story їх зачіпає. Підстава — посилання на `security-conventions.md` і AR-. Обов'язкових правил не послаблюй (RR-14).
-- **Залежності** (`workflow-policies.md` §2, Risk-Based Dependency Approval, OD-09). Кожна нова чи змінена залежність отримує класифікацію за критеріями OD-09:
-  - проста допоміжна залежність, що не відповідає жодному критерію, — пропонується в дизайні з обґрунтуванням;
-  - суттєва залежність, а також будь-яка, класифікація якої неоднозначна, — `BLOCKED` (розділ 6);
-  - для Customer Portal діє AR-012: нова технологія чи заміна позиції `architecture.md` §6 потребує оновлення Foundation — `BLOCKED` (Foundation Change Required);
-  - якщо нових залежностей немає, так і напиши.
-- **Аналізи, яких вимагає Foundation.** Наприклад, Consistency Analysis для кожного use case, що змінює і PostgreSQL, і Redis (`persistence-conventions.md` §10), за всіма пунктами його таблиці. Якщо таких use cases немає, так і напиши.
+- **Security at the architecture level** — for every Story, regardless of whether SECURITY_REVIEW will be applicable (OD-05). Describe authentication, authorization and "who is acting", trust boundaries, sensitive data in logs and responses, sessions and credentials, if the Story touches them. The basis — references to `security-conventions.md` and AR-. Do not weaken mandatory rules (RR-14).
+- **Dependencies** (`workflow-policies.md` §2, Risk-Based Dependency Approval, OD-09). Each new or changed dependency receives a classification according to the OD-09 criteria:
+  - a simple auxiliary dependency that does not meet any criterion — proposed in the design with a justification;
+  - a significant dependency, as well as any whose classification is ambiguous — `BLOCKED` (section 6);
+  - for Customer Portal, AR-012 applies: a new technology or a replacement of an entry of `architecture.md` §6 requires a Foundation update — `BLOCKED` (Foundation Change Required);
+  - if there are no new dependencies, say so.
+- **Analyses required by the Foundation.** For example, a Consistency Analysis for each use case that changes both PostgreSQL and Redis (`persistence-conventions.md` §10), covering all items of its table. If there are no such use cases, say so.
 
 ## 4. Quality Criteria
 
-- Кожен `AC` має місце в дизайні: use case, правило чи компонент, що його реалізує (`stages.md`, Completion Conditions).
-- Якщо передано `impact-analysis`, кожну його зачеплену область і кожен пункт «Відкрито для Solution Design» розглянуто.
-- Кожен рівень (Domain, Application, Integration, Infrastructure) має рішення або обґрунтоване «не зачеплено».
-- Рішення не порушують Architecture Rules і інваріантів AR-, напрямків імпортів і правил розміщення бізнес-правил.
-- Security-рішення описано. Кожну залежність класифіковано. Аналізи, яких вимагає Foundation, виконано.
-- Намір змін зовнішнього інтерфейсу і збережених даних сформульовано явно: «так» або «ні», з посиланням на `REQ`/`AC`.
-- Деталей API_DESIGN і DB_DESIGN немає.
-- Немає вимог без джерела в `story-spec`. Відкрите продуктове питання не вирішено мовчки.
-- Кожне джерело в `inputs` — конкретний шлях з актуальним `commit`.
+- Each `AC` has a place in the design: a use case, a rule or a component that implements it (`stages.md`, Completion Conditions).
+- If `impact-analysis` is passed, each of its affected areas and each item of "Open for Solution Design" is considered.
+- Each level (Domain, Application, Integration, Infrastructure) has decisions or a justified "not affected".
+- The decisions do not violate the Architecture Rules and AR- invariants, the import directions and the business rule placement rules.
+- Security decisions are described. Each dependency is classified. The analyses required by the Foundation are performed.
+- The intent of external interface and persisted data changes is formulated explicitly: "yes" or "no", with a reference to `REQ`/`AC`.
+- There are no API_DESIGN and DB_DESIGN details.
+- There are no requirements without a source in `story-spec`. An open product question is not silently resolved.
+- Each source in `inputs` is a specific path with a current `commit`.
 
 ## 5. Output
 
-Один файл `solution-design` за шляхом `output`, мова — українська.
+One `solution-design` file at the `output` path, in English.
 
-Front matter — поля `docs/contracts/artifact-rules.md` §1, і лише вони:
+Front matter — the fields of `docs/contracts/artifact-rules.md` §1, and only them:
 - `artifact_type: solution-design`, `story_id`, `version`;
 - `produced_by: { stage: SOLUTION_DESIGN, attempt }`;
-- `created_at` — фактичний UTC з `date -u +%Y-%m-%dT%H:%M:%SZ`;
+- `created_at` — the actual UTC from `date -u +%Y-%m-%dT%H:%M:%SZ`;
 - `inputs`:
   - `{ type: story-spec, version }`;
-  - `{ type: impact-analysis, version }` — лише якщо передано `impact`;
-  - кожен прочитаний документ Foundation і шлях коду як `{ source: architecture-foundation | product-foundation | codebase, path, commit }`, де `commit` — `git log -1 --format=%h -- <path>`.
+  - `{ type: impact-analysis, version }` — only if `impact` is passed;
+  - each Foundation document and code path read as `{ source: architecture-foundation | product-foundation | codebase, path, commit }`, where `commit` is `git log -1 --format=%h -- <path>`.
 
-**Правила посилань на джерела (D-3):**
-- лише конкретні шляхи, ніколи корінь репозиторію `.`;
-- шлях без історії в Git до `inputs` не потрапляє, бо `commit` немає. Його фіксують у «Обмеженнях»;
-- для прочитаного шляху з незакоміченими змінами (`git status --porcelain -- <path>`) дизайн спирається на фактичний вміст робочого дерева, а обмеження описується в тілі.
+**Source reference rules (D-3):**
+- only specific paths, never the repository root `.`;
+- a path without a history in Git does not get into `inputs`, because there is no `commit`. It is recorded in "Limitations";
+- for a path read that has uncommitted changes (`git status --porcelain -- <path>`), the design relies on the actual content of the working tree, and the limitation is described in the body.
 
-Статусів, Currency, approval і позначки пілоту у front matter немає.
+There are no statuses, Currency, approval or pilot marker in the front matter.
 
-Розділи тіла, коротко і пропорційно Story:
+Body sections, brief and proportional to the Story:
 
-1. **Предмет** — версії `story-spec` і `impact-analysis` (якщо є), прочитані джерела.
-2. **Domain Design** — розділ 3.1.
-3. **Application Design** — use cases, порти, межі транзакцій, узгодженість, категорії помилок.
-4. **Integration Design** — модулі, публічні контракти, імпорти, зовнішні системи.
-5. **Infrastructure Design** — або «не зачеплено» з обґрунтуванням.
-6. **Трасування AC** — таблиця `AC-NN` → `REQ` → елемент дизайну.
-7. **Security** — розділ 3.3.
-8. **Зміни зовнішнього інтерфейсу** — так чи ні; які use cases додають чи змінюють операції або видиму поведінку, з `REQ`/`AC`. Без маршрутів і форматів.
-9. **Зміни збережених даних** — так чи ні; які дані, в якому сховищі, створення, зміна чи лише читання, з `REQ`/`AC`. Без схеми і міграцій.
-10. **Залежності** — класифікація за OD-09 або «нових залежностей немає».
-11. **Аналізи, яких вимагає Foundation** — наприклад Consistency Analysis, або «не потрібні» з причиною.
-12. **Опрацювання `impact-analysis`** — лише якщо його передано: як враховано кожну область і кожен пункт «Відкрито для Solution Design».
-13. **Відкрито для API_DESIGN і DB_DESIGN** — питання, які стадія свідомо не вирішує.
-14. **Обмеження** — незакомічені чи невідстежувані шляхи, межі видимості.
-15. **Рішення людини** — лише якщо передано `reason`: дослівна цитата і як вона вплинула на дизайн. Рішення людини фіксується в канонічному артефакті, а не лише в History (`workflow-policies.md` §2).
+1. **Subject** — the versions of `story-spec` and `impact-analysis` (if any), the sources read.
+2. **Domain Design** — section 3.1.
+3. **Application Design** — use cases, ports, transaction boundaries, consistency, error categories.
+4. **Integration Design** — modules, public contracts, imports, external systems.
+5. **Infrastructure Design** — or "not affected" with a justification.
+6. **AC Traceability** — a table `AC-NN` → `REQ` → design element.
+7. **Security** — section 3.3.
+8. **External Interface Changes** — yes or no; which use cases add or change operations or visible behavior, with `REQ`/`AC`. Without routes and formats.
+9. **Persisted Data Changes** — yes or no; which data, in which store, creation, change or only reading, with `REQ`/`AC`. Without a schema and migrations.
+10. **Dependencies** — the classification according to OD-09 or "there are no new dependencies".
+11. **Analyses Required by the Foundation** — for example Consistency Analysis, or "not needed" with a reason.
+12. **Handling of `impact-analysis`** — only if it is passed: how each area and each item of "Open for Solution Design" was taken into account.
+13. **Open for API and DB Design** — questions that the stage deliberately does not resolve.
+14. **Limitations** — uncommitted or untracked paths, visibility boundaries.
+15. **Human Decision** — only if `reason` is passed: a verbatim quotation and how it affected the design. A human's decision is recorded in the canonical artifact, not only in History (`workflow-policies.md` §2).
 
-У `mode=pilot` перший рядок тіла: «Пілотний артефакт поза офіційним зареєстрованим Workflow. Не є офіційно погодженим і не є входом стадій зареєстрованих Stories; може бути входом наступних стадій того самого пілоту».
+In `mode=pilot`, the first line of the body: "Pilot artifact outside the official registered Workflow. Not officially approved and not an input of stages of registered Stories; may be an input of subsequent stages of the same pilot."
 
 ## 6. Verdict and Return
 
-SOLUTION_DESIGN має `optional: false` і такі loopbacks:
-- `IMPACT_ANALYSIS` — без `crosses_gates`;
-- `SPECIFICATION` і `CLARIFICATION` — з `crosses_gates: [HUMAN_SPEC_APPROVAL]`.
+SOLUTION_DESIGN has `optional: false` and the following loopbacks:
+- `IMPACT_ANALYSIS` — without `crosses_gates`;
+- `SPECIFICATION` and `CLARIFICATION` — with `crosses_gates: [HUMAN_SPEC_APPROVAL]`.
 
-Тому допустимі **`PASS`**, **`CHANGES_REQUIRED`** і **`BLOCKED`**. `NOT_APPLICABLE` недопустимий.
+Therefore **`PASS`**, **`CHANGES_REQUIRED`** and **`BLOCKED`** are allowed. `NOT_APPLICABLE` is not allowed.
 
-| Ситуація | Verdict | `outputs` |
+| Situation | Verdict | `outputs` |
 |---|---|---|
-| Бракує аргументу, `version` ≠ `1`, вхід не читається або `output` уже існує | `BLOCKED` до проєктування. Файлу немає | `[]` |
-| Дизайн завершено, критерії розділу 4 виконано | `PASS` | `[{ type: solution-design, version }]` |
-| `impact-analysis` неповний чи хибний (пропущено зачеплену область, ризик або міграцію), або `impact` не передано, а дизайн показує, що зачіпає наявну поведінку, контракт, дані чи спільні компоненти (тригер IA-01…IA-04) | `CHANGES_REQUIRED`, `loopback_target: IMPACT_ANALYSIS` | `[]` |
-| `story-spec` нездійсненна, суперечлива чи неповна для дизайну, і це усувається в `story-spec` без нового рішення людини | `CHANGES_REQUIRED`, `loopback_target: SPECIFICATION` | `[]` |
-| Для дизайну потрібне нове чи інше продуктове рішення людини | `CHANGES_REQUIRED`, `loopback_target: CLARIFICATION` | `[]` |
-| Story потребує зміни Architecture чи Product Foundation, зокрема нової технології (AR-012) | `BLOCKED` (Foundation Change Required) | `[]` |
-| Суттєва чи неоднозначна нова залежність (OD-09) або інше рішення з переліку ескалацій (`workflow-policies.md` §2) | `BLOCKED` (Escalation Required) | `[]` |
-| Рішення неможливе без послаблення обов'язкового правила Foundation, зокрема Security Rules | `BLOCKED` (Foundation Rule Violation) | `[]` |
+| An argument is missing, `version` ≠ `1`, an input cannot be read or `output` already exists | `BLOCKED` before the design. No file | `[]` |
+| The design is completed, the criteria of section 4 are met | `PASS` | `[{ type: solution-design, version }]` |
+| `impact-analysis` is incomplete or wrong (an affected area, risk or migration is missed), or `impact` is not passed, but the design shows that it touches existing behavior, a contract, data or shared components (trigger IA-01…IA-04) | `CHANGES_REQUIRED`, `loopback_target: IMPACT_ANALYSIS` | `[]` |
+| `story-spec` is infeasible, contradictory or incomplete for the design, and this can be eliminated in `story-spec` without a new decision of the human | `CHANGES_REQUIRED`, `loopback_target: SPECIFICATION` | `[]` |
+| The design requires a new or different product decision of the human | `CHANGES_REQUIRED`, `loopback_target: CLARIFICATION` | `[]` |
+| The Story requires a change to the Architecture or Product Foundation, in particular a new technology (AR-012) | `BLOCKED` (Foundation Change Required) | `[]` |
+| A significant or ambiguous new dependency (OD-09) or another decision from the list of escalations (`workflow-policies.md` §2) | `BLOCKED` (Escalation Required) | `[]` |
+| A decision is impossible without weakening a mandatory Foundation rule, in particular the Security Rules | `BLOCKED` (Foundation Rule Violation) | `[]` |
 
-Правила:
+Rules:
 
-- Якщо підходить кілька цілей, обери найвищу за течією: CLARIFICATION, далі SPECIFICATION, далі IMPACT_ANALYSIS. Після повернення Story однаково пройде наступні стадії (RR-06). У `summary` перелічи всі виявлені проблеми.
-- `loopback_target` — лише пропозиція. Маршрут, підтвердження людини для цілей з `crosses_gates` (RR-04) і повторний вхід цілі належать Orchestrator. Skill їх не виконує й не імітує.
-- Для `CHANGES_REQUIRED` findings передаються в `summary`: коротко кожна проблема з посиланням на `REQ`/`AC`, область `impact-analysis` чи правило Foundation. ID `F-NNN` не присвоюй, це робить review.
-- Для `BLOCKED` потрібне опиши в `blocker.needed`. `foundation-change-request` Skill не створює.
-- У `mode=pilot` додай у `summary` позначку «pilot».
+- If several targets fit, choose the highest upstream one: CLARIFICATION, then SPECIFICATION, then IMPACT_ANALYSIS. After the return, the Story will go through the subsequent stages anyway (RR-06). List all detected problems in `summary`.
+- `loopback_target` is only a proposal. The route, the human's confirmation for targets with `crosses_gates` (RR-04) and the re-entry of the target belong to the Orchestrator. The Skill does not perform or simulate them.
+- For `CHANGES_REQUIRED`, findings are passed in `summary`: briefly each problem with a reference to `REQ`/`AC`, an `impact-analysis` area or a Foundation rule. Do not assign `F-NNN` IDs; that is done by review.
+- For `BLOCKED`, describe what is needed in `blocker.needed`. The Skill does not create a `foundation-change-request`.
+- In `mode=pilot`, add the marker "pilot" to `summary`.
 
-Envelope — формат `docs/contracts/workflow-state.md` §6, без змін і без додаткових полів:
+Envelope — the format of `docs/contracts/workflow-state.md` §6, unchanged and without additional fields:
 
 ```yaml
 result:
@@ -190,19 +192,19 @@ result:
   verdict: PASS                      # PASS | CHANGES_REQUIRED | BLOCKED
   outputs:
     - { type: solution-design, version: 1 }
-  loopback_target: null              # IMPACT_ANALYSIS | SPECIFICATION | CLARIFICATION лише для CHANGES_REQUIRED
-  blocker: null                      # для BLOCKED: { reason, details, needed }
-  summary: "2 use cases, 13/13 AC; інтерфейс: так; дані: лише читання; нових залежностей немає; pilot"
+  loopback_target: null              # IMPACT_ANALYSIS | SPECIFICATION | CLARIFICATION only for CHANGES_REQUIRED
+  blocker: null                      # for BLOCKED: { reason, details, needed }
+  summary: "2 use cases, 13/13 AC; interface: yes; data: read only; no new dependencies; pilot"
 ```
 
 ## 7. Constraints
 
-- Пиши лише файл `output` і лише для `PASS`.
-- Не змінюй `story-spec`, `impact-analysis`, `clarification-record`, код, Foundation, Workflow Definition, `docs/contracts/` та інші артефакти.
-- Не змінюй `state.yaml` і `history.jsonl` будь-якої Story, а також статуси, Currency чи approvals.
-- Не обчислюй шлях чи версію: бери їх з аргументів.
-- Bash — лише `git log`, `git status`, `git ls-files` і `date`.
-- Не веди інтерв'ю, не питай людину і не ухвалюй продуктових рішень.
-- Не проєктуй API і схему даних, не пиши код.
-- Не виконуй Loopback, не проходь Human Gate, не імітуй Orchestrator, DESIGN_REVIEW чи рішень людини. Не запускай інші стадії, Skills чи subagents.
-- Не роби `git commit`, `git push` чи деструктивних операцій.
+- Write only the `output` file and only for `PASS`.
+- Do not change `story-spec`, `impact-analysis`, `clarification-record`, the code, the Foundation, the Workflow Definition, `docs/contracts/` or other artifacts.
+- Do not change the `state.yaml` and `history.jsonl` of any Story, as well as statuses, Currency or approvals.
+- Do not compute the path or version: take them from the arguments.
+- Bash — only `git log`, `git status`, `git ls-files` and `date`.
+- Do not conduct an interview, do not ask the human and do not make product decisions.
+- Do not design the API and the data schema, do not write code.
+- Do not perform a Loopback, do not pass a Human Gate, do not simulate the Orchestrator, DESIGN_REVIEW or the human's decisions. Do not start other stages, Skills or subagents.
+- Do not run `git commit`, `git push` or destructive operations.
