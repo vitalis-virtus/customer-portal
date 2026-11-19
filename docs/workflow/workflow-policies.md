@@ -1,488 +1,488 @@
 # Workflow Policies — Workflow Definition
 
-**Статус документа:** `APPROVED` (revision 3). Погоджено людиною 2026-11-16 після фінального Review.
+**Document status:** `APPROVED` (revision 3). Approved by a human on 2026-11-16 after the final Review.
 
-## 1. Призначення
+## 1. Purpose
 
-Документ визначає нормативні політики Story Workflow: межі автономії агента, Human Gates, Reviews, Optional Stages, зміни Foundation, Findings, Definition of Done, Git-інтеграцію, режими виконання та ізоляцію Stories.
+This document defines the normative policies of the Story Workflow: the boundaries of agent autonomy, Human Gates, Reviews, Optional Stages, Foundation changes, Findings, the Definition of Done, Git integration, execution modes and Story isolation.
 
-Маршрути визначає [stage-map.yaml](stage-map.yaml). Стадії описано в [stages.md](stages.md). Модель стану — у [workflow-state-model.md](workflow-state-model.md).
+Routes are defined by [stage-map.yaml](stage-map.yaml). Stages are described in [stages.md](stages.md). The state model — in [workflow-state-model.md](workflow-state-model.md).
 
-Політики не залежать від технологій проєкту. Технологічні правила (мова, фреймворки, сховища, конкретні Security Rules) належать Project Foundation і застосовуються стадіями через посилання на нього. Ці політики описують, що Foundation має бути дотримано, але не дублюють його правил.
+The policies do not depend on the project's technologies. Technology rules (language, frameworks, stores, specific Security Rules) belong to the Project Foundation and are applied by stages by referencing it. These policies describe that the Foundation must be complied with, but do not duplicate its rules.
 
-Нормативні правила документа ще не мають програмної перевірки. Їх забезпечуватимуть Orchestrator, Stage Skills і Harness Validation на наступних етапах.
+The normative rules of this document do not yet have programmatic verification. They will be enforced by the Orchestrator, Stage Skills and Harness Validation at the next stages.
 
 ## 2. Controlled Autonomy
 
-Агент ухвалює технічні рішення в межах погоджених документів (Q7): Foundation, погодженої специфікації, погодженого дизайну та Implementation Plan.
+The agent makes technical decisions within the approved documents (Q7): the Foundation, the approved specification, the approved design and the Implementation Plan.
 
-**Агент вирішує сам:**
+**The agent decides on its own:**
 
-- деталі реалізації, які не суперечать погодженому дизайну й Foundation;
-- внутрішню структуру коду в межах правил Foundation;
-- склад і форму тестів у межах тестового підходу плану;
-- формулювання артефактів, які створює його стадія.
+- implementation details that do not contradict the approved design and the Foundation;
+- the internal structure of the code within the Foundation rules;
+- the composition and form of tests within the plan's testing approach;
+- the wording of the artifacts its stage creates.
 
-**Потрібна ескалація до людини:**
+**Escalation to a human is needed:**
 
-| Ситуація | Як обробляється |
+| Situation | How it is handled |
 |---|---|
-| Зміна Product Foundation | Foundation Change Request (розділ 6) |
-| Зміна Architecture Foundation | Foundation Change Request (розділ 6) |
-| Суттєва нова залежність (критерії нижче) | `BLOCKED` (Escalation Required). Якщо Foundation вимагає оновлення документа для нової технології, — Foundation Change Request |
-| Послаблення чи порушення обов'язкового правила Foundation, зокрема Security Rules | `BLOCKED` (Foundation Rule Violation). Лише Foundation Change Request або дозволений виняток (розділ 7). Ескалація і Risk Acceptance правила не послаблюють |
-| Зміна погоджених вимог | Loopback через gate з рішенням людини |
-| Прийняття значного ризику, що не порушує обов'язкових правил Foundation | `BLOCKED` (Escalation Required) → Risk Acceptance людиною (розділ 7) |
+| A change to the Product Foundation | Foundation Change Request (section 6) |
+| A change to the Architecture Foundation | Foundation Change Request (section 6) |
+| A significant new dependency (criteria below) | `BLOCKED` (Escalation Required). If the Foundation requires a document update for a new technology — Foundation Change Request |
+| Weakening or violation of a mandatory Foundation rule, in particular Security Rules | `BLOCKED` (Foundation Rule Violation). Only a Foundation Change Request or an allowed exception (section 7). Escalation and Risk Acceptance do not weaken the rules |
+| A change to approved requirements | A Loopback through a gate with a human's decision |
+| Acceptance of a significant risk that does not violate mandatory Foundation rules | `BLOCKED` (Escalation Required) → Risk Acceptance by a human (section 7) |
 
-Додаткові правила:
+Additional rules:
 
-- Якщо вимога або важливе архітектурне рішення не визначені й відповіді немає в документації, агент пояснює невизначеність і просить рішення людини. Агент не вигадує вимог.
-- Рішення людини за ескалацією записується в канонічний артефакт, якого воно стосується. Запису лише в History недостатньо.
-- Агент не пропонує Risk Acceptance для порушення обов'язкового правила Foundation (`stage-map.yaml` RR-14).
+- If a requirement or an important architectural decision is not defined and there is no answer in the documentation, the agent explains the uncertainty and asks the human for a decision. The agent does not invent requirements.
+- The human's decision on an escalation is recorded in the canonical artifact it concerns. A record only in History is insufficient.
+- The agent does not propose Risk Acceptance for a violation of a mandatory Foundation rule (`stage-map.yaml` RR-14).
 ### Risk-Based Dependency Approval (OD-09)
 
-Нова залежність або зміна наявної потребує погодження людини, якщо вона суттєво впливає хоча б на одне:
+A new dependency or a change of an existing one requires a human's approval if it significantly affects at least one of:
 
-- **архітектуру** — нова технологія в ролі компонента системи, заміна наявного компонента, новий runtime-сервіс;
-- **безпеку** — криптографія, автентифікація, розбір недовірених даних, мережева взаємодія, доступ до секретів;
-- **операційні вимоги** — новий сервіс чи інфраструктура для запуску, суттєві вимоги до ресурсів чи середовища;
-- **production credentials** — потрібні нові облікові дані, ключі чи секрети для production;
-- **ліцензійні зобов'язання** — ліцензія з обов'язками для проєкту або нестандартна чи комерційна ліцензія;
-- **сумісність** — зміна версії мови чи runtime, major-оновлення наявної залежності, breaking changes.
+- **architecture** — a new technology in the role of a system component, a replacement of an existing component, a new runtime service;
+- **security** — cryptography, authentication, parsing of untrusted data, network interaction, access to secrets;
+- **operational requirements** — a new service or infrastructure to run, significant resource or environment requirements;
+- **production credentials** — new credentials, keys or secrets are needed for production;
+- **license obligations** — a license with obligations for the project or a non-standard or commercial license;
+- **compatibility** — a change of the language or runtime version, a major update of an existing dependency, breaking changes.
 
-Правила:
+Rules:
 
-- Прості допоміжні залежності, які не відповідають жодному критерію, агент може запропонувати в `solution-design` або `implementation-plan` у межах Controlled Autonomy. Людина бачить їх на HUMAN_TECHNICAL_APPROVAL.
-- Незапланована залежність, яка з'явилася під час IMPLEMENTATION, фіксується в changeset. CODE_REVIEW перевіряє її класифікацію. Суттєва незапланована залежність → `BLOCKED` (Escalation Required).
-- Якщо класифікація неоднозначна, залежність вважається суттєвою.
-- Суворіші правила Project Foundation мають пріоритет. Для Customer Portal діє правило Architecture Foundation щодо нових технологій.
-- Формальної оцінки ризику залежностей (scoring) Workflow не передбачає.
+- Simple auxiliary dependencies that do not meet any criterion may be proposed by the agent in `solution-design` or `implementation-plan` within Controlled Autonomy. The human sees them at HUMAN_TECHNICAL_APPROVAL.
+- An unplanned dependency that appeared during IMPLEMENTATION is recorded in the changeset. CODE_REVIEW checks its classification. A significant unplanned dependency → `BLOCKED` (Escalation Required).
+- If the classification is ambiguous, the dependency is considered significant.
+- Stricter rules of the Project Foundation take precedence. For Customer Portal, the Architecture Foundation rule on new technologies applies.
+- The Workflow does not provide for a formal risk assessment of dependencies (scoring).
 
 ## 3. Human Gates
 
-Три Human Gates погоджують артефакти (Q5):
+Three Human Gates approve artifacts (Q5):
 
-| Gate | Що погоджує |
+| Gate | What it approves |
 |---|---|
-| HUMAN_SPEC_APPROVAL | Вимоги Story: `story-spec`, `clarification-record` |
-| HUMAN_TECHNICAL_APPROVAL | Технічний дизайн і Implementation Plan разом |
-| HUMAN_PR_APPROVAL | Конкретну версію змін Story у PR |
+| HUMAN_SPEC_APPROVAL | The Story requirements: `story-spec`, `clarification-record` |
+| HUMAN_TECHNICAL_APPROVAL | The technical design and the Implementation Plan together |
+| HUMAN_PR_APPROVAL | A specific version of the Story's changes in the PR |
 
-HUMAN_MERGE — окрема дія доставки, яку підтверджує людина. Вона не є погодженням артефактів.
+HUMAN_MERGE is a separate delivery action that a human confirms. It is not an approval of artifacts.
 
-Правила:
+Rules:
 
-- **Gate не можна обійти автоматично.** Жоден режим виконання, verdict чи конфігурація не замінює рішення людини.
-- **Reviewer PASS не є Human Approval.** Gate відкривається лише після `PASS` відповідних review-стадій, але й тоді потребує рішення людини.
-- **Approval прив'язаний до Approved Content Identity** кожного артефакта Approval Scope (`approval_scope` у `stage-map.yaml`). Правила валідності — [workflow-state-model.md](workflow-state-model.md#7-approval-validity).
-- **Пакет рішення.** Людина отримує артефакти Scope, звіти review, `applicability-decision`, Findings Disposition, ризики та ескалації. Під час повторного проходження — зміни відносно погодженої identity, результати Change Impact Assessment і `revalidation-record`.
-- **Рішення.** Людина обирає одне з рішень gate у `stage-map.yaml`. REQUEST_CHANGES має містити ціль із дозволених для цього gate і причину. Далі діє Rework Protocol.
-- **Повторне проходження (OD-06).** Gate — обов'язкова зупинка під час кожного проходження. Якщо погоджений вміст не змінився, approval має стан `VALID` або `SUSPENDED`, а кожну upstream-зміну після останнього рішення людини покрито перевіреним `revalidation-record`, людина може виконати скорочене RECONFIRM. `SUSPENDED` approval не стає `VALID` без рішення людини. Якщо погоджена identity змінилася або approval має стан `INVALIDATED`, потрібне повне APPROVE. RECONFIRM не є погодженням зміненого вмісту і фіксується окремою подією з посиланням на початковий approval.
-- **Auto Mode** не виконує APPROVE чи RECONFIRM і не обирає рішення замість людини.
-- **Межа повноважень gate (WF-V2-01).** Рішення людини на gate не може прийняти порушення обов'язкового правила Foundation, порушення Acceptance Criterion чи невиконану умову DoD. APPROVE за наявності такого BLOCKING finding неможливий. Можливі рішення — REQUEST_CHANGES, CANCEL або окремий Foundation Change Request.
-- Рішення людини фіксується в Workflow State і History разом з Approved Content Identity, до якої воно належить.
+- **A gate cannot be bypassed automatically.** No execution mode, verdict or configuration replaces a human's decision.
+- **A Reviewer PASS is not a Human Approval.** A gate opens only after `PASS` of the corresponding review stages, but even then it requires a human's decision.
+- **An approval is bound to the Approved Content Identity** of each artifact of the Approval Scope (`approval_scope` in `stage-map.yaml`). Validity rules — [workflow-state-model.md](workflow-state-model.md#7-approval-validity).
+- **Decision package.** The human receives the Scope artifacts, review reports, `applicability-decision`, the Findings Disposition, risks and escalations. During a repeated pass — the changes relative to the approved identity, the results of the Change Impact Assessment and `revalidation-record`.
+- **Decision.** The human chooses one of the gate's decisions in `stage-map.yaml`. REQUEST_CHANGES must contain a target from those allowed for this gate and a reason. Then the Rework Protocol applies.
+- **Repeated pass (OD-06).** A gate is a mandatory stop during every pass. If the approved content has not changed, the approval is in the `VALID` or `SUSPENDED` state, and each upstream change after the human's last decision is covered by a checked `revalidation-record`, the human may perform a shortened RECONFIRM. A `SUSPENDED` approval does not become `VALID` without a human's decision. If the approved identity has changed or the approval is in the `INVALIDATED` state, a full APPROVE is needed. RECONFIRM is not an approval of changed content and is recorded as a separate event with a reference to the original approval.
+- **Auto Mode** does not perform APPROVE or RECONFIRM and does not choose a decision instead of the human.
+- **Boundary of the gate's authority (WF-V2-01).** A human's decision at a gate cannot accept a violation of a mandatory Foundation rule, a violation of an Acceptance Criterion or an unmet DoD condition. APPROVE is impossible in the presence of such a BLOCKING finding. The possible decisions are REQUEST_CHANGES, CANCEL or a separate Foundation Change Request.
+- The human's decision is recorded in the Workflow State and History together with the Approved Content Identity to which it belongs.
 
 ## 4. Review Policies
 
-**Обов'язковість (Q28).** Review обов'язковий, якщо застосовна producer-стадія, яку він перевіряє. Відповідність producer → review задає поле `reviewed_by` у `stage-map.yaml`. Обійти Review через `NOT_APPLICABLE` не можна:
+**Mandatoriness (Q28).** A Review is mandatory if the producer stage it checks is applicable. The producer → review mapping is set by the `reviewed_by` field in `stage-map.yaml`. A Review cannot be bypassed through `NOT_APPLICABLE`:
 
-- обов'язкові review-стадії (SPEC_REVIEW, DESIGN_REVIEW, PLAN_REVIEW, CODE_REVIEW) не мають `optional: true` і не можуть повернути `NOT_APPLICABLE`;
-- кожна обов'язкова producer-стадія перевіряється обов'язковою review-стадією або Human Gate;
-- SECURITY_REVIEW — додаткова спеціалізована перевірка. Її `NOT_APPLICABLE` не звільняє зміни від DESIGN_REVIEW, CODE_REVIEW і базових security-перевірок у VERIFICATION.
-- Зміна Changeset Content Identity після CODE_REVIEW потребує нового CODE_REVIEW, а якщо SECURITY_REVIEW застосовна, — і нового SECURITY_REVIEW. Цього вимагає Review Binding Guard (`stage-map.yaml` RR-10). Зміна лише метаданих PR нового review не потребує (RR-12).
+- mandatory review stages (SPEC_REVIEW, DESIGN_REVIEW, PLAN_REVIEW, CODE_REVIEW) do not have `optional: true` and cannot return `NOT_APPLICABLE`;
+- each mandatory producer stage is checked by a mandatory review stage or a Human Gate;
+- SECURITY_REVIEW is an additional specialized check. Its `NOT_APPLICABLE` does not exempt the changes from DESIGN_REVIEW, CODE_REVIEW and the basic security checks in VERIFICATION.
+- A change of the Changeset Content Identity after CODE_REVIEW requires a new CODE_REVIEW, and if SECURITY_REVIEW is applicable — also a new SECURITY_REVIEW. This is required by the Review Binding Guard (`stage-map.yaml` RR-10). A change of only PR metadata does not require a new review (RR-12).
 
-**Дворівнева security-перевірка (OD-05):**
+**Two-level security check (OD-05):**
 
-1. DESIGN_REVIEW перевіряє security-рішення на рівні архітектури для кожної Story.
-2. SECURITY_REVIEW, якщо застосовна, виконує поглиблену перевірку реалізації після CODE_REVIEW.
+1. DESIGN_REVIEW checks security decisions at the architecture level for every Story.
+2. SECURITY_REVIEW, if applicable, performs an in-depth check of the implementation after CODE_REVIEW.
 
-Окремої Security Design Review Stage немає.
+There is no separate Security Design Review Stage.
 
-**Незалежність (Q6) — гібридна модель:**
+**Independence (Q6) — a hybrid model:**
 
-- Producer і Reviewer мають різні логічні ролі й відповідальності.
-- Reviewer не виправляє артефакт, який перевіряє. Він фіксує findings і verdict. Виправлення робить producer-стадія після повернення.
-- Reviewer отримує канонічні артефакти, а не робочий контекст producer-стадії.
+- The Producer and the Reviewer have different logical roles and responsibilities.
+- The Reviewer does not fix the artifact it checks. It records findings and a verdict. The fix is made by the producer stage after the return.
+- The Reviewer receives canonical artifacts, not the working context of the producer stage.
 
-**Ізоляція контексту (OD-10).** Ізольований контекст означає, що reviewer виконується окремо від producer-стадії і отримує лише канонічні артефакти, `revalidation-record` та джерела Foundation. Робочого контексту, міркувань і чернеток producer-стадії він не бачить. Механізм реалізації (наприклад, Subagents) визначає наступний етап.
+**Context isolation (OD-10).** An isolated context means that the reviewer is executed separately from the producer stage and receives only canonical artifacts, `revalidation-record` and Foundation sources. It does not see the working context, reasoning and drafts of the producer stage. The implementation mechanism (for example, Subagents) is defined by the next stage.
 
-- Ізоляція обов'язкова завжди для DESIGN_REVIEW, CODE_REVIEW і SECURITY_REVIEW.
-- Для SPEC_REVIEW і PLAN_REVIEW ізоляція обов'язкова, якщо спрацьовує хоча б один тригер підвищеного ризику з `review_context_isolation.risk_triggers` у `stage-map.yaml`: Story Type SECURITY чи INFRASTRUCTURE; зміни автентифікації, авторизації, сесій, облікових даних чи чутливих даних; заплановано SECURITY_REVIEW (для PLAN_REVIEW); артефакт створено після повернення через Human Gate; спрацював Repeated Failure або розширено Retry Budget; ізоляції вимагає людина.
-- Якщо застосовність тригера неоднозначна, ізоляція потрібна.
+- Isolation is always mandatory for DESIGN_REVIEW, CODE_REVIEW and SECURITY_REVIEW.
+- For SPEC_REVIEW and PLAN_REVIEW, isolation is mandatory if at least one elevated-risk trigger from `review_context_isolation.risk_triggers` in `stage-map.yaml` fires: Story Type SECURITY or INFRASTRUCTURE; changes to authentication, authorization, sessions, credentials or sensitive data; SECURITY_REVIEW is planned (for PLAN_REVIEW); the artifact was created after a return through a Human Gate; Repeated Failure fired or the Retry Budget was extended; a human requires isolation.
+- If the applicability of a trigger is ambiguous, isolation is needed.
 
-**Прив'язка до версій.** Review-звіт дійсний лише для тих версій артефактів і upstream-версій, щодо яких виконано перевірку. Після нової версії потрібен новий review. Для незмінної версії з новим `revalidation-record` review перевіряє цей запис.
+**Binding to versions.** A review report is valid only for the versions of artifacts and upstream versions against which the check was performed. After a new version, a new review is needed. For an unchanged version with a new `revalidation-record`, the review checks this record.
 
 ## 5. Optional Stage Policies
 
-Workflow один для всіх Stories (Q21). Складність Story впливає лише на застосовність Optional Stages: IMPACT_ANALYSIS, API_DESIGN, DB_DESIGN, SECURITY_REVIEW, RECONCILIATION.
+The Workflow is one for all Stories (Q21). The complexity of a Story affects only the applicability of Optional Stages: IMPACT_ANALYSIS, API_DESIGN, DB_DESIGN, SECURITY_REVIEW, RECONCILIATION.
 
-Правила:
+Rules:
 
-Умови застосовності кожної Optional Stage визначено в `applicability_conditions` у `stage-map.yaml` як перелік тригерів (OD-07). Там само визначено спільні правила AP-01…AP-07. Коротко:
+The applicability conditions of each Optional Stage are defined in `applicability_conditions` in `stage-map.yaml` as a list of triggers (OD-07). The common rules AP-01…AP-07 are defined there as well. In short:
 
-- Стадія застосовна, якщо виконується хоча б один тригер. Якщо застосовність неоднозначна, стадія вважається застосовною.
-- `NOT_APPLICABLE` потребує `applicability-decision`: для кожного тригера — чому він не виконується, з посиланням на джерело.
-- `applicability-decision` прив'язаний до Applicability Basis — усіх релевантних фактів рішення: версій артефактів, Changeset Content Identity, фактів Workflow State, релевантних подій History, Retry Counters, рішень людини, Story Risk Assessment (WF-V2-02, AP-04). Релевантні категорії для кожної стадії задає `basis_facts`.
-- Якщо релевантний факт змінився, рішення переоцінюється перед використанням (AP-08). Зокрема, повернення через Human Gate, Repeated Failure, розширення Retry Budget, нові security-findings, рішення людини застосувати Review, Recovery після BLOCKED чи зміна Story Risk Assessment не дозволяють повторно використати попередній `NOT_APPLICABLE` для SECURITY_REVIEW чи RECONCILIATION. Перевіряє стадія на вході, стадія з `na_checked_by` і Orchestrator у Review Binding Guard.
-- Події поза `basis_facts` стадії її рішення не інвалідують (AP-09).
-- Заплановане рішення в Implementation Plan — прогноз, що ґрунтується лише на артефактах плану. Після входу в стадію чинне рішення на вході (AP-10).
-- Обґрунтування `NOT_APPLICABLE` перевіряє стадія з поля `na_checked_by` і бачить людина на найближчому Human Gate.
-- Implementation Plan декларує очікувану застосовність SECURITY_REVIEW і RECONCILIATION. Людина погоджує її на HUMAN_TECHNICAL_APPROVAL і може вимагати застосування стадії.
-- Стадію, яку погоджено як застосовну, не можна пізніше оголосити `NOT_APPLICABLE` без рішення людини. Незастосовну стадію агент може оголосити застосовною без додаткового погодження.
-- Автоматичного Risk Scoring Engine немає: тригери оцінює стадія, а перевіряє reviewer і людина.
+- A stage is applicable if at least one trigger is met. If applicability is ambiguous, the stage is considered applicable.
+- `NOT_APPLICABLE` requires an `applicability-decision`: for each trigger — why it is not met, with a reference to the source.
+- An `applicability-decision` is bound to the Applicability Basis — all relevant facts of the decision: artifact versions, Changeset Content Identity, Workflow State facts, relevant History events, Retry Counters, human decisions, the Story Risk Assessment (WF-V2-02, AP-04). The relevant categories for each stage are set by `basis_facts`.
+- If a relevant fact has changed, the decision is re-evaluated before use (AP-08). In particular, a return through a Human Gate, Repeated Failure, a Retry Budget extension, new security findings, a human's decision to apply a Review, Recovery after BLOCKED or a change of the Story Risk Assessment do not allow reusing a previous `NOT_APPLICABLE` for SECURITY_REVIEW or RECONCILIATION. This is checked by the stage on entry, the stage from `na_checked_by` and the Orchestrator in the Review Binding Guard.
+- Events outside a stage's `basis_facts` do not invalidate its decision (AP-09).
+- The planned decision in the Implementation Plan is a forecast based only on the plan's artifacts. After entry into the stage, the decision on entry is valid (AP-10).
+- The `NOT_APPLICABLE` justification is checked by the stage from the `na_checked_by` field and seen by the human at the nearest Human Gate.
+- The Implementation Plan declares the expected applicability of SECURITY_REVIEW and RECONCILIATION. The human approves it at HUMAN_TECHNICAL_APPROVAL and may require the application of a stage.
+- A stage approved as applicable cannot later be declared `NOT_APPLICABLE` without a human's decision. The agent may declare a non-applicable stage applicable without additional approval.
+- There is no automatic Risk Scoring Engine: triggers are evaluated by the stage, and checked by the reviewer and the human.
 
-**SECURITY_REVIEW (Q22).** Для змін, що відповідають умові застосовності, стадія обов'язкова. Базові security-перевірки залишаються частиною VERIFICATION для всіх Stories.
+**SECURITY_REVIEW (Q22).** For changes that meet the applicability condition, the stage is mandatory. Basic security checks remain part of VERIFICATION for all Stories.
 
-**RECONCILIATION (Q27).** Повний Reconciliation виконується для Stories, які відповідають умові застосовності. Базова перевірка відповідності вимогам у VERIFICATION обов'язкова для всіх Stories.
+**RECONCILIATION (Q27).** A full Reconciliation is performed for Stories that meet the applicability condition. The basic check of compliance with requirements in VERIFICATION is mandatory for all Stories.
 
 ## 6. Foundation Change Management
 
-Stage Skill не змінює погоджену Product чи Architecture Foundation (Q19).
+A Stage Skill does not change the approved Product or Architecture Foundation (Q19).
 
-Якщо Story потребує зміни Foundation:
+If a Story requires a change to the Foundation:
 
-1. **Story зупиняється.** Стадія повертає `BLOCKED` з причиною Foundation Change Required.
-2. **Формується Change Request** (`foundation-change-request`): що змінити, чому, які погоджені рішення це зачіпає, альтернативи в межах чинної Foundation.
-3. **Людина розглядає зміну** і погоджує або відхиляє її.
-4. **Foundation оновлюється** після погодження. Оновлення — окрема робота поза Story Workflow, яку погоджує людина.
-5. **Виконується Change Impact Assessment** для артефактів цієї Story. Інші нетермінальні Stories перевіряють Staleness під час свого наступного запуску (розділ 10, [Session Recovery](workflow-state-model.md#12-session-recovery)), бо один запуск Orchestrator працює лише з однією Story.
-6. **Залежні результати проходять Revalidation** ([workflow-state-model.md](workflow-state-model.md#8-staleness-і-revalidation)). Для незмінних версій створюються `revalidation-record`, для зачеплених — нові версії.
-7. **Story відновлюється** через Recovery Protocol: `RESUME` або `ROUTE_BACK` за правилами Rework Protocol ([workflow-state-model.md](workflow-state-model.md#14-rework-protocol)). Для `SUSPENDED` approvals попередніх gates виконується Out-of-Stage Revalidation ([workflow-state-model.md](workflow-state-model.md#8-staleness-і-revalidation)), після чого людина підтверджує їх через RECONFIRM у межах цього рішення. Якщо approval має стан `INVALIDATED`, потрібен `ROUTE_BACK` на producer-стадію відповідного артефакта.
+1. **The Story stops.** The stage returns `BLOCKED` with the reason Foundation Change Required.
+2. **A Change Request is produced** (`foundation-change-request`): what to change, why, which approved decisions it affects, alternatives within the current Foundation.
+3. **A human reviews the change** and approves or rejects it.
+4. **The Foundation is updated** after approval. The update is separate work outside the Story Workflow, approved by a human.
+5. **A Change Impact Assessment is performed** for the artifacts of this Story. Other non-terminal Stories check Staleness during their next run (section 10, [Session Recovery](workflow-state-model.md#12-session-recovery)), because one Orchestrator run works only with one Story.
+6. **Dependent results go through Revalidation** ([workflow-state-model.md](workflow-state-model.md#8-staleness-and-revalidation)). For unchanged versions, `revalidation-record` items are created; for affected ones — new versions.
+7. **The Story is resumed** through the Recovery Protocol: `RESUME` or `ROUTE_BACK` according to the rules of the Rework Protocol ([workflow-state-model.md](workflow-state-model.md#14-rework-protocol)). For `SUSPENDED` approvals of previous gates, Out-of-Stage Revalidation is performed ([workflow-state-model.md](workflow-state-model.md#8-staleness-and-revalidation)), after which the human confirms them through RECONFIRM within this decision. If an approval is in the `INVALIDATED` state, a `ROUTE_BACK` to the producer stage of the corresponding artifact is needed.
 
-Якщо зміну відхилено, Story або адаптується в межах чинної Foundation (`ROUTE_BACK`), або скасовується (`CANCEL`).
+If the change is rejected, the Story either adapts within the current Foundation (`ROUTE_BACK`) or is cancelled (`CANCEL`).
 
-Суперечність між документами Foundation агент повідомляє і не вирішує сам на користь одного з документів.
+The agent reports a contradiction between Foundation documents and does not resolve it on its own in favor of one of the documents.
 
 ## 7. Findings Disposition
 
-Кожен finding review- чи verification-стадії має клас (Q23):
+Each finding of a review or verification stage has a class (Q23):
 
-| Клас | Значення | Наслідок |
+| Class | Meaning | Consequence |
 |---|---|---|
-| BLOCKING | Порушення, яке не дозволяє рухатися далі | Verdict `CHANGES_REQUIRED` або `BLOCKED`. Має бути усунений до `PASS` |
-| NON_BLOCKING | Недолік, який не порушує вимог і правил | Виправляється або приймається з обґрунтуванням у Findings Disposition |
-| FOLLOW_UP | Робота поза scope Story | Потребує погодження людини на HUMAN_PR_APPROVAL. Погоджений FOLLOW_UP стає `backlog-entry` у канонічному Backlog |
+| BLOCKING | A violation that does not allow moving forward | Verdict `CHANGES_REQUIRED` or `BLOCKED`. Must be eliminated before `PASS` |
+| NON_BLOCKING | A shortcoming that does not violate requirements and rules | Fixed or accepted with a justification in the Findings Disposition |
+| FOLLOW_UP | Work outside the Story's scope | Requires a human's approval at HUMAN_PR_APPROVAL. An approved FOLLOW_UP becomes a `backlog-entry` in the canonical Backlog |
 
-Правила:
+Rules:
 
-- Порушення обов'язкового Acceptance Criterion завжди BLOCKING. Його не можна перенести у FOLLOW_UP.
-- Порушення обов'язкового правила Product, Architecture чи Security Foundation завжди BLOCKING, доки його не вирішено належно (див. нижче, `stage-map.yaml` RR-14).
-- Клас пропонує reviewer. Агент не знижує клас BLOCKING. Людина може знизити клас лише для finding, який не є порушенням Acceptance Criterion, обов'язкового правила Foundation чи умови DoD. Рішення фіксується.
-- BLOCKING не переводиться у FOLLOW_UP, якщо це дозволило б обійти обов'язкову вимогу. Автоматичного зниження класу немає.
-- Findings Disposition (як вирішено кожен finding) входить до `verification-report` і пакета HUMAN_PR_APPROVAL.
+- A violation of a mandatory Acceptance Criterion is always BLOCKING. It cannot be moved to FOLLOW_UP.
+- A violation of a mandatory rule of the Product, Architecture or Security Foundation is always BLOCKING until it is properly resolved (see below, `stage-map.yaml` RR-14).
+- The class is proposed by the reviewer. The agent does not lower the BLOCKING class. A human may lower the class only for a finding that is not a violation of an Acceptance Criterion, a mandatory Foundation rule or a DoD condition. The decision is recorded.
+- BLOCKING is not moved to FOLLOW_UP if this would allow bypassing a mandatory requirement. There is no automatic lowering of the class.
+- The Findings Disposition (how each finding is resolved) is part of `verification-report` and the HUMAN_PR_APPROVAL package.
 
-### Risk Acceptance і Foundation Rules (WF-V2-01)
+### Risk Acceptance and Foundation Rules (WF-V2-01)
 
-| Випадок | Що можливо | Запис |
+| Case | What is possible | Record |
 |---|---|---|
-| **A. Risk Acceptance без порушення Foundation** | Людина явно приймає обґрунтований ризик, який не суперечить обов'язковим правилам Product, Architecture чи Security Foundation. Finding може отримати Disposition «ризик прийнято» | `risk-acceptance-record` (Finding Identity, ризик, обґрунтування, хто ухвалив, межі) і Findings Disposition. Подія в History |
-| **B. Порушення обов'язкового правила Foundation** | Risk Acceptance і рішення на gate порушення не усувають. Варіанти: виправити реалізацію; погоджений Foundation Change Request з оновленням Foundation (розділ 6); контрольований виняток, лише якщо саме це правило Foundation прямо допускає виняток, — за процедурою, визначеною в Foundation | `foundation-change-request` або `foundation-exception-record` з посиланням на положення Foundation, яке допускає виняток. Подія в History |
+| **A. Risk Acceptance without a Foundation violation** | A human explicitly accepts a justified risk that does not contradict mandatory rules of the Product, Architecture or Security Foundation. The finding may receive the Disposition "risk accepted" | `risk-acceptance-record` (Finding Identity, risk, justification, who decided, boundaries) and the Findings Disposition. An event in History |
+| **B. A violation of a mandatory Foundation rule** | Risk Acceptance and a decision at a gate do not eliminate the violation. Options: fix the implementation; an approved Foundation Change Request with a Foundation update (section 6); a controlled exception, only if that specific Foundation rule explicitly allows an exception — under the procedure defined in the Foundation | `foundation-change-request` or `foundation-exception-record` with a reference to the Foundation provision that allows the exception. An event in History |
 
-Правила:
+Rules:
 
-- Якщо правило Foundation прямо не допускає винятку, Human Approval не може його створити. Залишаються лише виправлення або Foundation Change Request.
-- Finding випадку B лишається BLOCKING, доки немає виправлення, оновленої Foundation або чинного `foundation-exception-record`.
-- Для Customer Portal Foundation не містить загальної процедури винятків. Окремі правила самі визначають умови свого винятку (наприклад, «лише окремим погодженням»). Workflow не розширює цих умов.
-- Якщо неочевидно, чи порушує ризик обов'язкове правило Foundation, застосовується випадок B.
-- Кожен finding має Finding Identity ([workflow-state-model.md](workflow-state-model.md#10-retry-policy)). Повторна поява тієї самої проблеми — той самий finding, навіть якщо його виявила інша стадія.
+- If a Foundation rule does not explicitly allow an exception, a Human Approval cannot create one. Only a fix or a Foundation Change Request remain.
+- A case B finding remains BLOCKING until there is a fix, an updated Foundation or a valid `foundation-exception-record`.
+- For Customer Portal, the Foundation does not contain a general exception procedure. Individual rules define the conditions of their own exception (for example, "only by separate approval"). The Workflow does not extend these conditions.
+- If it is not obvious whether a risk violates a mandatory Foundation rule, case B applies.
+- Each finding has a Finding Identity ([workflow-state-model.md](workflow-state-model.md#10-retry-policy)). A repeated occurrence of the same problem is the same finding, even if another stage detected it.
 
 ### FOLLOW_UP Backlog (OD-11)
 
-- Кожен погоджений людиною FOLLOW_UP створює відстежуваний запис `backlog-entry` у канонічному Backlog проєкту.
-- `backlog-entry` посилається на початкову Story і на Finding Identity.
-- Записи створює INTEGRATION_CONFIRMATION до переходу Story в DONE. Story не стає DONE, поки для кожного погодженого FOLLOW_UP немає `backlog-entry`.
-- `backlog-entry` живе незалежно від Story: перехід Story в DONE чи CANCELLED його не закриває і не видаляє.
-- Backlog — спільний артефакт проєкту, а не артефакт Story. Створення `backlog-entry` — дозволений виняток з ізоляції Stories (розділ 10).
-- Канонічного Backlog ще немає. Його наявність — передумова (розділ 15). Структуру запису визначає етап Artifact Contracts.
+- Each FOLLOW_UP approved by a human creates a trackable `backlog-entry` record in the project's canonical Backlog.
+- A `backlog-entry` references the original Story and the Finding Identity.
+- The records are created by INTEGRATION_CONFIRMATION before the Story moves to DONE. The Story does not become DONE until there is a `backlog-entry` for each approved FOLLOW_UP.
+- A `backlog-entry` lives independently of the Story: the Story's transition to DONE or CANCELLED does not close or delete it.
+- The Backlog is a shared project artifact, not a Story artifact. Creating a `backlog-entry` is an allowed exception from Story isolation (section 10).
+- There is no canonical Backlog yet. Its existence is a prerequisite (section 15). The record structure is defined by the Artifact Contracts stage.
 
 ## 8. Definition of Done
 
-Story отримує `DONE` лише тоді, коли виконано всі умови (Q4, Q23).
+A Story receives `DONE` only when all conditions are met (Q4, Q23).
 
-**Перевіряє VERIFICATION:**
+**Checked by VERIFICATION:**
 
-1. Усі обов'язкові стадії мають `PASS`, а Optional Stages — `PASS` або `NOT_APPLICABLE` з перевіреним `applicability-decision`.
-2. Обов'язкові review виконано для поточної Changeset Content Identity і поточних версій артефактів (Review Binding Guard).
-3. Усі контрольовані артефакти мають Currency `CURRENT`, а review-звіти прив'язані до поточних версій.
-4. Кожен Acceptance Criterion має фактичний доказ виконання.
-5. Перевірки, які вимагають Testing Strategy проєкту, Story Risk Assessment і Testing Approach плану, виконано й пройдено (розділ 18).
-6. Нерозв'язаних BLOCKING findings немає. Порушення обов'язкових правил Foundation вирішено виправленням, Foundation Change Request або чинним `foundation-exception-record`, а не Risk Acceptance. NON_BLOCKING і FOLLOW_UP мають Disposition.
-7. Рішення людини, зафіксовані в History, відображені в канонічних артефактах. Це перевіряє лише VERIFICATION. RECONCILIATION цього не дублює.
+1. All mandatory stages have `PASS`, and Optional Stages — `PASS` or `NOT_APPLICABLE` with a checked `applicability-decision`.
+2. The mandatory reviews have been performed for the current Changeset Content Identity and the current versions of artifacts (Review Binding Guard).
+3. All controlled artifacts have Currency `CURRENT`, and review reports are bound to the current versions.
+4. Each Acceptance Criterion has actual evidence of fulfillment.
+5. The checks required by the project's Testing Strategy, the Story Risk Assessment and the plan's Testing Approach have been performed and passed (section 18).
+6. There are no unresolved BLOCKING findings. Violations of mandatory Foundation rules have been resolved by a fix, a Foundation Change Request or a valid `foundation-exception-record`, not by Risk Acceptance. NON_BLOCKING and FOLLOW_UP have a Disposition.
+7. Human decisions recorded in History are reflected in canonical artifacts. Only VERIFICATION checks this. RECONCILIATION does not duplicate it.
 
-**Підтверджує людина:**
+**Confirmed by a human:**
 
-8. HUMAN_PR_APPROVAL має стан `VALID` для поточної Changeset Content Identity.
-9. HUMAN_MERGE виконано.
+8. HUMAN_PR_APPROVAL is in the `VALID` state for the current Changeset Content Identity.
+9. HUMAN_MERGE has been performed.
 
-**Підтверджують MERGE_READINESS_CHECK і INTEGRATION_CONFIRMATION:**
+**Confirmed by MERGE_READINESS_CHECK and INTEGRATION_CONFIRMATION:**
 
-10. Перед merge перевірено актуальність feature branch і target branch (розділ 9).
-11. Merge вніс у target branch саме погоджені зміни, без непогодженого вмісту.
-12. Якщо Target Base Identity на момент merge відрізнялася від перевіреної, Post-Merge Validation пройдена.
-13. Для кожного погодженого FOLLOW_UP створено `backlog-entry` (розділ 7).
+10. Before the merge, the freshness of the feature branch and the target branch has been checked (section 9).
+11. The merge introduced exactly the approved changes into the target branch, without unapproved content.
+12. If the Target Base Identity at the moment of the merge differed from the checked one, Post-Merge Validation has passed.
+13. A `backlog-entry` has been created for each approved FOLLOW_UP (section 7).
 
-Готовність до PR чи відкритий PR не означають DONE.
+Readiness for a PR or an open PR does not mean DONE.
 
 ## 9. Git Integration
 
-Правила (Q8):
+Rules (Q8):
 
-- Кожна Story працює в окремій feature branch.
-- Агент може створювати commits у feature branch і готувати PR до основної гілки (target branch).
-- Merge в target branch виконує лише людина.
-- DONE можливий лише після підтвердженої інтеграції погоджених змін.
+- Each Story works in a separate feature branch.
+- The agent may create commits in the feature branch and prepare a PR to the main branch (target branch).
+- Only a human performs the merge into the target branch.
+- DONE is possible only after a confirmed integration of the approved changes.
 
-### Ідентичність змін
+### Identity of Changes
 
-Перевірки й approvals прив'язуються не лише до Git SHA, а до двох ідентичностей ([workflow-state-model.md](workflow-state-model.md#5-artifact-status)):
+Checks and approvals are bound not only to Git SHA, but to two identities ([workflow-state-model.md](workflow-state-model.md#5-artifact-status)):
 
-- **Changeset Content Identity** — зміст змін Story. Перебудова commits (squash, rebase без конфліктів, перейменування commits) її не змінює, якщо зміст змін той самий.
-- **Target Base Identity** — версія target branch, щодо якої перевірено інтеграційний результат.
+- **Changeset Content Identity** — the content of the Story's changes. Rebuilding commits (squash, rebase without conflicts, renaming commits) does not change it if the content of the changes is the same.
+- **Target Base Identity** — the version of the target branch against which the integration result has been checked.
 
-Нову Changeset Content Identity створює лише IMPLEMENTATION. Зокрема, розв'язання конфлікту з target branch — це зміна вмісту, яка виконується в IMPLEMENTATION і проходить CODE_REVIEW, SECURITY_REVIEW (якщо застосовна) і VERIFICATION (`stage-map.yaml` RR-10).
+A new Changeset Content Identity is created only by IMPLEMENTATION. In particular, resolving a conflict with the target branch is a change of content that is performed in IMPLEMENTATION and goes through CODE_REVIEW, SECURITY_REVIEW (if applicable) and VERIFICATION (`stage-map.yaml` RR-10).
 
 ### Merge Validation Protocol (OD-12)
 
-1. **Прив'язка перевірки.** VERIFICATION прив'язує `verification-report` до Changeset Content Identity і Target Base Identity.
-2. **Перевірка перед merge.** MERGE_READINESS_CHECK після HUMAN_PR_APPROVAL перевіряє, що feature branch містить погоджену Changeset Content Identity, PR відповідає погодженій identity, а target branch не змінилася відносно перевіреної Target Base Identity.
-3. **Target branch змінилася.** Якщо вміст змін Story той самий, потрібна перевірка інтеграційного результату: повернення на VERIFICATION з condition `CHANGESET_CONTENT_UNCHANGED`. Новий `verification-report` змінює Approval Scope, тому HUMAN_PR_APPROVAL стає `INVALIDATED`.
-4. **Потрібна зміна коду для інтеграції.** Повернення на IMPLEMENTATION. Далі CODE_REVIEW, SECURITY_REVIEW (якщо застосовна), RECONCILIATION (якщо застосовна) і VERIFICATION.
-5. **Застарілий approval.** `INVALIDATED` HUMAN_PR_APPROVAL потребує повного APPROVE. RECONFIRM можливий лише тоді, коли жоден артефакт Scope не змінився.
-6. **Merge виконує лише людина** (HUMAN_MERGE). Агент не виконує merge, revert чи push в target branch.
-7. **Підтвердження після merge.** INTEGRATION_CONFIRMATION перевіряє фактичний результат merge: зміни Story в target branch відповідають погодженій Changeset Content Identity, непогодженого вмісту немає. Потім порівнює Target Base Identity на момент merge з перевіреною.
-8. **DONE** — лише після `PASS` INTEGRATION_CONFIRMATION.
+1. **Binding of the check.** VERIFICATION binds `verification-report` to the Changeset Content Identity and the Target Base Identity.
+2. **The check before merge.** MERGE_READINESS_CHECK after HUMAN_PR_APPROVAL checks that the feature branch contains the approved Changeset Content Identity, the PR corresponds to the approved identity, and the target branch has not changed relative to the checked Target Base Identity.
+3. **The target branch has changed.** If the content of the Story's changes is the same, a check of the integration result is needed: a return to VERIFICATION with the condition `CHANGESET_CONTENT_UNCHANGED`. A new `verification-report` changes the Approval Scope, so HUMAN_PR_APPROVAL becomes `INVALIDATED`.
+4. **A code change is needed for integration.** A return to IMPLEMENTATION. Then CODE_REVIEW, SECURITY_REVIEW (if applicable), RECONCILIATION (if applicable) and VERIFICATION.
+5. **A stale approval.** An `INVALIDATED` HUMAN_PR_APPROVAL requires a full APPROVE. RECONFIRM is possible only when no artifact of the Scope has changed.
+6. **Only a human performs the merge** (HUMAN_MERGE). The agent does not perform merge, revert or push into the target branch.
+7. **The confirmation after merge.** INTEGRATION_CONFIRMATION checks the actual merge result: the Story's changes in the target branch correspond to the approved Changeset Content Identity, there is no unapproved content. Then it compares the Target Base Identity at the moment of the merge with the checked one.
+8. **DONE** — only after `PASS` of INTEGRATION_CONFIRMATION.
 
-Перевірка перед merge (крок 2) і підтвердження після merge (крок 7) — різні стадії. Між ними target branch може змінитися. Цей проміжок закривається двома рівнями (OD-16): Merge Protection запобігає неперевіреній інтеграції, а Post-Merge Validation контрольовано її перевіряє, якщо вона все-таки відбулася.
+The check before merge (step 2) and the confirmation after merge (step 7) are different stages. The target branch may change between them. This gap is closed by two levels (OD-16): Merge Protection prevents unchecked integration, and Post-Merge Validation checks it in a controlled way if it has nevertheless happened.
 
 ### Merge Protection — Prevention (OD-16)
 
-- Якщо Git-платформа підтримує механізми захисту target branch (Branch Protection, Required Checks, заборона merge із застарілими перевірками або еквівалент), вони використовуються відповідно до **Merge Protection Policy** проєкту (`stage-map.yaml` RR-13). Merge Protection Policy визначає, які механізми обов'язкові. Це правило проєкту, тож на нього поширюється WF-V2-01. Workflow Core не залежить від конкретної платформи чи стратегії merge.
-- MERGE_READINESS_CHECK фіксує **Merge Protection Status** і діє за ним (`merge_protection_statuses`, FR-02):
+- If the Git platform supports target branch protection mechanisms (Branch Protection, Required Checks, prohibition of merging with stale checks or an equivalent), they are used in accordance with the project's **Merge Protection Policy** (`stage-map.yaml` RR-13). The Merge Protection Policy defines which mechanisms are mandatory. This is a project rule, so WF-V2-01 applies to it. The Workflow Core does not depend on a specific platform or merge strategy.
+- MERGE_READINESS_CHECK records the **Merge Protection Status** and acts according to it (`merge_protection_statuses`, FR-02):
 
-| Status | Випадок | Дія |
+| Status | Case | Action |
 |---|---|---|
-| `ACTIVE` | Механізм увімкнено | Звичайна перевірка перед merge |
-| `NOT_SUPPORTED` | Платформа не підтримує механізм | Дозволена контрольована ручна процедура (нижче). Обмеження фіксується. Якщо Merge Protection Policy вимагає саме цього механізму, Story обробляється як `DISABLED` |
-| `UNAVAILABLE` | Механізм підтримується, але об'єктивно недоступний | Обмеження фіксується. `BLOCKED` (Merge Protection Unavailable). Людина в Recovery погоджує допустимий порядок інтеграції. Рішення фіксується у Workflow State і History |
-| `DISABLED` | Механізм доступний і обов'язковий за Merge Protection Policy, але вимкнений | `BLOCKED` (Merge Protection Disabled). Merge неможливий, доки людина не ввімкне захист або доки немає чинного `foundation-exception-record`, якщо Merge Protection Policy прямо допускає виняток. Ручна процедура цей випадок не замінює |
+| `ACTIVE` | The mechanism is enabled | A regular check before merge |
+| `NOT_SUPPORTED` | The platform does not support the mechanism | A controlled manual procedure is allowed (below). The limitation is recorded. If the Merge Protection Policy requires exactly this mechanism, the Story is handled as `DISABLED` |
+| `UNAVAILABLE` | The mechanism is supported but objectively unavailable | The limitation is recorded. `BLOCKED` (Merge Protection Unavailable). The human in Recovery approves an acceptable integration order. The decision is recorded in the Workflow State and History |
+| `DISABLED` | The mechanism is available and mandatory under the Merge Protection Policy, but disabled | `BLOCKED` (Merge Protection Disabled). The merge remains blocked until protection is enabled or a valid foundation-exception-record exists, provided that the Merge Protection Policy explicitly permits the exception. A manual procedure does not replace this case.
 
-Механізм, доступний, але не обов'язковий за політикою і вимкнений, обробляється як `UNAVAILABLE`.
+A mechanism that is available but not mandatory under the policy and is disabled is handled as `UNAVAILABLE`.
 
-- **Контрольована ручна процедура** (`NOT_SUPPORTED` або погоджений порядок для `UNAVAILABLE`): людина виконує merge одразу після MERGE_READINESS_CHECK і разом із CONFIRM_MERGED підтверджує, що target branch не змінилася після перевірки. Якщо змінилася, людина не виконує merge, а обирає REQUEST_CHANGES → MERGE_READINESS_CHECK. Ручна процедура не обходить обов'язкових правил проєкту.
-- Агент не змінює налаштування захисту репозиторію без дозволу людини.
-- Merge Protection знижує ризик, але не замінює INTEGRATION_CONFIRMATION.
+- **A controlled manual procedure** (`NOT_SUPPORTED` or an approved order for `UNAVAILABLE`): the human performs the merge immediately after MERGE_READINESS_CHECK and, together with CONFIRM_MERGED, confirms that the target branch has not changed after the check. If it has changed, the human does not perform the merge, but chooses REQUEST_CHANGES → MERGE_READINESS_CHECK. A manual procedure does not bypass mandatory project rules.
+- The agent does not change the repository protection settings without a human's permission.
+- Merge Protection reduces the risk, but does not replace INTEGRATION_CONFIRMATION.
 
 ### Post-Merge Validation — Recovery (OD-16)
 
-Post-Merge Validation — частина INTEGRATION_CONFIRMATION, а не окрема стадія. Вона використовує ті самі результати стадії (`PASS` → DONE, `BLOCKED`, технічний збій → `FAILED`), тож нових маршрутів, gates чи Loopbacks не потребує. Порядок перевірок у стадії обов'язковий (`post_merge_validation.check_order` у `stage-map.yaml`):
+Post-Merge Validation is part of INTEGRATION_CONFIRMATION, not a separate stage. It uses the same stage results (`PASS` → DONE, `BLOCKED`, a technical failure → `FAILED`), so it does not require new routes, gates or Loopbacks. The order of checks in the stage is mandatory (`post_merge_validation.check_order` in `stage-map.yaml`):
 
-1. **Integration Match.** Оцінюється результат merge Story, а не пізніший стан target branch. Merge мав внести саме погоджену Changeset Content Identity без непогодженого вмісту. Інакше — `BLOCKED` (Integration Mismatch), а Post-Merge Validation не виконується. Так Story не може стати DONE з невідповідним changeset.
-2. **Base Comparison.** Якщо Target Base Identity на момент merge дорівнює перевіреній, Post-Merge Validation не потрібна.
-3. **Post-Merge Validation** — лише якщо база змінилася:
-   - перевіряється фактичний інтегрований результат на поточному стані target branch;
-   - виконуються релевантні інтеграційні перевірки й тести за Testing Strategy, Story Risk Assessment і Testing Approach;
-   - результат і перевірений стан target branch фіксуються в незмінному `post-merge-validation-record`;
-   - `PASS` дозволяє продовжити, `FAIL` дає `BLOCKED` (Post-Merge Validation Failed) з діагностикою в `post-merge-validation-record`;
-   - технічний збій запуску перевірок — це `FAILED` у межах Technical Attempts, а не verdict.
-4. **FOLLOW_UP Backlog.** Створюються `backlog-entry`.
+1. **Integration Match.** The Story's merge result is evaluated, not a later state of the target branch. The merge had to introduce exactly the approved Changeset Content Identity without unapproved content. Otherwise — `BLOCKED` (Integration Mismatch), and Post-Merge Validation is not performed. This way the Story cannot become DONE with a non-matching changeset.
+2. **Base Comparison.** If the Target Base Identity at the moment of the merge equals the checked one, Post-Merge Validation is not needed.
+3. **Post-Merge Validation** — only if the base has changed:
+   - the actual integrated result on the current state of the target branch is checked;
+   - the relevant integration checks and tests are performed according to the Testing Strategy, the Story Risk Assessment and the Testing Approach;
+   - the result and the checked state of the target branch are recorded in an immutable `post-merge-validation-record`;
+   - `PASS` allows continuing, `FAIL` gives `BLOCKED` (Post-Merge Validation Failed) with diagnostics in `post-merge-validation-record`;
+   - a technical failure to run the checks is `FAILED` within Technical Attempts, not a verdict.
+4. **FOLLOW_UP Backlog.** `backlog-entry` items are created.
 
-Правила:
+Rules:
 
-- Агент не змінює target branch: не виконує merge, revert чи push і не виправляє автоматично вже інтегрований код.
-- Post-Merge Validation не інвалідує HUMAN_PR_APPROVAL, якщо Changeset Content Identity не змінилася. `post-merge-validation-record` не входить до Approval Scope ([workflow-state-model.md](workflow-state-model.md#7-approval-validity)).
-- Невідповідність інтегрованого результату або зміна погодженого коду обробляються чинними правилами Approval Validity, Recovery Protocol і Rework Protocol.
+- The agent does not change the target branch: it does not perform merge, revert or push and does not automatically fix already integrated code.
+- Post-Merge Validation does not invalidate HUMAN_PR_APPROVAL if the Changeset Content Identity has not changed. `post-merge-validation-record` is not part of the Approval Scope ([workflow-state-model.md](workflow-state-model.md#7-approval-validity)).
+- A mismatch of the integrated result or a change of approved code is handled by the current rules of Approval Validity, the Recovery Protocol and the Rework Protocol.
 
-**Незалежність від стратегії merge.** Протокол не залежить від того, чи використовується merge commit, squash merge чи rebase:
+**Independence from the merge strategy.** The protocol does not depend on whether a merge commit, a squash merge or a rebase is used:
 
-| Стратегія | Що перевіряє INTEGRATION_CONFIRMATION |
+| Strategy | What INTEGRATION_CONFIRMATION checks |
 |---|---|
-| Merge commit | Інтегрована гілка має погоджену Changeset Content Identity, а merge не додав іншого вмісту |
-| Squash merge | Зміни squash-commit відносно Target Base Identity відповідають погодженій Changeset Content Identity |
-| Rebase | Сукупні зміни перенесених commits відповідають погодженій Changeset Content Identity |
+| Merge commit | The integrated branch has the approved Changeset Content Identity, and the merge did not add other content |
+| Squash merge | The changes of the squash commit relative to the Target Base Identity correspond to the approved Changeset Content Identity |
+| Rebase | The cumulative changes of the moved commits correspond to the approved Changeset Content Identity |
 
-Конкретний спосіб порівняння визначають Stage Skills та Artifact Contracts.
+The specific comparison method is defined by the Stage Skills and Artifact Contracts.
 
-**Integration Mismatch і Post-Merge Validation Failed.** В обох випадках INTEGRATION_CONFIRMATION повертає `BLOCKED`, і Story не стає DONE. Агент не виправляє вже виконаний merge автоматично. Рішення ухвалює людина через Recovery Protocol ([workflow-state-model.md](workflow-state-model.md#9-blocked-і-recovery-protocol)).
+**Integration Mismatch and Post-Merge Validation Failed.** In both cases, INTEGRATION_CONFIRMATION returns `BLOCKED`, and the Story does not become DONE. The agent does not automatically fix an already performed merge. The decision is made by a human through the Recovery Protocol ([workflow-state-model.md](workflow-state-model.md#9-blocked-and-recovery-protocol)).
 
-**Завершення після зовнішнього виправлення (OD-17).** Зовнішнє виправлення саме по собі Story не завершує.
+**Completion after an external fix (OD-17).** An external fix by itself does not complete the Story.
 
-- **Post-Merge Validation Failed.** DONE можливий, якщо первісний Integration Match = `PASS`, причину виправила інша Story або людина, людина дозволила `RESUME`, повторна Post-Merge Validation = `PASS` і виконано всі інші умови DoD.
-- **Integration Mismatch.** Успішна інша Story не виправдовує первісної інтеграції. DONE можливий лише за доказу, що погоджена Changeset Content Identity цієї Story інтегрована належно, і за виконання всіх умов DoD. Інакше Story лишається `BLOCKED` або завершується `CANCELLED` за рішенням людини. Доказ — новий merge погоджених змін після корекції: `ROUTE_BACK` → HUMAN_MERGE → новий CONFIRM_MERGED. Integration Match завжди оцінює merge, зафіксований останнім CONFIRM_MERGED.
+- **Post-Merge Validation Failed.** DONE is possible if the original Integration Match = `PASS`, the cause was fixed by another Story or a human, the human allowed `RESUME`, the repeated Post-Merge Validation = `PASS`, and all other DoD conditions are met.
+- **Integration Mismatch.** A successful other Story does not justify the original integration. DONE is possible only with proof that the approved Changeset Content Identity of this Story has been integrated properly, and with all DoD conditions met. Otherwise, the Story remains `BLOCKED` or ends as `CANCELLED` by a human's decision. Proof — a new merge of the approved changes after a correction: `ROUTE_BACK` → HUMAN_MERGE → a new CONFIRM_MERGED. Integration Match always evaluates the merge recorded by the last CONFIRM_MERGED.
 
-Іменування гілок і формат commits та PR визначають Stage Skills і Artifact Contracts.
+Branch naming and the format of commits and PRs are defined by the Stage Skills and Artifact Contracts.
 
 ## 10. Multiple Story Isolation
 
-Правила (Q12):
+Rules (Q12):
 
-- Кожна Story має незалежний Workflow State, History, артефакти та feature branch.
-- Один запуск Orchestrator працює лише з однією Story.
-- Перемикання між Stories дозволене. Стан Story, з якої перемкнулися, зберігається, і її можна відновити пізніше ([workflow-state-model.md](workflow-state-model.md#12-session-recovery)).
-- Стадія однієї Story не змінює стан, артефакти чи гілку іншої Story. Читати інші Stories можна (наприклад, для IMPACT_ANALYSIS).
-- Єдиний виняток — створення `backlog-entry` у спільному Backlog проєкту для погодженого FOLLOW_UP (розділ 7). Наявні записи інших Stories при цьому не змінюються.
-- Спільні для всіх Stories джерела — Foundation і Workflow Definition. Їхня зміна запускає перевірку Staleness в інших нетермінальних Stories під час їхнього наступного запуску.
-- Автоматична паралельна оркестрація кількох Stories не входить до поточної версії.
+- Each Story has an independent Workflow State, History, artifacts and feature branch.
+- One Orchestrator run works only with one Story.
+- Switching between Stories is allowed. The state of the Story switched away from is preserved, and it can be resumed later ([workflow-state-model.md](workflow-state-model.md#12-session-recovery)).
+- A stage of one Story does not change the state, artifacts or branch of another Story. Reading other Stories is allowed (for example, for IMPACT_ANALYSIS).
+- The only exception is creating a `backlog-entry` in the project's shared Backlog for an approved FOLLOW_UP (section 7). The existing records of other Stories are not changed.
+- The sources shared by all Stories are the Foundation and the Workflow Definition. Their change triggers a Staleness check in other non-terminal Stories during their next run.
+- Automatic parallel orchestration of several Stories is not part of the current version.
 
-## 11. Step Mode і Auto Mode
+## 11. Step Mode and Auto Mode
 
-| Режим | Поведінка |
+| Mode | Behavior |
 |---|---|
-| Step Mode | Виконується одна стадія. Після переходу запуск зупиняється |
-| Auto Mode | Стадії виконуються послідовно до обов'язкової зупинки |
+| Step Mode | One stage is executed. After the transition, the run stops |
+| Auto Mode | Stages are executed sequentially until a mandatory stop |
 
-**Обов'язкові зупинки Auto Mode** (Q25):
+**Mandatory stops of Auto Mode** (Q25):
 
-- Human Gate, зокрема повторне проходження, на якому можливий RECONFIRM;
-- human action;
-- Loopback, що перетинає Human Gate;
-- очікування відповідей людини;
-- `BLOCKED`, зокрема вичерпання Retry Budget, ескалація, Foundation Change Request, Foundation Rule Violation, порушення цілісності, Review Binding Guard, Merge Protection Unavailable чи Disabled, Integration Mismatch, Post-Merge Validation Failed;
-- термінальний стан.
+- a Human Gate, including a repeated pass at which RECONFIRM is possible;
+- a human action;
+- a Loopback that crosses a Human Gate;
+- waiting for the human's answers;
+- `BLOCKED`, in particular Retry Budget exhaustion, escalation, Foundation Change Request, Foundation Rule Violation, an integrity violation, the Review Binding Guard, Merge Protection Unavailable or Disabled, Integration Mismatch, Post-Merge Validation Failed;
+- a terminal state.
 
-Auto Mode не обходить Human Gates і не ухвалює рішень людини: ні APPROVE, ні RECONFIRM, ні рішень Recovery. Loopback без перетину gate в межах Retry Budget Auto Mode виконує без зупинки.
+Auto Mode does not bypass Human Gates and does not make human decisions: neither APPROVE, nor RECONFIRM, nor Recovery decisions. A Loopback without crossing a gate within the Retry Budget is performed by Auto Mode without stopping.
 
 ## 12. Context Management
 
-- **Progressive Context Loading (Q17).** Кожна стадія має мінімальний набір джерел ([stages.md](stages.md#2-джерела-контексту)). Додаткові документи завантажуються лише за потреби.
-- **Persistent Artifacts (Q18).** Наступні стадії отримують контекст із канонічних артефактів попередніх стадій. Історія чату не є джерелом стану, вимог чи погоджених рішень.
+- **Progressive Context Loading (Q17).** Each stage has a minimum set of sources ([stages.md](stages.md#2-context-sources)). Additional documents are loaded only as needed.
+- **Persistent Artifacts (Q18).** Subsequent stages obtain context from the canonical artifacts of previous stages. Chat history is not a source of state, requirements or approved decisions.
 
-## 13. Відповідність Workflow Invariants
+## 13. Mapping to Workflow Invariants
 
-| # | Інваріант | Де забезпечено |
+| # | Invariant | Where it is ensured |
 |---|---|---|
-| 1 | Немає переходу без дозволеного маршруту | `stage-map.yaml` RR-01; state model §6 |
-| 2 | Human Gate не можна обійти автоматично | §3, §11; `stage-map.yaml` RR-07 (зокрема RECONFIRM) |
+| 1 | There is no transition without an allowed route | `stage-map.yaml` RR-01; state model §6 |
+| 2 | A Human Gate cannot be bypassed automatically | §3, §11; `stage-map.yaml` RR-07 (including RECONFIRM) |
 | 3 | Reviewer PASS ≠ Human Approval | §3; state model §4 |
-| 4 | Approval прив'язаний до актуальних артефактів | §3; state model §5 (Approved Content Identity), §7 |
-| 5 | Рішення людини — у канонічному джерелі | §2; state model §2 |
-| 6 | Stale artifacts не використовуються без Revalidation | state model §5, §8, §14 |
-| 7 | Недозволений Loopback не виконується | `stage-map.yaml` RR-03; state model §6 |
-| 8 | BLOCKED має Recovery Protocol | state model §9 |
-| 9 | Retry Budget скінченний | state model §10 |
-| 10 | NOT_APPLICABLE потребує обґрунтування | §5; `stage-map.yaml` RR-02 |
-| 11 | Stage Skills не змінюють Workflow State | state model §2 |
-| 12 | DONE лише після Git Integration | §8, §9; `stage-map.yaml` RR-09, RR-10, RR-13, `post_merge_validation` |
-| 13 | Chat History не є джерелом істини | §12; state model §2 |
-| 14 | Workflow Core не залежить від Go, Gin, PostgreSQL | §1; [stages.md](stages.md#2-джерела-контексту) (прив'язка до проєкту винесена окремо) |
-| 15 | Технологічні правила — у Foundation і Stage Skills | §1 |
+| 4 | An approval is bound to the current artifacts | §3; state model §5 (Approved Content Identity), §7 |
+| 5 | A human's decision is in the canonical source | §2; state model §2 |
+| 6 | Stale artifacts are not used without Revalidation | state model §5, §8, §14 |
+| 7 | A disallowed Loopback is not performed | `stage-map.yaml` RR-03; state model §6 |
+| 8 | BLOCKED has a Recovery Protocol | state model §9 |
+| 9 | The Retry Budget is finite | state model §10 |
+| 10 | NOT_APPLICABLE requires a justification | §5; `stage-map.yaml` RR-02 |
+| 11 | Stage Skills do not change the Workflow State | state model §2 |
+| 12 | DONE only after Git Integration | §8, §9; `stage-map.yaml` RR-09, RR-10, RR-13, `post_merge_validation` |
+| 13 | Chat History is not a source of truth | §12; state model §2 |
+| 14 | The Workflow Core does not depend on Go, Gin, PostgreSQL | §1; [stages.md](stages.md#2-context-sources) (the binding to the project is placed separately) |
+| 15 | Technology rules are in the Foundation and Stage Skills | §1 |
 
-Нормативне визначення інваріантів не є їхньою програмною перевіркою. Перевірку забезпечать Orchestrator і Harness Validation.
+A normative definition of the invariants is not their programmatic verification. Verification will be provided by the Orchestrator and Harness Validation.
 
-## 14. Рішення OD
+## 14. OD Decisions
 
-### Погоджені рішення OD-01…OD-17
+### Approved Decisions OD-01…OD-17
 
-Усі сімнадцять рішень погоджено людиною: OD-01…OD-15 — після Review Draft v1, OD-16 — після Review Draft v2, OD-17 — після фінального Review Draft v3. Статус кожного — `APPROVED_DECISION`. Ідентифікатори OD-* лишаються стабільними і використовуються в усіх документах Workflow Definition для traceability.
+All seventeen decisions are approved by a human: OD-01…OD-15 — after Review Draft v1, OD-16 — after Review Draft v2, OD-17 — after the final Review Draft v3. The status of each is `APPROVED_DECISION`. The OD-* identifiers remain stable and are used in all Workflow Definition documents for traceability.
 
-| ID | Статус | Рішення | Нормативні правила | Де застосовано |
+| ID | Status | Decision | Normative rules | Where applied |
 |---|---|---|---|---|
-| OD-01 | `APPROVED_DECISION` | Обов'язкова універсальна стадія SOLUTION_DESIGN: загальна технічна структура рішення — Domain, Application, Integration та Infrastructure Design, якщо це потрібно Story | Стадія не повертає `NOT_APPLICABLE`. DESIGN_REVIEW завжди застосовна | `stage-map.yaml` (SOLUTION_DESIGN, DESIGN_REVIEW); stages.md §8 |
-| OD-02 | `APPROVED_DECISION` | Окрема фаза DELIVERY відокремлює технічну готовність Story від інтеграції змін | Фаза 7 у `phases` | `stage-map.yaml` (`phases`); stages.md §4, §12 |
-| OD-03 | `APPROVED_DECISION` | Окремої Clarification Review Stage немає. SPEC_REVIEW перевіряє `clarification-record` і `story-spec` | `reviewed_by: SPEC_REVIEW` для CLARIFICATION | `stage-map.yaml`; stages.md §6, §7 |
-| OD-04 | `APPROVED_DECISION` | Окрема стадія PLAN_REVIEW для незалежної перевірки Implementation Plan | PLAN_REVIEW обов'язкова | `stage-map.yaml`; stages.md §9 |
-| OD-05 | `APPROVED_DECISION` | Дворівнева security-перевірка: DESIGN_REVIEW — архітектура; SECURITY_REVIEW — поглиблена перевірка реалізації після CODE_REVIEW, якщо застосовна | Окремої Security Design Review немає | §4; `stage-map.yaml` (DESIGN_REVIEW, SECURITY_REVIEW); stages.md §8, §11 |
-| OD-06 | `APPROVED_DECISION` | Gates — обов'язкові зупинки. Незмінний вміст після Revalidation → скорочене RECONFIRM. Змінений вміст або `INVALIDATED` → повне APPROVE. Auto Mode не виконує Reconfirmation | `gate_decisions.RECONFIRM`, RR-07 | §3, §11; state model §7; `stage-map.yaml` |
-| OD-07 | `APPROVED_DECISION` | Явні нормативні умови застосовності Optional Stages. Неоднозначність → застосовна. `NOT_APPLICABLE` з обґрунтуванням і перевіркою. Без Risk Scoring Engine | `applicability_conditions`, AP-01…AP-07 | §5; `stage-map.yaml` |
-| OD-08 | `APPROVED_DECISION` | Конфігурована Retry Policy з погодженими початковими значеннями 3 / 3 / 3 (Technical Attempts, Quality Loops, Repeated Failure). Правила обліку й скидання. Розширення — лише людиною через Recovery | `retry_policy` | state model §10; `stage-map.yaml` |
-| OD-09 | `APPROVED_DECISION` | Risk-Based Dependency Approval. Прості допоміжні залежності — у межах Controlled Autonomy. Суворіші правила Foundation мають пріоритет | Критерії суттєвості | §2 |
-| OD-10 | `APPROVED_DECISION` | Ізоляція контексту обов'язкова для DESIGN_REVIEW, CODE_REVIEW, SECURITY_REVIEW. Для SPEC_REVIEW і PLAN_REVIEW — за risk triggers | `review_context_isolation`, ISO-01…ISO-06 | §4; `stage-map.yaml` |
-| OD-11 | `APPROVED_DECISION` | Погоджені FOLLOW_UP створюють `backlog-entry` у канонічному Backlog з посиланням на Story і Finding | Умова DoD 12 | §7, §8, §10, §15; stages.md §12 |
-| OD-12 | `APPROVED_DECISION` | Merge Validation Protocol: прив'язка до feature і target branch, перевірка перед merge, перевірка інтеграційного результату, повторні review за зміни коду, повне погодження застарілого approval, merge лише людиною, підтвердження після merge | RR-10, RR-12, `route_conditions`, MERGE_READINESS_CHECK | §9; state model §5, §9; `stage-map.yaml`; stages.md §12 |
-| OD-13 | `APPROVED_DECISION` | Cancellation Protocol. CANCELLED — термінальний стан, Story не відкривається повторно. Без явного дозволу нічого не видаляється | RR-08 | §17; `stage-map.yaml` |
-| OD-14 | `APPROVED_DECISION` | Один Workflow для типів FEATURE, BUG, TECHNICAL, INFRASTRUCTURE, SECURITY. Clarification і Specification адаптуються до типу. Без окремих Workflow Profiles | `story_types` | §16; stages.md §6, §7; `stage-map.yaml` |
-| OD-15 | `APPROVED_DECISION` | Перевірки визначають Testing Strategy проєкту, Story Risk Assessment і Testing Approach плану. Технологічні правила тестування не входять у Workflow Core. Відсутність Testing Strategy — Foundation Gap | FG-01 | §8, §15, §18; stages.md §9, §11 |
+| OD-01 | `APPROVED_DECISION` | A mandatory universal SOLUTION_DESIGN stage: the overall technical structure of the solution — Domain, Application, Integration and Infrastructure Design, if the Story needs it | The stage does not return `NOT_APPLICABLE`. DESIGN_REVIEW is always applicable | `stage-map.yaml` (SOLUTION_DESIGN, DESIGN_REVIEW); stages.md §8 |
+| OD-02 | `APPROVED_DECISION` | A separate DELIVERY phase separates the technical readiness of the Story from the integration of changes | Phase 7 in `phases` | `stage-map.yaml` (`phases`); stages.md §4, §12 |
+| OD-03 | `APPROVED_DECISION` | There is no separate Clarification Review Stage. SPEC_REVIEW checks `clarification-record` and `story-spec` | `reviewed_by: SPEC_REVIEW` for CLARIFICATION | `stage-map.yaml`; stages.md §6, §7 |
+| OD-04 | `APPROVED_DECISION` | A separate PLAN_REVIEW stage for an independent check of the Implementation Plan | PLAN_REVIEW is mandatory | `stage-map.yaml`; stages.md §9 |
+| OD-05 | `APPROVED_DECISION` | A two-level security check: DESIGN_REVIEW — architecture; SECURITY_REVIEW — an in-depth check of the implementation after CODE_REVIEW, if applicable | There is no separate Security Design Review | §4; `stage-map.yaml` (DESIGN_REVIEW, SECURITY_REVIEW); stages.md §8, §11 |
+| OD-06 | `APPROVED_DECISION` | Gates are mandatory stops. Unchanged content after Revalidation → a shortened RECONFIRM. Changed content or `INVALIDATED` → a full APPROVE. Auto Mode does not perform Reconfirmation | `gate_decisions.RECONFIRM`, RR-07 | §3, §11; state model §7; `stage-map.yaml` |
+| OD-07 | `APPROVED_DECISION` | Explicit normative applicability conditions for Optional Stages. Ambiguity → applicable. `NOT_APPLICABLE` with a justification and a check. Without a Risk Scoring Engine | `applicability_conditions`, AP-01…AP-07 | §5; `stage-map.yaml` |
+| OD-08 | `APPROVED_DECISION` | A configurable Retry Policy with approved initial values 3 / 3 / 3 (Technical Attempts, Quality Loops, Repeated Failure). Accounting and reset rules. Extension — only by a human through Recovery | `retry_policy` | state model §10; `stage-map.yaml` |
+| OD-09 | `APPROVED_DECISION` | Risk-Based Dependency Approval. Simple auxiliary dependencies — within Controlled Autonomy. Stricter Foundation rules take precedence | Significance criteria | §2 |
+| OD-10 | `APPROVED_DECISION` | Context isolation is mandatory for DESIGN_REVIEW, CODE_REVIEW, SECURITY_REVIEW. For SPEC_REVIEW and PLAN_REVIEW — according to risk triggers | `review_context_isolation`, ISO-01…ISO-06 | §4; `stage-map.yaml` |
+| OD-11 | `APPROVED_DECISION` | Approved FOLLOW_UP create a `backlog-entry` in the canonical Backlog with a reference to the Story and the Finding | DoD condition 12 | §7, §8, §10, §15; stages.md §12 |
+| OD-12 | `APPROVED_DECISION` | Merge Validation Protocol: binding to the feature and target branch, the check before merge, a check of the integration result, repeated reviews on code changes, full approval of a stale approval, merge only by a human, the confirmation after merge | RR-10, RR-12, `route_conditions`, MERGE_READINESS_CHECK | §9; state model §5, §9; `stage-map.yaml`; stages.md §12 |
+| OD-13 | `APPROVED_DECISION` | Cancellation Protocol. CANCELLED is a terminal state, the Story is not reopened. Nothing is deleted without explicit permission | RR-08 | §17; `stage-map.yaml` |
+| OD-14 | `APPROVED_DECISION` | One Workflow for the types FEATURE, BUG, TECHNICAL, INFRASTRUCTURE, SECURITY. Clarification and Specification adapt to the type. Without separate Workflow Profiles | `story_types` | §16; stages.md §6, §7; `stage-map.yaml` |
+| OD-15 | `APPROVED_DECISION` | Checks are defined by the project's Testing Strategy, the Story Risk Assessment and the plan's Testing Approach. Technology testing rules are not part of the Workflow Core. The absence of a Testing Strategy is a Foundation Gap | FG-01 | §8, §15, §18; stages.md §9, §11 |
 
-| OD-16 | `APPROVED_DECISION` | Option C: Merge Protection (Prevention) і Post-Merge Validation (Recovery). Post-Merge Validation — частина INTEGRATION_CONFIRMATION, без нової стадії. Агент не змінює target branch і налаштування захисту | RR-13, `post_merge_validation`, DoD 11–12 | §9; state model §7, §9; `stage-map.yaml` (INTEGRATION_CONFIRMATION); stages.md §12 |
-| OD-17 | `APPROVED_DECISION` | Завершення після зовнішнього виправлення: Post-Merge Validation Failed → DONE лише за первісного Integration Match PASS, RESUME людини, повторної Post-Merge Validation PASS і виконання DoD. Integration Mismatch → DONE лише з доказом належної інтеграції погодженої Changeset Content Identity, інакше BLOCKED або CANCELLED | `post_merge_validation.resume_rules` | §9; state model §9; stages.md §12 |
+| OD-16 | `APPROVED_DECISION` | Option C: Merge Protection (Prevention) and Post-Merge Validation (Recovery). Post-Merge Validation is part of INTEGRATION_CONFIRMATION, without a new stage. The agent does not change the target branch and protection settings | RR-13, `post_merge_validation`, DoD 11–12 | §9; state model §7, §9; `stage-map.yaml` (INTEGRATION_CONFIRMATION); stages.md §12 |
+| OD-17 | `APPROVED_DECISION` | Completion after an external fix: Post-Merge Validation Failed → DONE only with the original Integration Match PASS, the human's RESUME, a repeated Post-Merge Validation PASS and the DoD met. Integration Mismatch → DONE only with proof of the proper integration of the approved Changeset Content Identity, otherwise BLOCKED or CANCELLED | `post_merge_validation.resume_rules` | §9; state model §9; stages.md §12 |
 
-### Погоджені Review Findings
+### Approved Review Findings
 
-| ID | Статус | Суть | Де застосовано |
+| ID | Status | Essence | Where applied |
 |---|---|---|---|
-| WF-01 | `RESOLVED` | Незмінність версій, Currency, `revalidation-record` | state model §5, §7, §8 |
+| WF-01 | `RESOLVED` | Version immutability, Currency, `revalidation-record` | state model §5, §7, §8 |
 | WF-02 | `RESOLVED` | Review Binding Guard | `stage-map.yaml` RR-10, RR-12 |
-| WF-03 | `RESOLVED` | Approved Content Identity для Approval Scope | state model §5; `stage-map.yaml` |
-| WF-04 | `RESOLVED` | Єдиний Rework Protocol | state model §14; RR-11 |
-| WF-05 | `RESOLVED` | Розподіл RECONCILIATION і VERIFICATION | stages.md §11 |
-| WF-V2-01 | `APPROVED_DECISION` | Risk Acceptance не усуває порушень обов'язкових правил Foundation | §2, §3, §7, §8; RR-14; stages.md §8, §11 |
-| WF-V2-02 | `APPROVED_DECISION` | Applicability Decision прив'язана до всіх релевантних фактів (Applicability Basis) | §5; AP-04, AP-08…AP-10, `basis_facts`, RR-10; state model §6, §14 |
+| WF-03 | `RESOLVED` | Approved Content Identity for the Approval Scope | state model §5; `stage-map.yaml` |
+| WF-04 | `RESOLVED` | A single Rework Protocol | state model §14; RR-11 |
+| WF-05 | `RESOLVED` | Distribution between RECONCILIATION and VERIFICATION | stages.md §11 |
+| WF-V2-01 | `APPROVED_DECISION` | Risk Acceptance does not eliminate violations of mandatory Foundation rules | §2, §3, §7, §8; RR-14; stages.md §8, §11 |
+| WF-V2-02 | `APPROVED_DECISION` | An Applicability Decision is bound to all relevant facts (Applicability Basis) | §5; AP-04, AP-08…AP-10, `basis_facts`, RR-10; state model §6, §14 |
 
-### Рішення фінального Review
+### Final Review Decisions
 
-| ID | Статус | Рішення | Де застосовано |
+| ID | Status | Decision | Where applied |
 |---|---|---|---|
-| FR-01 | `APPROVED_DECISION` | Погоджено колишні `DERIVED` елементи: CODE_REVIEW, PR_PREPARATION, MERGE_READINESS_CHECK і конкретні Applicability Triggers | `stage-map.yaml` (`definition_status`, `applicability_conditions`); stages.md §4 |
-| FR-02 | `APPROVED_DECISION` | Merge Protection розрізняє `NOT_SUPPORTED` (ручна процедура), `UNAVAILABLE` (людина погоджує порядок інтеграції) і `DISABLED` за обов'язкової політики (merge блокується). Ручна процедура не обходить обов'язкових правил | RR-13, `merge_protection_statuses`; §9; state model §9; stages.md §12 |
-| FR-03 | `APPROVED_DECISION` | SEC-08 стосується лише змін, що безпосередньо впливають на security controls або поведінку, регульовану спеціалізованими Security Rules. Базові security-перевірки лишаються в DESIGN_REVIEW і VERIFICATION | `stage-map.yaml` (SEC-08) |
+| FR-01 | `APPROVED_DECISION` | The former `DERIVED` elements are approved: CODE_REVIEW, PR_PREPARATION, MERGE_READINESS_CHECK and the specific Applicability Triggers | `stage-map.yaml` (`definition_status`, `applicability_conditions`); stages.md §4 |
+| FR-02 | `APPROVED_DECISION` | Merge Protection distinguishes `NOT_SUPPORTED` (a manual procedure), `UNAVAILABLE` (a human approves the integration order) and `DISABLED` under a mandatory policy (the merge is blocked). A manual procedure does not bypass mandatory rules | RR-13, `merge_protection_statuses`; §9; state model §9; stages.md §12 |
+| FR-03 | `APPROVED_DECISION` | SEC-08 applies only to changes that directly affect security controls or behavior governed by specialized Security Rules. Basic security checks remain in DESIGN_REVIEW and VERIFICATION | `stage-map.yaml` (SEC-08) |
 
-### Відкриті питання
+### Open Questions
 
-Відкритих і блокувальних питань немає. Нові питання реєструються тут з наступним ідентифікатором OD-18 і проходять окреме погодження.
+There are no open or blocking questions. New questions are registered here with the next identifier OD-18 and go through separate approval.
 
-## 15. Prerequisites і Foundation Gaps
+## 15. Prerequisites and Foundation Gaps
 
-Передумови, без яких Workflow не можна застосувати до реальної Story. Вони не змінюють погодженої Foundation і не створюються в межах Workflow Definition.
+Prerequisites without which the Workflow cannot be applied to a real Story. They do not change the approved Foundation and are not created within the Workflow Definition.
 
-| ID | Передумова | Тип | Коли потрібна | Наслідок, якщо немає |
+| ID | Prerequisite | Type | When needed | Consequence if absent |
 |---|---|---|---|---|
-| FG-01 | Testing Strategy проєкту. Architecture Foundation Customer Portal посилається на неї, але документа ще немає | Foundation Gap | До першої реальної Story | Перша реальна Story не реєструється у Workflow, доки Testing Strategy не створено й не погоджено окремою роботою поза Story Workflow |
-| PRQ-01 | Канонічний Backlog проєкту | Prerequisite | До першої Story, джерелом якої не є Product Foundation, і до першого погодженого FOLLOW_UP | Story такого типу не реєструється. INTEGRATION_CONFIRMATION не може створити `backlog-entry`, тому Story не стає DONE |
-| PRQ-02 | Merge Protection Configuration: Merge Protection Policy проєкту (які механізми обов'язкові) і фактичний стан механізмів на платформі (OD-16, FR-02) | Prerequisite | До першої HUMAN_MERGE | Без визначеної політики жоден механізм не вважається обов'язковим, і діють випадки `NOT_SUPPORTED` / `UNAVAILABLE` (розділ 9). Обмеження фіксується в кожній Story. Налаштування змінює лише людина |
+| FG-01 | The project's Testing Strategy. The Customer Portal Architecture Foundation references it, but the document does not exist yet | Foundation Gap | Before the first real Story | The first real Story is not registered in the Workflow until the Testing Strategy is created and approved by separate work outside the Story Workflow |
+| PRQ-01 | The project's canonical Backlog | Prerequisite | Before the first Story whose source is not the Product Foundation, and before the first approved FOLLOW_UP | A Story of this kind is not registered. INTEGRATION_CONFIRMATION cannot create a `backlog-entry`, so the Story does not become DONE |
+| PRQ-02 | Merge Protection Configuration: the project's Merge Protection Policy (which mechanisms are mandatory) and the actual state of the mechanisms on the platform (OD-16, FR-02) | Prerequisite | Before the first HUMAN_MERGE | Without a defined policy, no mechanism is considered mandatory, and the `NOT_SUPPORTED` / `UNAVAILABLE` cases apply (section 9). The limitation is recorded in each Story. Only a human changes the settings |
 
 ## 16. Story Types (OD-14)
 
-Один канонічний Workflow підтримує всі типи зі `story_types` у `stage-map.yaml`. Окремих Workflow Profiles немає. Тип впливає на зміст CLARIFICATION і SPECIFICATION та на тригери Optional Stages і ізоляції review.
+One canonical Workflow supports all types from `story_types` in `stage-map.yaml`. There are no separate Workflow Profiles. The type affects the content of CLARIFICATION and SPECIFICATION and the triggers of Optional Stages and review isolation.
 
-| Story Type | Джерело Story | Обов'язковий зміст специфікації |
+| Story Type | Story source | Mandatory content of the specification |
 |---|---|---|
-| FEATURE | Product Foundation (для Customer Portal — Epic Map) або Backlog | Користувач чи роль, потреба, поведінка, scope |
-| BUG | Backlog | Спостережувана і очікувана поведінка, умови відтворення, зачеплений scope, регресійна перевірка |
-| TECHNICAL | Backlog, зокрема відкладені рішення Foundation | Technical Goal, Scope, Constraints |
-| INFRASTRUCTURE | Backlog, зокрема відкладені рішення Foundation | Technical Goal, Scope, Constraints, середовища, вплив на запуск і відкат |
-| SECURITY | Backlog або findings безпеки | Ризик чи загроза, security goal, Scope, Constraints |
+| FEATURE | Product Foundation (for Customer Portal — Epic Map) or Backlog | User or role, need, behavior, scope |
+| BUG | Backlog | Observed and expected behavior, reproduction conditions, affected scope, regression check |
+| TECHNICAL | Backlog, in particular deferred Foundation decisions | Technical Goal, Scope, Constraints |
+| INFRASTRUCTURE | Backlog, in particular deferred Foundation decisions | Technical Goal, Scope, Constraints, environments, impact on startup and rollback |
+| SECURITY | Backlog or security findings | Risk or threat, security goal, Scope, Constraints |
 
-Правила:
+Rules:
 
-- Кожна Story, незалежно від типу, має перевірювані Acceptance Criteria і для кожного з них — Verification Method.
-- Для TECHNICAL, INFRASTRUCTURE і SECURITY не потрібно штучно створювати User Persona.
-- Тип пропонує CLARIFICATION. Тип фіксується в `story-spec`, а людина погоджує його на HUMAN_SPEC_APPROVAL.
-- Зміна типу після погодження — це зміна `story-spec`, тобто повернення через Rework Protocol.
+- Each Story, regardless of type, has verifiable Acceptance Criteria and a Verification Method for each of them.
+- For TECHNICAL, INFRASTRUCTURE and SECURITY, there is no need to create an artificial User Persona.
+- The type is proposed by CLARIFICATION. The type is recorded in `story-spec`, and the human approves it at HUMAN_SPEC_APPROVAL.
+- A change of the type after approval is a change of `story-spec`, that is, a return through the Rework Protocol.
 
 ## 17. Cancellation Protocol (OD-13)
 
-`CANCELLED` — термінальний стан. Скасована Story не відкривається повторно. Якщо роботу треба продовжити, створюється нова Story з посиланням на скасовану.
+`CANCELLED` is a terminal state. A cancelled Story is not reopened. If the work needs to continue, a new Story is created with a reference to the cancelled one.
 
-Процедура:
+Procedure:
 
-1. **Рішення людини.** CANCEL ухвалює лише людина: на gate, на human action, у Recovery чи в рішенні щодо Loopback через gate.
-2. **Cancellation Record.** Orchestrator створює `cancellation-record`, який фіксує:
-   - причину скасування;
-   - останній стан Story: стадію, Story Status, Execution State;
-   - створені артефакти, їхні версії і статуси;
-   - стан feature branch: чи існує, чи є commits поза target branch, чи є незакомічені зміни;
-   - наявність відкритого PR;
-   - рішення людини щодо робочих ресурсів: що зберегти, що закрити чи видалити;
-   - рішення щодо погоджених FOLLOW_UP: які стають `backlog-entry`.
-3. **Робочі ресурси.** Агент не видаляє гілки, не закриває PR і не скасовує незакомічені зміни без явного дозволу людини на кожну дію. Дозвіл фіксується в `cancellation-record`.
-4. **Перехід** у `CANCELLED` і подія в History.
+1. **The human's decision.** Only a human makes CANCEL: at a gate, at a human action, in Recovery or in a decision regarding a Loopback through a gate.
+2. **Cancellation Record.** The Orchestrator creates a `cancellation-record` that records:
+   - the reason for cancellation;
+   - the last state of the Story: stage, Story Status, Execution State;
+   - the created artifacts, their versions and statuses;
+   - the state of the feature branch: whether it exists, whether there are commits outside the target branch, whether there are uncommitted changes;
+   - the presence of an open PR;
+   - the human's decisions regarding working resources: what to keep, what to close or delete;
+   - decisions regarding approved FOLLOW_UP: which ones become a `backlog-entry`.
+3. **Working resources.** The agent does not delete branches, does not close PRs and does not discard uncommitted changes without the human's explicit permission for each action. The permission is recorded in `cancellation-record`.
+4. **Transition** to `CANCELLED` and an event in History.
 
-Якщо зміни Story вже інтегровано в target branch (CANCEL після HUMAN_MERGE), `cancellation-record` явно це фіксує. Скасування не відкочує інтегрованих змін.
+If the Story's changes have already been integrated into the target branch (CANCEL after HUMAN_MERGE), `cancellation-record` explicitly records this. Cancellation does not roll back integrated changes.
 
 ## 18. Testing Requirements (OD-15)
 
-Обов'язкові перевірки Story визначають три джерела:
+The mandatory checks of a Story are defined by three sources:
 
-1. **Testing Strategy проєкту** — частина Project Foundation (FG-01).
-2. **Story Risk Assessment** — розділ `implementation-plan`. Він визначає категорії ризику, яких торкається Story, на основі `solution-design`, `impact-analysis` і Story Type. Його перевіряє PLAN_REVIEW, а погоджує людина на HUMAN_TECHNICAL_APPROVAL.
-3. **Testing Approach** — розділ `implementation-plan`, що визначає перевірки для кожного Acceptance Criterion і кожної категорії ризику.
+1. **The project's Testing Strategy** — part of the Project Foundation (FG-01).
+2. **The Story Risk Assessment** — a section of `implementation-plan`. It defines the risk categories that the Story touches, based on `solution-design`, `impact-analysis` and the Story Type. It is checked by PLAN_REVIEW and approved by a human at HUMAN_TECHNICAL_APPROVAL.
+3. **The Testing Approach** — a section of `implementation-plan` that defines the checks for each Acceptance Criterion and each risk category.
 
-Ризикові зміни отримують додаткові перевірки. Workflow Core визначає категорії ризику, а не технології тестування:
+Risky changes receive additional checks. The Workflow Core defines risk categories, not testing technologies:
 
-| Категорія ризику | Приклад додаткової перевірки |
+| Risk category | Example of an additional check |
 |---|---|
 | Authentication, authorization | Security tests |
-| Persistence | Integration tests зі сховищем |
+| Persistence | Integration tests with the store |
 | Concurrency | Concurrent scenario / race tests |
 | Infrastructure | Configuration / deployment validation |
 
-Конкретні види, інструменти й обсяги тестів визначає Testing Strategy проєкту. VERIFICATION перевіряє, що всі перевірки з трьох джерел виконано і вони пройшли.
+The specific kinds, tools and scope of tests are defined by the project's Testing Strategy. VERIFICATION checks that all checks from the three sources have been performed and have passed.
