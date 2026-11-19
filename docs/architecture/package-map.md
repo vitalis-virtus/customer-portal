@@ -1,51 +1,51 @@
 # Package Map — Customer Portal
 
-## 1. Призначення
+## 1. Purpose
 
-Документ визначає фізичну структуру Go-проєкту Customer Portal: директорії, пакети, їхню відповідальність і дозволені напрямки імпортів. Він відображає логічну архітектуру з [Architecture](architecture.md) на пакети Go і нових архітектурних рішень не вводить.
+This document defines the physical structure of the Customer Portal Go project: directories, packages, their responsibilities and the allowed import directions. It maps the logical architecture from [Architecture](architecture.md) onto Go packages and does not introduce new architectural decisions.
 
-**Що входить:**
+**In scope:**
 
-- дерево директорій і правило іменування пакетів;
-- розміщення composition root, Platform, шарів модуля, портів і публічного контракту модуля;
-- дозволені напрямки імпортів і спосіб їх перевірки;
-- фізичне розміщення тестів, тестових дублів і міграцій.
+- the directory tree and the package naming rule;
+- placement of the composition root, Platform, module layers, ports and the module's public contract;
+- allowed import directions and how they are checked;
+- physical placement of tests, test doubles and migrations.
 
-**Що не входить:**
+**Out of scope:**
 
-- runtime-параметри: timeout-и, параметри graceful shutdown, версії PostgreSQL і Redis;
-- API-, Security- та Persistence-конвенції;
-- тестова стратегія, зокрема вибір тестових бібліотек та інфраструктура для тестів;
-- Go-код.
+- runtime parameters: timeouts, graceful shutdown parameters, PostgreSQL and Redis versions;
+- API, Security and Persistence conventions;
+- testing strategy, including the choice of test libraries and test infrastructure;
+- Go code.
 
-**Статуси рішень** ті самі, що й в [Architecture](architecture.md#1-призначення): `APPROVED` означає, що рішення явно погоджено. Непогоджене записується в розділ [Відомі наслідки та відкладені рішення](#9-відомі-наслідки-та-відкладені-рішення).
+**Decision statuses** are the same as in [Architecture](architecture.md#1-purpose): `APPROVED` means the decision is explicitly approved. Anything not approved is recorded in the section [Known Consequences and Deferred Decisions](#9-known-consequences-and-deferred-decisions).
 
-**Обов'язковість імен.** Імена директорій і пакетів, наведені в цьому документі, обов'язкові. Імена типів, методів і файлів, позначені словом «наприклад», ілюстративні.
+**Mandatory names.** The directory and package names given in this document are mandatory. Names of types, methods and files marked with the word "for example" are illustrative.
 
-**Зв'язок з іншими документами.** Терміни вживаються у значеннях із [Business Glossary](../product/business-glossary.md). Якщо цей документ суперечить [Architecture](architecture.md) або продуктовим документам, агент має повідомити про суперечність. Автоматично віддавати перевагу одному з документів не можна.
+**Relationship to other documents.** Terms are used in the meanings from the [Business Glossary](../product/business-glossary.md). If this document contradicts [Architecture](architecture.md) or the product documents, the agent must report the contradiction. The agent must not automatically prefer one of the documents.
 
-Рішення погоджено 2026-11-13.
+Decisions approved on 2026-11-13.
 
-## 2. Дерево проєкту
+## 2. Project Tree
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
 ```
 customer-portal/
-├── go.mod                              # module path; директива go визначає версію Go
+├── go.mod                              # module path; the go directive defines the Go version
 ├── cmd/
-│   └── customer-portal/                # package main: точка входу і composition root
-├── migrations/                         # SQL-міграції golang-migrate
+│   └── customer-portal/                # package main: entry point and composition root
+├── migrations/                         # golang-migrate SQL migrations
 └── internal/
-    ├── platform/                       # спільна технічна інфраструктура
+    ├── platform/                       # shared technical infrastructure
     │   ├── config/
     │   ├── logging/
     │   ├── httpserver/
     │   ├── postgres/
     │   └── redisclient/
     └── modules/
-        └── account/                    # package account: публічний контракт і збирання модуля
-            └── internal/               # приватна реалізація модуля
+        └── account/                    # package account: public contract and module assembly
+            └── internal/               # the module's private implementation
                 ├── domain/
                 ├── application/
                 └── adapters/
@@ -57,176 +57,176 @@ customer-portal/
                         └── passwordhash/
 ```
 
-| Директорія | Відповідальність |
+| Directory | Responsibility |
 |---|---|
-| `cmd/customer-portal/` | Точка входу і composition root, див. [розділ 3](#3-точка-входу-та-composition-root) |
-| `internal/` | Увесь код застосунку. Каталогу `pkg/` немає: сервіс не надає коду для імпорту ззовні |
-| `internal/platform/` | Platform, див. [розділ 4](#4-platform) |
-| `internal/modules/<module>/` | Модуль, див. [розділ 5](#5-структура-модуля) і [розділ 6](#6-публічний-контракт-модуля) |
-| `migrations/` | Міграції схеми БД, див. [розділ 8](#8-тести-міграції-версія-go) |
+| `cmd/customer-portal/` | Entry point and composition root, see [section 3](#3-entry-point-and-composition-root) |
+| `internal/` | All application code. There is no `pkg/` directory: the service does not provide code for external import |
+| `internal/platform/` | Platform, see [section 4](#4-platform) |
+| `internal/modules/<module>/` | A module, see [section 5](#5-module-structure) and [section 6](#6-module-public-contract) |
+| `migrations/` | DB schema migrations, see [section 8](#8-tests-migrations-go-version) |
 
-Дерево показує цільову структуру. Пакет або директорія створюються тоді, коли з'являється реалізація, якій вони потрібні. Створювати порожні пакети лише для того, щоб структура збігалася з деревом, не потрібно.
+The tree shows the target structure. A package or directory is created when an implementation that needs it appears. There is no need to create empty packages just to make the structure match the tree.
 
-Майбутні модулі створюються в `internal/modules/<module>/` за тим самим шаблоном, що й `account`.
+Future modules are created in `internal/modules/<module>/` following the same template as `account`.
 
-**Обґрунтування:** `cmd/` + `internal/` — стандартна структура Go-сервісу. Правило `internal/` у компіляторі забороняє імпортувати код застосунку ззовні. Окремий префікс `internal/modules/` показує межу модулів прямо в шляху, тож правила імпортів можна сформулювати через префікси.
+**Rationale:** `cmd/` + `internal/` is the standard structure of a Go service. The compiler's `internal/` rule prohibits importing application code from outside. A separate `internal/modules/` prefix shows the module boundary directly in the path, so import rules can be formulated through prefixes.
 
-### Правило іменування пакетів
+### Package Naming Rule
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Ім'я пакета не збігається з іменем бібліотеки, яку цей пакет імпортує.
+A package name does not match the name of a library that the package imports.
 
-| Місце | Ім'я пакета | Примітка |
+| Place | Package name | Note |
 |---|---|---|
-| Inbound HTTP-адаптер | `httpapi` | Не `http`, бо збігається з `net/http` |
-| Outbound PostgreSQL-адаптер | `postgres` | pgx імпортується як `pgx` / `pgxpool`, колізії немає |
-| Outbound Redis-адаптер | `redisstore` | Не `redis`, бо збігається з Redis-клієнтом |
-| Outbound адаптер хешування | `passwordhash` | Назва за роллю: алгоритм відкладено в Security-конвенції |
-| Platform: PostgreSQL | `postgres` | Колізії немає |
-| Platform: Redis | `redisclient` | Не `redis` |
+| Inbound HTTP adapter | `httpapi` | Not `http`, because it matches `net/http` |
+| Outbound PostgreSQL adapter | `postgres` | pgx is imported as `pgx` / `pgxpool`, there is no collision |
+| Outbound Redis adapter | `redisstore` | Not `redis`, because it matches the Redis client |
+| Outbound hashing adapter | `passwordhash` | Named by role: the algorithm is deferred to the Security conventions |
+| Platform: PostgreSQL | `postgres` | There is no collision |
+| Platform: Redis | `redisclient` | Not `redis` |
 
-**Обґрунтування:** у файлах, які імпортують і пакет проєкту, і однойменну бібліотеку, не потрібні аліаси. Агентам не треба вигадувати імена під час кожної User Story.
+**Rationale:** files that import both a project package and a library of the same name do not need aliases. Agents do not have to invent names in every User Story.
 
-## 3. Точка входу та Composition Root
+## 3. Entry Point and Composition Root
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Composition root повністю лежить у `cmd/customer-portal/` (package `main`). Його можна розбити на кілька файлів. Це той єдиний composition root на точці входу, про який говорить [Architecture §5](architecture.md#composition-root).
+The composition root lies entirely in `cmd/customer-portal/` (package `main`). It may be split into several files. This is the single composition root at the entry point that [Architecture §5](architecture.md#composition-root) refers to.
 
-Відповідальності, у такому порядку:
+Responsibilities, in this order:
 
-1. завантажити конфігурацію (`platform/config`);
-2. ініціалізувати логування (`platform/logging`);
-3. відкрити підключення до PostgreSQL і Redis (`platform/postgres`, `platform/redisclient`);
-4. викликати функції збирання модулів, передаючи їм залежності Platform і, якщо потрібно, публічні типи інших модулів;
-5. створити HTTP-сервер (`platform/httpserver`), створити групи маршрутів і передати їх модулям для реєстрації маршрутів;
-6. запустити сервер і коректно його зупинити (graceful shutdown).
+1. load the configuration (`platform/config`);
+2. initialize logging (`platform/logging`);
+3. open connections to PostgreSQL and Redis (`platform/postgres`, `platform/redisclient`);
+4. call the module assembly functions, passing them Platform dependencies and, if needed, public types of other modules;
+5. create the HTTP server (`platform/httpserver`), create route groups and pass them to the modules for route registration;
+6. start the server and stop it correctly (graceful shutdown).
 
-Composition root імпортує лише кореневі пакети модулів і пакети Platform. Внутрішніх пакетів модулів він не бачить: це гарантує компілятор, див. [розділ 5](#розміщення-модуля-і-приватна-реалізація).
+The composition root imports only module root packages and Platform packages. It does not see the modules' internal packages: the compiler guarantees this, see [section 5](#module-placement-and-private-implementation).
 
-Значення timeout-ів і параметри shutdown цей документ не визначає, див. [розділ 9](#відкладені-рішення).
+This document does not define timeout values and shutdown parameters, see [section 9](#deferred-decisions).
 
-**Обґрунтування:** розміщення відповідає [Architecture §5](architecture.md#composition-root) буквально. Модуль сам збирає свої внутрішні частини, тож composition root з'єднує лише готові модулі.
+**Rationale:** the placement corresponds to [Architecture §5](architecture.md#composition-root) literally. A module assembles its internal parts itself, so the composition root connects only ready-made modules.
 
 ## 4. Platform
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Platform поділена на окремі пакети за відповідальністю:
+Platform is divided into separate packages by responsibility:
 
-| Пакет | Відповідальність |
+| Package | Responsibility |
 |---|---|
-| `internal/platform/config` | Завантаження конфігурації |
-| `internal/platform/logging` | Логування |
-| `internal/platform/httpserver` | Базова інфраструктура HTTP-сервера (Gin) |
-| `internal/platform/postgres` | Створення і закриття пулу підключень до PostgreSQL |
-| `internal/platform/redisclient` | Створення і закриття клієнта Redis |
+| `internal/platform/config` | Configuration loading |
+| `internal/platform/logging` | Logging |
+| `internal/platform/httpserver` | Basic HTTP server infrastructure (Gin) |
+| `internal/platform/postgres` | Creating and closing the PostgreSQL connection pool |
+| `internal/platform/redisclient` | Creating and closing the Redis client |
 
-- `platform/postgres` і `platform/redisclient` лише створюють і закривають підключення. Репозиторії та сховища сесій сюди не входять: це outbound adapters модулів.
-- Пакети Platform не імпортують пакети модулів і не містять бізнес-логіки ([AR-005](architecture.md#8-архітектурні-інваріанти)).
-- Логіка, пов'язана з сесіями, cookie і «хто діє», належить модулю `account`, а не Platform. Див. [розділ 6](#перевірка-сесії-і-хто-діє).
+- `platform/postgres` and `platform/redisclient` only create and close connections. Repositories and session stores do not belong here: they are module outbound adapters.
+- Platform packages do not import module packages and do not contain business logic ([AR-005](architecture.md#8-architectural-invariants)).
+- Logic related to sessions, cookies and "who is acting" belongs to the `account` module, not to Platform. See [section 6](#session-check-and-who-is-acting).
 
-**Обґрунтування:** окремі пакети не змушують модуль, якому потрібне лише одне підключення, транзитивно залежати від усієї інфраструктури. Межа «технічне спільне лежить у Platform» перевіряється на рівні кожного пакета.
+**Rationale:** separate packages do not force a module that needs only one connection to depend transitively on the whole infrastructure. The boundary "shared technical things live in Platform" is checked at the level of each package.
 
-## 5. Структура модуля
+## 5. Module Structure
 
-### Розміщення модуля і приватна реалізація
+### Module Placement and Private Implementation
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Модуль лежить у `internal/modules/<module>/`.
-- Приватна реалізація модуля лежить у вкладеному `internal/modules/<module>/internal/`. Компілятор не дає імпортувати ці пакети поза деревом `internal/modules/<module>/`. Це обмеження діє і для composition root, і для інших модулів.
-- Поза вкладеним `internal/` лежить лише кореневий пакет модуля з публічним контрактом ([розділ 6](#6-публічний-контракт-модуля)).
+- A module lies in `internal/modules/<module>/`.
+- The module's private implementation lies in the nested `internal/modules/<module>/internal/`. The compiler does not allow importing these packages outside the `internal/modules/<module>/` tree. This restriction applies both to the composition root and to other modules.
+- Outside the nested `internal/`, there is only the module's root package with the public contract ([section 6](#6-module-public-contract)).
 
-**Обґрунтування:** імпорт приватних пакетів іншого модуля стає помилкою компіляції без додаткових інструментів. Composition root теж не бачить внутрішніх частин модуля, як і вимагає [Architecture §5](architecture.md#composition-root). Що компілятор не гарантує, описано в [розділі 7](#межа-гарантій-компілятора).
+**Rationale:** importing another module's private packages becomes a compilation error without additional tools. The composition root also does not see the module's internal parts, as [Architecture §5](architecture.md#composition-root) requires. What the compiler does not guarantee is described in [section 7](#limits-of-compiler-guarantees).
 
-### Шари як окремі пакети
+### Layers as Separate Packages
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Пакет | Компонент з [Architecture §4](architecture.md#гексагональна-архітектура) | Вміст |
+| Package | Component from [Architecture §4](architecture.md#hexagonal-architecture) | Contents |
 |---|---|---|
-| `internal/domain` | Domain | Сутності, value objects, бізнес-інваріанти |
-| `internal/application` | Application | Use cases і outbound-порти |
-| `internal/adapters/inbound/<tech>` | Inbound adapters | HTTP: handlers, middleware перевірки сесії |
-| `internal/adapters/outbound/<tech>` | Outbound adapters | Реалізації outbound-портів |
+| `internal/domain` | Domain | Entities, value objects, business invariants |
+| `internal/application` | Application | Use cases and outbound ports |
+| `internal/adapters/inbound/<tech>` | Inbound adapters | HTTP: handlers, session check middleware |
+| `internal/adapters/outbound/<tech>` | Outbound adapters | Outbound port implementations |
 
-(Шляхи вказано відносно `internal/modules/<module>/`.)
+(Paths are given relative to `internal/modules/<module>/`.)
 
-- `domain` і `application` — кожен один пакет на модуль.
-- Домовленість, а не вимога: один файл на use case, наприклад `register_account.go`, `block_user.go`.
+- `domain` and `application` are each one package per module.
+- A convention, not a requirement: one file per use case, for example `register_account.go`, `block_user.go`.
 
-**Обґрунтування:** окремі пакети дають змогу перевіряти правила залежностей за імпортами. Модуль `account` охоплює одну невелику предметну область, тож поділ ядра на кілька пакетів створив би міжпакетні залежності без користі.
+**Rationale:** separate packages make it possible to check dependency rules by imports. The `account` module covers one small subject area, so splitting the core into several packages would create inter-package dependencies without benefit.
 
-### Адаптери
+### Adapters
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Адаптери групуються за напрямком: `adapters/inbound/<tech>/` і `adapters/outbound/<tech>/`. Імена пакетів задає [правило іменування](#правило-іменування-пакетів). Для модуля `account`:
+Adapters are grouped by direction: `adapters/inbound/<tech>/` and `adapters/outbound/<tech>/`. Package names are set by the [naming rule](#package-naming-rule). For the `account` module:
 
-| Пакет | Відповідальність |
+| Package | Responsibility |
 |---|---|
-| `adapters/inbound/httpapi` | HTTP handlers (Gin), middleware перевірки сесії |
-| `adapters/outbound/postgres` | Сховище даних модуля в PostgreSQL (pgx), реалізація порту транзакцій |
-| `adapters/outbound/redisstore` | Сховище сесій у Redis |
-| `adapters/outbound/passwordhash` | Хешування паролів |
+| `adapters/inbound/httpapi` | HTTP handlers (Gin), session check middleware |
+| `adapters/outbound/postgres` | The module's data store in PostgreSQL (pgx), implementation of the transaction port |
+| `adapters/outbound/redisstore` | Session store in Redis |
+| `adapters/outbound/passwordhash` | Password hashing |
 
-**Обґрунтування:** групування відтворює терміни з [Architecture §4](architecture.md#гексагональна-архітектура). Правила для inbound- і outbound-адаптерів різні (AR-003 і AR-008), і тепер видно, до якого пакета яке правило застосовується.
+**Rationale:** the grouping reproduces the terms from [Architecture §4](architecture.md#hexagonal-architecture). The rules for inbound and outbound adapters differ (AR-003 and AR-008), and now it is visible which rule applies to which package.
 
-### Порти
+### Ports
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- **Outbound-порти** — інтерфейси, які оголошено в пакеті `application`. Домовленість: окремий файл, наприклад `ports.go`. Outbound-адаптери реалізують ці інтерфейси.
-- **Inbound-порти** окремими інтерфейсами в Application не оголошуються. Application надає конкретні типи use cases. Handler залежить від вузького інтерфейсу, який оголошено в самому пакеті inbound-адаптера, тобто на боці споживача.
+- **Outbound ports** are interfaces declared in the `application` package. Convention: a separate file, for example `ports.go`. Outbound adapters implement these interfaces.
+- **Inbound ports** are not declared as separate interfaces in Application. Application provides concrete use case types. A handler depends on a narrow interface declared in the inbound adapter package itself, that is, on the consumer side.
 
-На всіх межах діє одне правило: інтерфейс оголошує той, хто його споживає.
+One rule applies at all boundaries: the interface is declared by whoever consumes it.
 
-**Обґрунтування:** розміщення outbound-портів прямо втілює [Architecture §4](architecture.md#гексагональна-архітектура): порти визначаються в Application. Інтерфейси на боці споживача — ідіома Go: handler можна тестувати з тестовим дублем, а Application не обростає абстракціями, які нічим не використовуються.
+**Rationale:** the placement of outbound ports directly embodies [Architecture §4](architecture.md#hexagonal-architecture): ports are defined in Application. Consumer-side interfaces are a Go idiom: a handler can be tested with a test double, and Application does not accumulate abstractions that nothing uses.
 
-## 6. Публічний контракт модуля
+## 6. Module Public Contract
 
-### Кореневий пакет модуля
+### Module Root Package
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Публічний контракт модуля лежить у кореневому пакеті `internal/modules/<module>/`. Для `account` це package `account`. Він містить:
+The module's public contract lies in the root package `internal/modules/<module>/`. For `account`, this is package `account`. It contains:
 
-- **функцію збирання.** Вона приймає залежності Platform і повертає конкретний тип модуля, наприклад `*account.Module`;
-- **публічні методи** типу модуля. Разом вони і є публічним інтерфейсом модуля з [Architecture §5](architecture.md#взаємодія-між-модулями). Окремого Go-інтерфейсу для всього модуля немає. Модуль-споживач сам оголошує вузький інтерфейс того, що йому потрібно;
-- **публічні типи**, які фігурують у публічних методах, наприклад `account.Actor`.
+- **the assembly function.** It accepts Platform dependencies and returns the module's concrete type, for example `*account.Module`;
+- **the public methods** of the module type. Together they are the module's public interface from [Architecture §5](architecture.md#inter-module-interaction). There is no separate Go interface for the whole module. A consumer module declares a narrow interface for what it needs itself;
+- **the public types** that appear in the public methods, for example `account.Actor`.
 
-Кореневий пакет може імпортувати власні внутрішні пакети модуля, Platform і Gin, бо його роль — збирання модуля. Він не містить бізнес-логіки: use cases лишаються в `application`.
+The root package may import the module's own internal packages, Platform and Gin, because its role is module assembly. It does not contain business logic: use cases stay in `application`.
 
-**Обґрунтування:** контракт і збирання модуля лежать в одному місці, яке видно ззовні. Форма «конкретний тип + інтерфейс на боці споживача» застосовує те саме правило, що й [порти](#порти).
+**Rationale:** the module's contract and assembly lie in one place visible from outside. The "concrete type + consumer-side interface" form applies the same rule as the [ports](#ports).
 
-### HTTP-маршрути
+### HTTP Routes
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Тип модуля має метод реєстрації маршрутів: `RegisterRoutes(r gin.IRouter)`. Composition root створює групу маршрутів і передає її модулю. Модуль реєструє свої маршрути, але не вирішує, під яким префіксом вони будуть. URL-префікси й версіонування визначають API-конвенції.
+The module type has a route registration method: `RegisterRoutes(r gin.IRouter)`. The composition root creates a route group and passes it to the module. The module registers its routes but does not decide under which prefix they will be. URL prefixes and versioning are defined by the API conventions.
 
-**Обґрунтування:** Platform не прив'язується до формату маршрутів модулів, а спільні Gin-middleware лишаються доступними.
+**Rationale:** Platform is not tied to the format of the modules' routes, and shared Gin middleware remains available.
 
-### Перевірка сесії і «хто діє»
+### Session Check and "Who Is Acting"
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Middleware перевірки сесії лежить у `account/internal/adapters/inbound/httpapi`. Він викликає use case перевірки сесії з `application` ([AR-006](architecture.md#8-архітектурні-інваріанти)).
-- Тип модуля відкриває цей middleware через публічний метод, наприклад `RequireSession() gin.HandlerFunc`. Composition root та адаптери інших модулів застосовують його до захищених маршрутів.
-- Middleware кладе результат перевірки («хто діє») у контекст запиту. Handler дістає його й передає в use case **явним параметром**. Application нічого не читає з контексту запиту ([AR-007](architecture.md#8-архітектурні-інваріанти)).
-- Для ядра `account` тип «хто діє» визначено всередині модуля. Публічний тип у кореневому пакеті (наприклад `account.Actor`) і функція, яка читає його з контексту запиту, призначені для адаптерів інших модулів.
+- The session check middleware lies in `account/internal/adapters/inbound/httpapi`. It calls the session validation use case from `application` ([AR-006](architecture.md#8-architectural-invariants)).
+- The module type exposes this middleware through a public method, for example `RequireSession() gin.HandlerFunc`. The composition root and other modules' adapters apply it to protected routes.
+- The middleware puts the check result ("who is acting") into the request context. The handler retrieves it and passes it to the use case **as an explicit parameter**. Application reads nothing from the request context ([AR-007](architecture.md#8-architectural-invariants)).
+- For the `account` core, the "who is acting" type is defined inside the module. The public type in the root package (for example `account.Actor`) and the function that reads it from the request context are intended for other modules' adapters.
 
-Ключ контексту і формат claims визначають Security-конвенції.
+The context key and the claims format are defined by the Security conventions.
 
-**Обґрунтування:** уся логіка сесій лишається в модулі `account`, а Platform лишається чисто технічною. З сигнатури use case видно, що він залежить від того, хто діє, тож перевірку прав важко пропустити.
+**Rationale:** all session logic stays in the `account` module, and Platform stays purely technical. The use case signature shows that it depends on who is acting, so the permission check is hard to skip.
 
-### Організація публічних типів без циклів імпорту
+### Organizing Public Types Without Import Cycles
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Залежності всередині модуля спрямовані лише від кореневого пакета до внутрішніх:
+Dependencies inside a module point only from the root package to the internal ones:
 
 ```
 account  ──►  account/internal/adapters/...  ──►  account/internal/application  ──►  account/internal/domain
@@ -234,161 +234,161 @@ account  ──►  account/internal/adapters/...  ──►  account/internal/a
    └────────────────────────────────────────────────────────┘
 ```
 
-- Кореневий пакет модуля може імпортувати власні внутрішні пакети.
-- Внутрішні пакети модуля **не імпортують** його кореневий пакет. Зокрема, `account/internal/adapters/...` не імпортує `account`.
-- Публічні типи визначаються лише в кореневому пакеті. Внутрішні пакети працюють із власними типами (`domain`, `application`, `httpapi`).
-- Переклад між внутрішніми і публічними типами виконує кореневий пакет. Приклад: функція читання «хто діє» з контексту отримує внутрішнє значення через експортовану функцію `httpapi` і перетворює його на `account.Actor`.
-- Публічні методи типу модуля приймають і повертають публічні типи, а внутрішні типи перекладають самі.
+- The module's root package may import its own internal packages.
+- The module's internal packages **do not import** its root package. In particular, `account/internal/adapters/...` does not import `account`.
+- Public types are defined only in the root package. Internal packages work with their own types (`domain`, `application`, `httpapi`).
+- Translation between internal and public types is performed by the root package. Example: the function that reads "who is acting" from the context obtains the internal value through an exported `httpapi` function and converts it into `account.Actor`.
+- Public methods of the module type accept and return public types and translate internal types themselves.
 
-**Обґрунтування:** граф імпортів усередині модуля стає ациклічним, бо кореневий пакет лише споживає внутрішні пакети. Внутрішні типи не потрапляють у публічний контракт, тому внутрішню реалізацію можна змінювати, не чіпаючи споживачів.
+**Rationale:** the import graph inside the module becomes acyclic, because the root package only consumes internal packages. Internal types do not get into the public contract, so the internal implementation can be changed without touching consumers.
 
-### Хто може імпортувати кореневий пакет модуля
+### Who May Import a Module's Root Package
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Кореневий пакет модуля імпортують лише composition root та адаптери **інших** модулів.
-- Domain та Application модуля не імпортують жодного іншого модуля.
-- Inbound-адаптер перекладає дані іншого модуля (наприклад, `account.Actor`) у власні типи свого модуля, перш ніж передати їх у use case.
-- Кореневий пакет модуля не імпортує кореневі пакети інших модулів. Залежність від іншого модуля composition root передає через параметр функції збирання. Тип параметра — вузький інтерфейс, який оголошує модуль-споживач.
+- A module's root package is imported only by the composition root and by adapters of **other** modules.
+- A module's Domain and Application do not import any other module.
+- An inbound adapter translates another module's data (for example, `account.Actor`) into its own module's types before passing them to a use case.
+- A module's root package does not import other modules' root packages. The composition root passes a dependency on another module through a parameter of the assembly function. The parameter type is a narrow interface declared by the consumer module.
 
-**Обґрунтування:** кореневий пакет транзитивно залежить від Gin, pgx і Redis-клієнта. Якби його імпортували Domain чи Application іншого модуля, ці технології стали б їхньою залежністю, а це суперечить наміру [Architecture §4](architecture.md#гексагональна-архітектура). Обмеження для коренів модулів зменшує ризик циклів між модулями. Залишковий ризик описано в [розділі 9](#відомі-наслідки).
+**Rationale:** the root package depends transitively on Gin, pgx and the Redis client. If another module's Domain or Application imported it, these technologies would become their dependency, which contradicts the intent of [Architecture §4](architecture.md#hexagonal-architecture). The restriction for module roots reduces the risk of cycles between modules. The residual risk is described in [section 9](#known-consequences).
 
-## 7. Дозволені напрямки імпортів
+## 7. Allowed Import Directions
 
-### Таблиця імпортів
+### Import Table
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-«Власні» означає пакети того самого модуля. «Корені інших модулів» означає кореневі пакети `internal/modules/<other>`.
+"Own" means packages of the same module. "Other module roots" means the root packages `internal/modules/<other>`.
 
-| Пакет | Може імпортувати | Не може імпортувати |
+| Package | May import | May not import |
 |---|---|---|
-| `domain` | stdlib, якщо пакет не прив'язує до інфраструктури | Будь-які інші пакети проєкту, фреймворки, драйвери, Redis-клієнт, інфраструктурні пакети stdlib (зокрема `net/http`, `database/sql`) |
-| `application` | Власний `domain`, stdlib, якщо пакет не прив'язує до інфраструктури | Адаптери, Platform, будь-які модулі (свій корінь теж), Gin, pgx, Redis-клієнт, інфраструктурні пакети stdlib (зокрема `net/http`, `database/sql`) |
-| `adapters/inbound/*` | Власні `application` і `domain`, Platform, Gin, корені інших модулів | Корінь власного модуля, outbound-адаптери власного модуля |
-| `adapters/outbound/*` | Власні `application` і `domain`, Platform, pgx, Redis-клієнт, корені інших модулів | Корінь власного модуля, inbound-адаптери власного модуля |
-| Корінь модуля | Власні `internal/...`, Platform, Gin | Корені інших модулів |
-| `platform/*` | stdlib, Gin, pgx, Redis-клієнт, інші пакети `platform/*` | Будь-які пакети модулів |
-| `cmd/customer-portal` | Корені модулів, Platform | Внутрішні пакети модулів |
+| `domain` | stdlib, if the package does not tie to infrastructure | Any other project packages, frameworks, drivers, the Redis client, infrastructure stdlib packages (in particular `net/http`, `database/sql`) |
+| `application` | Own `domain`, stdlib, if the package does not tie to infrastructure | Adapters, Platform, any modules (its own root as well), Gin, pgx, the Redis client, infrastructure stdlib packages (in particular `net/http`, `database/sql`) |
+| `adapters/inbound/*` | Own `application` and `domain`, Platform, Gin, other module roots | Own module root, own module's outbound adapters |
+| `adapters/outbound/*` | Own `application` and `domain`, Platform, pgx, the Redis client, other module roots | Own module root, own module's inbound adapters |
+| Module root | Own `internal/...`, Platform, Gin | Other module roots |
+| `platform/*` | stdlib, Gin, pgx, the Redis client, other `platform/*` packages | Any module packages |
+| `cmd/customer-portal` | Module roots, Platform | Modules' internal packages |
 
-Наслідки таблиці:
+Consequences of the table:
 
-- Application не імпортує Platform. Якщо use case має логувати, це робиться через outbound-порт або в адаптерах, а не через `platform/logging` напряму.
-- Inbound- і outbound-адаптери одного модуля не імпортують одне одного.
-- Набір зовнішніх бібліотек обмежено [Architecture §6](architecture.md#6-технологічний-стек) і [AR-012](architecture.md#8-архітектурні-інваріанти).
+- Application does not import Platform. If a use case needs to log, this is done through an outbound port or in adapters, not through `platform/logging` directly.
+- Inbound and outbound adapters of the same module do not import each other.
+- The set of external libraries is limited by [Architecture §6](architecture.md#6-technology-stack) and [AR-012](architecture.md#8-architectural-invariants).
 
-**Обґрунтування:** таблиця переносить правило залежностей «лише всередину» з [Architecture §4](architecture.md#гексагональна-архітектура) і межі Platform з [Architecture §5](architecture.md#platform) на конкретні пакети. Порушення видно з блоку `import`.
+**Rationale:** the table carries the "inward only" dependency rule from [Architecture §4](architecture.md#hexagonal-architecture) and the Platform boundaries from [Architecture §5](architecture.md#platform) over to specific packages. A violation is visible from the `import` block.
 
-### Межа гарантій компілятора
+### Limits of Compiler Guarantees
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Що гарантується | Як |
+| What is guaranteed | How |
 |---|---|
-| Пакети поза деревом `internal/modules/<module>/` не можуть імпортувати приватні пакети з його вкладеного `internal/` (частина AR-004). Що імпортують самі приватні пакети, вкладений `internal/` не обмежує | Компілятор, вкладений `internal/` |
-| Немає циклів імпорту | Компілятор: цикл означає помилку збірки |
-| Решта таблиці імпортів | Design Review та Implementation Verification |
-| Запити до БД модуля не звертаються до таблиць іншого модуля (частина AR-004) | Design Review та Implementation Verification |
-| Зміст правил: немає бізнес-логіки в адаптерах і Platform, зовнішні виклики Application лише через порти (AR-002, AR-003, AR-005) | Design Review та Implementation Verification |
+| Packages outside the `internal/modules/<module>/` tree cannot import private packages from its nested `internal/` (part of AR-004). The nested `internal/` does not restrict what the private packages themselves import | The compiler, the nested `internal/` |
+| There are no import cycles | The compiler: a cycle means a build error |
+| The rest of the import table | Design Review and Implementation Verification |
+| A module's DB queries do not access another module's tables (part of AR-004) | Design Review and Implementation Verification |
+| The substance of the rules: no business logic in adapters and Platform, Application's external calls only through ports (AR-002, AR-003, AR-005) | Design Review and Implementation Verification |
 
-Структура пакетів робить правила залежностей перевірюваними за імпортами, але Go сам їх не гарантує. Автоматична перевірка таблиці імпортів — окреме майбутнє завдання. Інструменти для неї обирають окремим рішенням, коли налаштовуватимуть Engineering Tooling.
+The package structure makes the dependency rules checkable by imports, but Go itself does not guarantee them. Automatic checking of the import table is a separate future task. The tools for it are chosen by a separate decision when Engineering Tooling is set up.
 
-**Обґрунтування:** документ явно показує, де закінчується автоматичний захист, щоб на review не вважали, що компілятор перевіряє більше, ніж насправді.
+**Rationale:** the document explicitly shows where automatic protection ends, so that at review no one assumes the compiler checks more than it actually does.
 
-### Відповідність Architecture Rules
+### Mapping to Architecture Rules
 
-| Правило | Як воно виражається в Package Map |
+| Rule | How it is expressed in the Package Map |
 |---|---|
-| [AR-001](architecture.md#8-архітектурні-інваріанти) | Рядок `domain` у таблиці імпортів: лише stdlib без інфраструктурних пакетів |
-| [AR-002](architecture.md#8-архітектурні-інваріанти) | Рядок `application`: без Gin, pgx, Redis-клієнта, інфраструктурних пакетів stdlib, Platform та інших модулів; outbound-порти оголошено в `application` |
-| [AR-003](architecture.md#8-архітектурні-інваріанти) | HTTP-логіка лише в `adapters/inbound/httpapi`. Зміст handlers перевіряється на review |
-| [AR-004](architecture.md#8-архітектурні-інваріанти) | Вкладений `internal/` (компілятор), публічний контракт лише в кореневому пакеті, корені інших модулів імпортують лише адаптери і composition root. Доступ до таблиць перевіряється на review |
-| [AR-005](architecture.md#8-архітектурні-інваріанти) | Рядок `platform/*`: без імпортів модулів. Логіка сесій лишається в `account`. Відсутність бізнес-логіки перевіряється на review |
+| [AR-001](architecture.md#8-architectural-invariants) | The `domain` row of the import table: only stdlib without infrastructure packages |
+| [AR-002](architecture.md#8-architectural-invariants) | The `application` row: without Gin, pgx, the Redis client, infrastructure stdlib packages, Platform and other modules; outbound ports are declared in `application` |
+| [AR-003](architecture.md#8-architectural-invariants) | HTTP logic only in `adapters/inbound/httpapi`. The content of handlers is checked at review |
+| [AR-004](architecture.md#8-architectural-invariants) | The nested `internal/` (compiler), the public contract only in the root package, other module roots are imported only by adapters and the composition root. Table access is checked at review |
+| [AR-005](architecture.md#8-architectural-invariants) | The `platform/*` row: without module imports. Session logic stays in `account`. The absence of business logic is checked at review |
 
-## 8. Тести, міграції, версія Go
+## 8. Tests, Migrations, Go Version
 
-Тут визначено лише фізичне розміщення. Тестову стратегію, вибір тестових бібліотек та інфраструктуру для тестів визначає майбутня Testing Strategy.
+Only physical placement is defined here. The testing strategy, the choice of test libraries and test infrastructure are defined by the future Testing Strategy.
 
-### Unit-тести
+### Unit Tests
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Файли `_test.go` лежать у тій самій директорії, що й код, який вони тестують.
-- За замовчуванням використовується зовнішній тестовий пакет (наприклад `package application_test`): тест працює через експортований API.
-- Внутрішній тестовий пакет (наприклад `package application`) допустимий, коли треба перевірити неекспортовану логіку.
+- `_test.go` files lie in the same directory as the code they test.
+- By default, an external test package is used (for example `package application_test`): the test works through the exported API.
+- An internal test package (for example `package application`) is acceptable when unexported logic needs to be checked.
 
-**Обґрунтування:** тести з окремого дерева не бачили б пакетів у вкладеному `internal/` модуля.
+**Rationale:** tests from a separate tree would not see packages in the module's nested `internal/`.
 
-### Тестові дублі
+### Test Doubles
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Тестові дублі портів та інтерфейсів на боці споживача лежать у `_test.go` файлах пакета, який їх використовує.
-- Окремий пакет для дублів, які використовуються в кількох пакетах, створюється лише за окремим рішенням, коли така потреба з'явиться.
+- Test doubles of ports and consumer-side interfaces lie in `_test.go` files of the package that uses them.
+- A separate package for doubles used in several packages is created only by a separate decision, when such a need appears.
 
-Чи писати дублі вручну чи генерувати їх, і якими бібліотеками, вирішує Testing Strategy.
+Whether to write doubles manually or generate them, and with which libraries, is decided by the Testing Strategy.
 
-**Обґрунтування:** дубль лежить поруч зі споживачем інтерфейсу, як і сам інтерфейс ([Порти](#порти)), і не потрапляє в production-збірку.
+**Rationale:** a double lies next to the consumer of the interface, as does the interface itself ([Ports](#ports)), and does not get into the production build.
 
-### Інтеграційні тести адаптерів
+### Adapter Integration Tests
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Інтеграційні тести адаптерів, які працюють зі справжніми PostgreSQL чи Redis, лежать поруч з адаптером, наприклад в `adapters/outbound/postgres/*_test.go`.
-- Вони позначаються build-тегом `//go:build integration`. Звичайний `go test ./...` їх не запускає.
+- Adapter integration tests that work with real PostgreSQL or Redis lie next to the adapter, for example in `adapters/outbound/postgres/*_test.go`.
+- They are marked with the build tag `//go:build integration`. A regular `go test ./...` does not run them.
 
-Спосіб запуску PostgreSQL і Redis для тестів та наявність end-to-end / API-тестів визначає Testing Strategy.
+How PostgreSQL and Redis are started for tests and whether end-to-end / API tests exist is defined by the Testing Strategy.
 
-**Обґрунтування:** тест має доступ до пакета адаптера у вкладеному `internal/`, а поділ на unit- та інтеграційні тести явний.
+**Rationale:** the test has access to the adapter package in the nested `internal/`, and the split into unit and integration tests is explicit.
 
-### Міграції
+### Migrations
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Усі міграції golang-migrate лежать в одній директорії `migrations/` у корені репозиторію й утворюють одну послідовність.
-- У назві файлу вказується модуль-власник таблиць, наприклад `000001_account_create_accounts.up.sql`.
+- All golang-migrate migrations lie in a single `migrations/` directory in the repository root and form one sequence.
+- The file name states the module that owns the tables, for example `000001_account_create_accounts.up.sql`.
 
-Міграції запускає CLI golang-migrate окремим кроком перед стартом застосунку. Правила міграцій визначає [Persistence Conventions §7](persistence-conventions.md#7-міграції).
+Migrations are run by the golang-migrate CLI as a separate step before the application starts. Migration rules are defined by [Persistence Conventions §7](persistence-conventions.md#7-migrations).
 
-**Обґрунтування:** це стандартна форма для golang-migrate, тож вона не визначає наперед, як запускатимуться міграції. Модуль у назві файлу показує, кому належать таблиці, для перевірки AR-004.
+**Rationale:** this is the standard form for golang-migrate, so it does not determine in advance how migrations will be run. The module in the file name shows who owns the tables, for checking AR-004.
 
-### Версія Go
+### Go Version
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Версію Go визначає директива `go` у [go.mod](../../go.mod). Цей документ числа версії не дублює. Major-версії PostgreSQL (18) і Redis (8.x) визначає [Persistence Conventions §2](persistence-conventions.md#середовище). Minor- і patch-версії та образи визначає Infrastructure Bootstrap.
+The Go version is defined by the `go` directive in [go.mod](../../go.mod). This document does not duplicate the version number. The major versions of PostgreSQL (18) and Redis (8.x) are defined by [Persistence Conventions §2](persistence-conventions.md#environment). Minor and patch versions and images are defined by Infrastructure Bootstrap.
 
-**Обґрунтування:** одне джерело правди без ручної синхронізації.
+**Rationale:** a single source of truth without manual synchronization.
 
-## 9. Відомі наслідки та відкладені рішення
+## 9. Known Consequences and Deferred Decisions
 
-### Відомі наслідки
+### Known Consequences
 
-Ці наслідки погоджених рішень прийнято свідомо.
+These consequences of approved decisions are accepted deliberately.
 
-| Наслідок | Причина | Що робити |
+| Consequence | Cause | What to do |
 |---|---|---|
-| Ризик циклу імпорту між модулями. Приклад: адаптери `account` імпортують корінь модуля B, а адаптери B імпортують корінь `account`. Тоді виникає цикл через кореневі пакети, які збирають свої адаптери | Публічний контракт і збирання модуля лежать в одному кореневому пакеті | Компілятор виявить цикл. Якщо з'явиться потреба у взаємній залежності двох модулів, організацію контракту вирішують окремо, а цей документ оновлюють |
-| На межах потрібен переклад типів: між внутрішніми і публічними типами модуля (у кореневому пакеті) та між публічними типами іншого модуля і власними типами (в inbound-адаптері) | Внутрішні пакети не імпортують свій корінь. Domain та Application не імпортують інших модулів | Застосовувати як звичайну частину реалізації |
-| Application логує лише через outbound-порт | Application не імпортує Platform | Застосовувати, якщо use case потребує логування |
+| Risk of an import cycle between modules. Example: `account` adapters import the root of module B, and B's adapters import the `account` root. Then a cycle arises through the root packages, which assemble their adapters | The module's public contract and assembly lie in one root package | The compiler will detect the cycle. If a need for mutual dependency between two modules appears, the organization of the contract is decided separately, and this document is updated |
+| Type translation is needed at the boundaries: between the module's internal and public types (in the root package) and between another module's public types and own types (in the inbound adapter) | Internal packages do not import their root. Domain and Application do not import other modules | Apply as a normal part of the implementation |
+| Application logs only through an outbound port | Application does not import Platform | Apply if a use case needs logging |
 
-### Відкриті питання
+### Open Questions
 
-Немає.
+None.
 
-### Відкладені рішення
+### Deferred Decisions
 
-Ці рішення свідомо відкладено. До того як їх визначено, агент не може спиратися на жоден варіант.
+These decisions are deliberately deferred. Until they are defined, the agent cannot rely on any option.
 
-Рядки з позначкою «Визначено» вже закрито відповідним документом. Їх лишено для простежуваності.
+Rows marked "Defined" have already been closed by the corresponding document. They are kept for traceability.
 
-| Рішення | Куди відкладено |
+| Decision | Deferred to |
 |---|---|
-| Значення timeout-ів HTTP-сервера та параметри graceful shutdown | **Частково визначено:** модель timeout-ів, лімітів і graceful shutdown — [API Conventions §11](api-conventions.md#11-модель-timeout-ів-і-лімітів-http-сервера). Значення лишаються відкладеними до Infrastructure Bootstrap |
-| Версії PostgreSQL і Redis, спосіб запуску міграцій | **Визначено:** [Persistence Conventions §2](persistence-conventions.md#середовище) (PostgreSQL 18, Redis 8.x), [§7](persistence-conventions.md#7-міграції) (CLI golang-migrate окремим кроком). Minor- і patch-версії та образи лишаються відкладеними до Infrastructure Bootstrap |
-| Ключ контексту для «хто діє», формат claims | **Визначено:** [Security Conventions §7](security-conventions.md#авторизація-і-хто-діє) (ключ контексту), [§3](security-conventions.md#3-jwt) (claims) |
-| URL-префікси й версіонування маршрутів | **Визначено:** [API Conventions §3](api-conventions.md#3-url-версіонування-групи-маршрутів) |
-| Подання бізнес-помилок у публічних методах модуля | Коли з'явиться перший модуль-споживач |
-| Вибір тестових бібліотек, спосіб створення тестових дублів, інфраструктура для інтеграційних тестів, end-to-end / API-тести | Testing Strategy |
-| Окремий пакет для тестових дублів, які використовуються в кількох пакетах | Коли з'явиться така потреба |
-| Автоматична перевірка таблиці імпортів та вибір інструментів для неї | Налаштування Engineering Tooling |
+| HTTP server timeout values and graceful shutdown parameters | **Partially defined:** the model of timeouts, limits and graceful shutdown — [API Conventions §11](api-conventions.md#11-http-server-timeout-and-limit-model). The values remain deferred until Infrastructure Bootstrap |
+| PostgreSQL and Redis versions, how migrations are run | **Defined:** [Persistence Conventions §2](persistence-conventions.md#environment) (PostgreSQL 18, Redis 8.x), [§7](persistence-conventions.md#7-migrations) (golang-migrate CLI as a separate step). Minor and patch versions and images remain deferred until Infrastructure Bootstrap |
+| Context key for "who is acting", claims format | **Defined:** [Security Conventions §7](security-conventions.md#authorization-and-who-is-acting) (context key), [§3](security-conventions.md#3-jwt) (claims) |
+| URL prefixes and route versioning | **Defined:** [API Conventions §3](api-conventions.md#3-urls-versioning-route-groups) |
+| Representation of business errors in the module's public methods | When the first consumer module appears |
+| Choice of test libraries, how test doubles are created, integration test infrastructure, end-to-end / API tests | Testing Strategy |
+| A separate package for test doubles used in several packages | When such a need appears |
+| Automatic checking of the import table and the choice of tools for it | Engineering Tooling setup |

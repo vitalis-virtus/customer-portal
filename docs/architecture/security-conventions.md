@@ -1,540 +1,540 @@
 # Security Conventions — Customer Portal
 
-## 1. Призначення
+## 1. Purpose
 
-Документ визначає сталі технічні правила безпеки Customer Portal для всіх User Stories. Він деталізує логічну архітектуру з [Architecture](architecture.md) і фізичну структуру з [Package Map](package-map.md), але не змінює їх.
+This document defines the stable technical security rules of Customer Portal for all User Stories. It details the logical architecture from [Architecture](architecture.md) and the physical structure from the [Package Map](package-map.md), but does not change them.
 
-Architecture Rules (AR) задають інваріанти, тобто що має бути правдою. Ці конвенції задають конкретні параметри й правила, як досягти цих інваріантів. Конвенції не можуть послабити жодне AR.
+Architecture Rules (AR) set invariants, that is, what must be true. These conventions set specific parameters and rules for how to achieve these invariants. The conventions cannot weaken any AR.
 
-**Що входить:**
+**In scope:**
 
-- JWT, сесії в Redis, відкликання;
+- JWT, sessions in Redis, revocation;
 - cookies, CSRF, CORS, HTTPS;
-- хешування паролів і поводження з паролем;
-- технічні правила автентифікації та авторизації;
-- секрети, security logging, поведінка під час збоїв.
+- password hashing and password handling;
+- technical rules of authentication and authorization;
+- secrets, security logging, behavior during failures.
 
-**Що не входить:**
+**Out of scope:**
 
-- продуктові вимоги й критерії перевірки NFR;
-- HTTP-коди, формат помилок, URL маршрутів (API-конвенції);
-- механізм серіалізації в PostgreSQL і модель timeout-ів ([Persistence Conventions](persistence-conventions.md)), значення timeout-ів (Infrastructure Bootstrap);
-- розгортання, сховище секретів, конфігурація Redis persistence (Deployment-конвенції);
-- Go-код.
+- product requirements and NFR verification criteria;
+- HTTP codes, the error format, route URLs (API conventions);
+- the serialization mechanism in PostgreSQL and the timeout model ([Persistence Conventions](persistence-conventions.md)), timeout values (Infrastructure Bootstrap);
+- deployment, the secret store, Redis persistence configuration (Deployment conventions);
+- Go code.
 
-**NFR-001.** [NFR-001](../product/non-functional-requirements.md#nfr-001--secure-authentication) має статус `NEEDS_CLARIFICATION`. Ці конвенції роблять автентифікацію безпечнішою, але NFR-001 не закривають і критеріїв її перевірки не встановлюють.
+**NFR-001.** [NFR-001](../product/non-functional-requirements.md#nfr-001--secure-authentication) has the `NEEDS_CLARIFICATION` status. These conventions make authentication more secure, but they do not close NFR-001 and do not establish its verification criteria.
 
-**Бібліотеки та AR-012.** Конкретні бібліотеки для JWT, Redis-клієнта і хешування паролів вважаються реалізацією погодженого стеку з [Architecture §6](architecture.md#6-технологічний-стек), поки вони не змінюють архітектурних принципів і не додають нових технологій. Бібліотека, яка змінює погоджену архітектуру, потребує окремого погодження. Формулювання AR-012 цей документ не змінює.
+**Libraries and AR-012.** Specific libraries for JWT, the Redis client and password hashing are considered an implementation of the approved stack from [Architecture §6](architecture.md#6-technology-stack) as long as they do not change architectural principles and do not add new technologies. A library that changes the approved architecture requires separate approval. This document does not change the wording of AR-012.
 
-**Статуси:**
+**Statuses:**
 
-- `APPROVED` — рішення явно погоджено. Агенти й люди можуть на нього спиратися.
-- `OPEN` — питання не вирішено. Функціональність, яка від нього залежить, не реалізується, поки питання не закрито.
-- `DEFERRED` — рішення свідомо відкладено до вказаного моменту. До того часу агент не спирається на жоден варіант.
+- `APPROVED` — the decision is explicitly approved. Agents and people may rely on it.
+- `OPEN` — the question is not resolved. Functionality that depends on it is not implemented until the question is closed.
+- `DEFERRED` — the decision is deliberately deferred until the stated point. Until then, the agent does not rely on any option.
 
-Пункти зі статусом `OPEN` і `DEFERRED` зібрано в [розділі 12](#12-відкриті-питання-та-залежності). Рекомендації в тому розділі не є погодженими рішеннями.
+Items with the `OPEN` and `DEFERRED` statuses are collected in [section 12](#12-open-questions-and-dependencies). Recommendations in that section are not approved decisions.
 
-Терміни вживаються у значеннях із [Business Glossary](../product/business-glossary.md). Якщо цей документ суперечить іншим документам, агент має повідомити про суперечність. Автоматично віддавати перевагу одному з документів не можна.
+Terms are used in the meanings from the [Business Glossary](../product/business-glossary.md). If this document contradicts other documents, the agent must report the contradiction. The agent must not automatically prefer one of the documents.
 
-Рішення погоджено 2026-11-13.
+Decisions approved on 2026-11-13.
 
-## 2. Припущення та межі гарантій
+## 2. Assumptions and Limits of Guarantees
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-**Припущення:**
+**Assumptions:**
 
-- Майбутній браузерний клієнт розміщується на тому самому *site*, що й API. Якщо клієнт буде cross-site, політику cookies, CSRF і CORS треба переглянути ([розділ 5](#5-cookies-csrf-cors-https)).
-- Поточне середовище навчальне. Сервіс використовують через HTTP-інструменти (curl, Postman), як описано в [Architecture §3](architecture.md#3-системний-контекст).
-- Усе, що приходить від клієнта, недовірене. PostgreSQL і Redis вважаються довіреними сховищами.
+- The future browser client is hosted on the same *site* as the API. If the client is cross-site, the cookie, CSRF and CORS policy must be revisited ([section 5](#5-cookies-csrf-cors-https)).
+- The current environment is educational. The service is used through HTTP tools (curl, Postman), as described in [Architecture §3](architecture.md#3-system-context).
+- Everything that comes from the client is untrusted. PostgreSQL and Redis are considered trusted stores.
 
-**Межі гарантій BR-007:**
+**Limits of the BR-007 guarantees:**
 
-- Схема з цього документа виконує [BR-007](../product/business-rules.md#br-007--blocked-user-access) за збоїв мережі, timeout-ів і невідомих результатів команд, описаних у [розділах 4](#4-сесії-в-redis-і-відкликання) і [10](#10-збої-та-timeout-и).
-- Схема **не гарантує** відкликання сесій **за будь-якого інфраструктурного збою Redis**. Якщо Redis відновлюється з persistence (snapshot / AOF), зробленого до блокування, або після failover переходить на репліку, яка ще не отримала видалення, відкликані сесії можуть відновитися.
-- Цей ризик — невирішена залежність від Persistence- / Deployment-конвенцій. Гарантії треба визначити до production-розгортання ([розділ 12](#інфраструктурні-та-архітектурні-залежності)).
-- Гарантія стосується запитів, надісланих після завершення блокування, як і формулює BR-007. Запити, які пройшли перевірку сесії до завершення блокування (in-flight), можуть завершитися ([розділ 12](#семантика-br-007-для-in-flight-запитів)).
-- Ці межі так само зафіксовано в [Architecture §7, «Операції зі станом доступу»](architecture.md#операції-зі-станом-доступу).
+- The scheme from this document satisfies [BR-007](../product/business-rules.md#br-007--blocked-user-access) under network failures, timeouts and unknown command outcomes described in [sections 4](#4-sessions-in-redis-and-revocation) and [10](#10-failures-and-timeouts).
+- The scheme **does not guarantee** session revocation **under any Redis infrastructure failure**. If Redis is restored from persistence (snapshot / AOF) made before the blocking or, after a failover, switches to a replica that has not yet received the deletion, revoked sessions may be restored.
+- This risk is an unresolved dependency on the Persistence / Deployment conventions. The guarantees must be defined before production deployment ([section 12](#infrastructure-and-architectural-dependencies)).
+- The guarantee applies to requests sent after the blocking is completed, as BR-007 formulates it. Requests that passed the session check before the blocking was completed (in-flight) may complete ([section 12](#br-007-semantics-for-in-flight-requests)).
+- These limits are also recorded in [Architecture §7, "Access-State Operations"](architecture.md#access-state-operations).
 
 ## 3. JWT
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-**Підпис:**
+**Signature:**
 
-- Алгоритм — HS256.
-- Access і refresh підписуються **різними** ключами ([розділ 8](#8-секрети)).
-- Під час валідації алгоритм жорстко заданий на сервері. `none` і алгоритм, указаний у заголовку токена, не приймаються.
+- The algorithm is HS256.
+- Access and refresh are signed with **different** keys ([section 8](#8-secrets)).
+- During validation, the algorithm is fixed on the server. `none` and the algorithm stated in the token header are not accepted.
 
-**Типізація.** Тип токена задається JOSE header `typ` (RFC 7515 §4.1.9, explicit typing за RFC 8725 §3.11):
+**Typing.** The token type is set by the JOSE header `typ` (RFC 7515 §4.1.9, explicit typing per RFC 8725 §3.11):
 
-| Токен | `typ` |
+| Token | `typ` |
 |---|---|
 | Access | `cp-access+jwt` |
 | Refresh | `cp-refresh+jwt` |
 
-- Валідатори взаємовиключні: валідатор access приймає лише `cp-access+jwt`, валідатор refresh лише `cp-refresh+jwt`. Значення порівнюються без урахування регістру.
-- Токен без `typ` відхиляється.
-- Власного claim для типу токена немає. Значення `at+jwt` (RFC 9068) не використовується, бо токени не відповідають цьому профілю.
+- The validators are mutually exclusive: the access validator accepts only `cp-access+jwt`, the refresh validator only `cp-refresh+jwt`. Values are compared case-insensitively.
+- A token without `typ` is rejected.
+- There is no custom claim for the token type. The value `at+jwt` (RFC 9068) is not used, because the tokens do not conform to that profile.
 
 **Claims:**
 
 | Claim | Access | Refresh |
 |---|---|---|
-| `sid` | так | так |
-| `jti` | — | так |
-| `iss` | так | так |
-| `aud` | так | так |
-| `iat` | так | так |
-| `exp` | так | так |
+| `sid` | yes | yes |
+| `jti` | — | yes |
+| `iss` | yes | yes |
+| `aud` | yes | yes |
+| `iat` | yes | yes |
+| `exp` | yes | yes |
 
-- `user_id` і `role` у токенах відсутні. «Хто діє» визначає лише сесія в Redis.
-- Значення `iss` і `aud` задаються конфігурацією.
+- `user_id` and `role` are absent from the tokens. "Who is acting" is determined only by the session in Redis.
+- The values of `iss` and `aud` are set by configuration.
 
-**Валідація.** Токен відхиляється, якщо:
+**Validation.** A token is rejected if:
 
-- підпис або алгоритм неправильні;
-- `typ` не відповідає місцю використання;
-- немає будь-якого з обов'язкових claims;
-- `exp` минув (допуск розбіжності годинників 0);
-- `iss` або `aud` не збігаються з очікуваними.
+- the signature or the algorithm is wrong;
+- `typ` does not correspond to the place of use;
+- any of the mandatory claims is missing;
+- `exp` has passed (clock skew tolerance 0);
+- `iss` or `aud` do not match the expected values.
 
 **TTL:**
 
-| | Значення за замовчуванням |
+| | Default value |
 |---|---|
-| Access JWT | 15 хвилин |
-| Сесія та refresh JWT | 7 днів від login, абсолютний строк |
+| Access JWT | 15 minutes |
+| Session and refresh JWT | 7 days from login, absolute lifetime |
 
-- Ротація refresh не подовжує строк сесії. Через 7 днів потрібно увійти знову.
-- `exp` access JWT ≤ `expires_at` сесії. Правило діє і під час генерації, і під час валідації.
-- `exp` refresh JWT дорівнює `expires_at` сесії.
-- Значення TTL задаються конфігурацією. Документ фіксує модель і значення за замовчуванням.
+- Refresh rotation does not extend the session lifetime. After 7 days, the user must log in again.
+- Access JWT `exp` ≤ session `expires_at`. The rule applies both during generation and during validation.
+- Refresh JWT `exp` equals session `expires_at`.
+- TTL values are set by configuration. The document records the model and the default values.
 
-**Обґрунтування:** токени випускає і перевіряє той самий сервіс, тож симетричного ключа достатньо. Мінімальні claims не дублюють даних Redis і не розкривають у cookie зайвих даних. Explicit typing не дає використати токен одного типу на місці іншого.
+**Rationale:** the tokens are issued and verified by the same service, so a symmetric key is sufficient. Minimal claims do not duplicate Redis data and do not disclose extra data in the cookie. Explicit typing prevents using a token of one type in place of another.
 
-## 4. Сесії в Redis і відкликання
+## 4. Sessions in Redis and Revocation
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-### Модель
+### Model
 
-- Одна сесія відповідає одному успішному login. Користувач може мати кілька одночасних сесій.
-- `sid` і `jti` мають щонайменше 128 біт і генеруються через `crypto/rand`.
+- One session corresponds to one successful login. A user may have several concurrent sessions.
+- `sid` and `jti` have at least 128 bits and are generated via `crypto/rand`.
 
-### Структура
+### Structure
 
-`session:{sid}` — Redis hash. TTL ключа дорівнює `expires_at`.
+`session:{sid}` — a Redis hash. The key's TTL equals `expires_at`.
 
-| Поле | Зміст |
+| Field | Content |
 |---|---|
-| `user_id` | Ідентифікатор користувача |
-| `role` | Роль на момент login |
-| `refresh_jti` | `jti` чинного refresh JWT, у відкритому вигляді |
-| `created_at` | Час створення |
-| `expires_at` | Абсолютний строк сесії |
+| `user_id` | User identifier |
+| `role` | The role at the moment of login |
+| `refresh_jti` | The `jti` of the current refresh JWT, in plain form |
+| `created_at` | Creation time |
+| `expires_at` | The absolute session lifetime |
 
-- Статус користувача в сесії не зберігається. Login і refresh перевіряють його в PostgreSQL під блокуванням рядка ([AR-011](architecture.md#8-архітектурні-інваріанти)), а блокування видаляє сесії.
-- `role` з PostgreSQL на захищених запитах не перечитується. Будь-який майбутній механізм зміни ролі має відкликати або синхронізувати активні сесії користувача. Для MVP перевага за відкликанням.
+- The user status is not stored in the session. Login and refresh check it in PostgreSQL under the row lock ([AR-011](architecture.md#8-architectural-invariants)), and blocking deletes sessions.
+- `role` is not re-read from PostgreSQL on protected requests. Any future role change mechanism must revoke or synchronize the user's active sessions. For the MVP, revocation is preferred.
 
-`user_sessions:{user_id}` — Sorted Set без TTL: значення `sid`, score `expires_at`.
+`user_sessions:{user_id}` — a Sorted Set without TTL: value `sid`, score `expires_at`.
 
-### Перевірка сесії на захищеному запиті
+### Session Check on a Protected Request
 
-Після валідації access JWT use case перевірки сесії відхиляє запит як «не автентифіковано», якщо хоча б одна з умов не виконується:
+After validating the access JWT, the session validation use case rejects the request as "unauthenticated" if at least one of the conditions is not met:
 
-1. ключ `session:{sid}` існує;
-2. запис читається, і всі обов'язкові поля присутні та мають коректний формат;
-3. `role` — `user` або `admin`;
-4. `expires_at` ще не настав. Перевіряється за полем, а не лише за TTL;
-5. `exp` access JWT ≤ `expires_at`.
+1. the key `session:{sid}` exists;
+2. the record is readable, and all mandatory fields are present and have a correct format;
+3. `role` is `user` or `admin`;
+4. `expires_at` has not yet arrived. It is checked by the field, not only by the TTL;
+5. access JWT `exp` ≤ `expires_at`.
 
-Пошкоджений запис вважається недійсним і не виправляється. `refresh_jti` на захищеному запиті не перевіряється, PostgreSQL не викликається.
+A corrupted record is considered invalid and is not repaired. `refresh_jti` is not checked on a protected request, and PostgreSQL is not called.
 
-### Створення сесії (index-first)
+### Session Creation (index-first)
 
-1. `ZADD user_sessions:{user_id} <expires_at> <sid>`. Якщо команда не вдалася або результат невідомий, це помилка Redis: сесія не створюється.
-2. Лише після підтвердженого кроку 1 створюється `session:{sid}` з TTL.
+1. `ZADD user_sessions:{user_id} <expires_at> <sid>`. If the command failed or the outcome is unknown, this is a Redis error: the session is not created.
+2. Only after a confirmed step 1 is `session:{sid}` created with a TTL.
 
-Масове очищення індексу за `expires_at` не виконується ([«Очищення індексу»](#очищення-індексу)).
+Bulk index cleanup by `expires_at` is not performed (["Index Cleanup"](#index-cleanup)).
 
-### Зміна наявної сесії (compare-and-set)
+### Changing an Existing Session (compare-and-set)
 
-Refresh і будь-яка інша зміна наявної сесії виконуються **лише атомарною умовною операцією** (Lua-скрипт або `WATCH`/`MULTI`/`EXEC`), яка:
+Refresh and any other change of an existing session are performed **only by an atomic conditional operation** (a Lua script or `WATCH`/`MULTI`/`EXEC`) that:
 
-- не створює ключ, якщо його немає;
-- змінює запис, лише якщо `refresh_jti` дорівнює очікуваному значенню, прочитаному під блокуванням рядка;
-- не змінює `expires_at` і TTL.
+- does not create the key if it does not exist;
+- changes the record only if `refresh_jti` equals the expected value read under the row lock;
+- does not change `expires_at` and the TTL.
 
-Безумовний перезапис наявної сесії (повний `SET`) заборонено.
+Unconditional overwriting of an existing session (a full `SET`) is prohibited.
 
-### Ротація refresh і reuse detection
+### Refresh Rotation and Reuse Detection
 
-- Кожен успішний refresh видає новий refresh JWT з новим `jti` і compare-and-set записує його в `refresh_jti`.
-- **Reuse:** підпис refresh JWT правильний, сесія існує, але `jti ≠ refresh_jti`. Тоді **лише ця сесія** відкликається, а запит відхиляється як «не автентифіковано». Інші сесії користувача лишаються.
-- Reuse трактується як *можлива*, а не доведена компрометація. Ризик хибного відкликання через конкурентні запити або повторні спроби клієнта прийнято.
+- Each successful refresh issues a new refresh JWT with a new `jti` and writes it into `refresh_jti` with compare-and-set.
+- **Reuse:** the refresh JWT signature is correct, the session exists, but `jti ≠ refresh_jti`. Then **only this session** is revoked, and the request is rejected as "unauthenticated". The user's other sessions remain.
+- Reuse is treated as a *possible*, not a proven compromise. The risk of false revocation due to concurrent requests or client retries is accepted.
 
-### Відкликання
+### Revocation
 
-| Подія | Що відкликається |
+| Event | What is revoked |
 |---|---|
-| Блокування користувача | Усі `session:{sid}` з індексу. Помилка видалення — це помилка Redis (rollback за AR-011). Індекс цілком не видаляється. Після підтвердженого видалення сесій їхні `sid` прибираються з індексу через `ZREM` best-effort |
-| Reuse refresh JWT | Лише `session:{sid}`. Після підтвердженого видалення `ZREM` цього `sid` з індексу best-effort |
-| Refresh для сесії, якої немає | Нічого. Запит відхиляється |
-| Сплив строк сесії | Ключ видаляє TTL Redis |
+| Blocking a user | All `session:{sid}` from the index. A deletion error is a Redis error (rollback according to AR-011). The index is not deleted as a whole. After a confirmed deletion of the sessions, their `sid` values are removed from the index via `ZREM` best-effort |
+| Refresh JWT reuse | Only `session:{sid}`. After a confirmed deletion, `ZREM` of this `sid` from the index best-effort |
+| Refresh for a session that does not exist | Nothing. The request is rejected |
+| The session lifetime has expired | The key is deleted by the Redis TTL |
 
-Logout і відкликання після зміни пароля не визначено (P1, P2, [розділ 12](#продуктові-питання)).
+Logout and revocation after a password change are not defined (P1, P2, [section 12](#product-questions)).
 
-### Очищення індексу
+### Index Cleanup
 
-- Індекс `user_sessions:{user_id}` **ніколи не видаляється цілком**. `DEL`, `UNLINK` і перезапис ключа заборонено. Запізніла команда, що видаляє ключ, може виконатися вже після Unblock і нового login і прибрати з індексу запис нової активної сесії. Тоді наступне блокування цю сесію не знайде, і BR-007 буде порушено.
-- **Інваріант:** активна сесія, токени якої отримав клієнт, не може бути прибрана з індексу під час очищення.
-- Запис прибирається лише через `ZREM` конкретного `sid` і лише за одного з двох безпечних критеріїв:
-  - **після підтвердженого видалення** `session:{sid}` цією самою операцією (блокування, reuse);
-  - **після підтвердженої відсутності** `session:{sid}` (наприклад, ключ видалив TTL Redis). Таке очищення виконується лише під блокуванням рядка користувача (AR-011), тобто серіалізовано з login. Інакше воно могло б прибрати `sid` login-у, що виконується, між його `ZADD` і створенням сесії.
-- Значення `sid` унікальні й повторно не використовуються. Ключ сесії, якого вже немає, не може з'явитися знову: compare-and-set ключ не створює. Виняток — запізніле створення сесії від login, commit якого не вдався, але токенів такої сесії ніхто не отримав. Тому запізнілий `ZREM` прибирає лише запис сесії, яка вже не може дати доступу.
-- **Масове очищення лише за `expires_at`** (`ZREMRANGEBYSCORE`) **не виконується**. Розбіжність годинників між інстансами, навіть невелика, може прибрати з індексу `sid` сесії, ключ якої ще існує й дає доступ. Тоді блокування її не знайде.
-- Очищення best-effort. Його помилка чи невідомий результат не змінює результату основної операції.
-- Коли саме виконується очищення за відсутністю ключа, як воно оформлене (окремі команди чи атомарний Lua-скрипт) і чи обмежено кількість записів за одну операцію, визначає Technical Design. Нові технології чи компоненти не додаються.
-- Застарілий запис (є `sid` в індексі, але немає `session:{sid}`) нешкідливий для коректності. Перевірка сесії індекс не використовує, а `DEL` ключа, якого немає, під час наступного блокування не є помилкою.
+- The `user_sessions:{user_id}` index is **never deleted as a whole**. `DEL`, `UNLINK` and overwriting the key are prohibited. A late command that deletes the key may execute after Unblock and a new login and remove the record of a new active session from the index. Then the next blocking would not find this session, and BR-007 would be violated.
+- **Invariant:** an active session whose tokens the client has received cannot be removed from the index during cleanup.
+- A record is removed only via `ZREM` of a specific `sid` and only under one of two safe criteria:
+  - **after a confirmed deletion** of `session:{sid}` by this same operation (blocking, reuse);
+  - **after a confirmed absence** of `session:{sid}` (for example, the key was deleted by the Redis TTL). Such cleanup is performed only under the user row lock (AR-011), that is, serialized with login. Otherwise it could remove the `sid` of an in-progress login between its `ZADD` and the session creation.
+- `sid` values are unique and are not reused. A session key that no longer exists cannot appear again: compare-and-set does not create the key. The exception is a late session creation from a login whose commit failed, but no one received the tokens of such a session. Therefore, a late `ZREM` removes only the record of a session that can no longer grant access.
+- **Bulk cleanup only by `expires_at`** (`ZREMRANGEBYSCORE`) **is not performed**. A clock skew between instances, even a small one, may remove from the index the `sid` of a session whose key still exists and grants access. Then blocking would not find it.
+- Cleanup is best-effort. Its error or unknown outcome does not change the outcome of the main operation.
+- When exactly cleanup by key absence is performed, how it is structured (separate commands or an atomic Lua script) and whether the number of records per operation is limited is defined by Technical Design. No new technologies or components are added.
+- A stale record (a `sid` in the index, but no `session:{sid}`) is harmless for correctness. The session check does not use the index, and a `DEL` of a non-existent key during the next blocking is not an error.
 
-**Наслідки для інших операцій:**
+**Consequences for other operations:**
 
-- **Login після Unblock** додає новий `sid` в індекс поруч із застарілими записами. Наступне блокування знайде й видалить нову сесію.
-- **Unblock** не має дії в Redis ([Architecture §7](architecture.md#операції-зі-станом-доступу)) і індекс не очищує.
+- **Login after Unblock** adds a new `sid` to the index next to the stale records. The next blocking will find and delete the new session.
+- **Unblock** has no Redis action ([Architecture §7](architecture.md#access-state-operations)) and does not clean the index.
 
-**Компроміс — накопичення застарілих записів.** Очищення best-effort і не є запланованою фоновою задачею, тож розмір індексу **не обмежений гарантовано**. Застарілі записи накопичуються, якщо очищення не вдається або не запускається. Наприклад, індекс користувача, який більше не входить, лишається назавжди, бо ключ без TTL. Ціна — пам'ять Redis і довше блокування (більше `DEL` ключів, яких немає). Для MVP це прийнято свідомо: коректність BR-007 важливіша за компактність індексу. Якщо накопичення стане проблемою, механізм обмеження потребує окремого рішення.
+**Trade-off — accumulation of stale records.** Cleanup is best-effort and is not a scheduled background task, so the index size is **not guaranteed to be bounded**. Stale records accumulate if cleanup fails or is not run. For example, the index of a user who no longer logs in remains forever, because the key has no TTL. The cost is Redis memory and a longer blocking (more `DEL` of non-existent keys). For the MVP, this is accepted deliberately: the correctness of BR-007 is more important than the compactness of the index. If accumulation becomes a problem, a limiting mechanism requires a separate decision.
 
-### Вимога до Redis
+### Redis Requirement
 
 `maxmemory-policy=noeviction`.
 
-### Що гарантує ця схема, а що ні
+### What This Scheme Guarantees and What It Does Not
 
-**Гарантує:**
+**Guarantees:**
 
-- Кожна сесія, токени якої отримав клієнт, на момент видачі токенів записана в індексі. Запис лишається там, поки існує `session:{sid}`: його прибирають лише після підтвердженого видалення сесії або підтвердженої відсутності її ключа.
-- Ні запізніла команда, ні очищення індексу не видаляють запис сесії, яка може дати доступ. Це не залежить від розбіжності годинників.
-- Запізніла команда refresh не відновлює відкликану сесію і не перезаписує новішу ротацію.
-- Сесія, створена запізнілою командою login після невдалого commit, доступу не дає: токенів з її `sid` ніхто не отримав, навіть якщо її `sid` уже прибрано з індексу. Вона зникає за TTL.
-- Login і блокування одного користувача серіалізовано блокуванням рядка (AR-011), тому між читанням індексу і новим `ZADD` гонки немає.
+- Every session whose tokens the client has received is recorded in the index at the moment the tokens are issued. The record remains there as long as `session:{sid}` exists: it is removed only after a confirmed deletion of the session or a confirmed absence of its key.
+- Neither a late command nor index cleanup deletes the record of a session that can grant access. This does not depend on clock skew.
+- A late refresh command does not restore a revoked session and does not overwrite a newer rotation.
+- A session created by a late login command after a failed commit does not grant access: no one received tokens with its `sid`, even if its `sid` has already been removed from the index. It disappears by TTL.
+- Login and blocking of the same user are serialized by the row lock (AR-011), so there is no race between reading the index and a new `ZADD`.
 
-**Не гарантує:**
+**Does not guarantee:**
 
-- атомарності: записи індексу без сесії можливі, і вони нешкідливі;
-- збереження даних Redis під час recovery з persistence і failover ([розділ 2](#2-припущення-та-межі-гарантій));
-- точності строків за розбіжності годинників між інстансами застосунку. Межа зсувається на величину розбіжності.
+- atomicity: index records without a session are possible, and they are harmless;
+- preservation of Redis data during recovery from persistence and failover ([section 2](#2-assumptions-and-limits-of-guarantees));
+- precision of lifetimes under clock skew between application instances. The boundary shifts by the amount of skew.
 
-**Обґрунтування:** `MULTI`/`EXEC` не дає rollback, а timeout залишає результат невідомим. Тому інваріант «активну сесію завжди можна знайти й відкликати» тримається на порядку операцій і умовних оновленнях, а не на атомарності. Індекс без TTL не може зникнути раніше за сесію. Політика `noeviction` не дає Redis витіснити індекс.
+**Rationale:** `MULTI`/`EXEC` does not provide rollback, and a timeout leaves the outcome unknown. Therefore, the invariant "an active session can always be found and revoked" relies on the order of operations and conditional updates, not on atomicity. An index without a TTL cannot disappear earlier than the session. The `noeviction` policy prevents Redis from evicting the index.
 
 ## 5. Cookies, CSRF, CORS, HTTPS
 
 ### Cookies
 
-**Статус:** `APPROVED` — початкова політика для same-site клієнта.
+**Status:** `APPROVED` — the initial policy for a same-site client.
 
-| Атрибут | Access cookie | Refresh cookie |
+| Attribute | Access cookie | Refresh cookie |
 |---|---|---|
-| Префікс імені | `__Host-` | `__Secure-` |
-| `HttpOnly` | так | так |
-| `Secure` | так | так |
+| Name prefix | `__Host-` | `__Secure-` |
+| `HttpOnly` | yes | yes |
+| `Secure` | yes | yes |
 | `SameSite` | `Strict` | `Strict` |
-| `Path` | `/` | `/api/v1/auth/refresh`, лише маршрут refresh ([API Conventions §3](api-conventions.md#refresh)) |
-| `Domain` | не задається | не задається |
-| `Max-Age` | TTL access | Залишок строку сесії |
+| `Path` | `/` | `/api/v1/auth/refresh`, only the refresh route ([API Conventions §3](api-conventions.md#refresh)) |
+| `Domain` | not set | not set |
+| `Max-Age` | Access TTL | The remaining session lifetime |
 
-Обмеження:
+Limitations:
 
-- `__Secure-` захищає від підміни cookie з піддоменів слабше, ніж `__Host-`.
-- Обмежений `Path` не є самостійною межею безпеки.
-- `SameSite=Strict` не замінює захисту від CSRF.
-- Якщо обраний клієнт буде cross-site, політику треба переглянути.
+- `__Secure-` protects against cookie substitution from subdomains more weakly than `__Host-`.
+- A restricted `Path` is not a standalone security boundary.
+- `SameSite=Strict` does not replace CSRF protection.
+- If the chosen client is cross-site, the policy must be revisited.
 
 ### CSRF
 
-**Статус:** `APPROVED` — session-bound механізм і правила перевірки. Спосіб доставки токена і, як наслідок, застосування перевірки cookie ↔ заголовок — `OPEN` ([розділ 12](#інфраструктурні-та-архітектурні-залежності)).
+**Status:** `APPROVED` — the session-bound mechanism and the check rules. The token delivery method and, as a consequence, the application of the cookie ↔ header check — `OPEN` ([section 12](#infrastructure-and-architectural-dependencies)).
 
-- **GET, HEAD і OPTIONS не змінюють стану.**
-- **Session-bound CSRF-токен (`APPROVED`).** Токен = HMAC(ключ CSRF, `sid`). Клієнт передає його в заголовку запиту `CSRF-Token` ([API Conventions §9](api-conventions.md#csrf-і-перевірка-походження)). Сервер обчислює HMAC для `sid` перевіреної сесії (з access JWT, а для refresh — з refresh JWT) і порівнює з заголовком за сталий час. Токен без чинної сесії або токен іншої сесії відхиляється. Ця перевірка обов'язкова за будь-якого способу доставки.
-- **Signed double-submit — можливий, але не обов'язковий варіант.** Він застосовується лише тоді, коли після погодження A2 буде обрано доставку токена через cookie. Назва «double-submit» стосується саме цього варіанту. У ньому сервер **додатково** перевіряє, що значення CSRF-cookie і заголовка збігаються. Сам збіг cookie і заголовка недостатній, бо cookie можна підкинути, наприклад, з піддомену. Тому перевірка прив'язки до `sid` лишається обов'язковою.
-- **Спосіб доставки токена (`OPEN`).** Поки A2 відкрите, конкретний спосіб доставки не затверджено. Тому не визначено й те, чи діє варіант signed double-submit.
-- **Запити, що змінюють стан і мають сесію** (зокрема refresh), вимагають чинний CSRF-токен **завжди**, незалежно від наявності `Origin` чи `Sec-Fetch-Site`.
-- **Перевірка походження** для всіх запитів, що змінюють стан:
-  - якщо `Origin` є, він мусить входити в allowlist;
-  - `Sec-Fetch-Site: cross-site` означає відмову;
-  - відсутність заголовків **не вважається доказом безпечного походження**.
-- **Login і registration** без `Origin` / `Sec-Fetch-Site` допускаються **лише в поточному навчальному середовищі**, щоб підтримувати curl і Postman. Це не production-політика: захист від login CSRF має бути погоджено, перш ніж з'явиться публічний браузерний клієнт ([розділ 12](#інфраструктурні-та-архітектурні-залежності)).
+- **GET, HEAD and OPTIONS do not change state.**
+- **Session-bound CSRF token (`APPROVED`).** Token = HMAC(CSRF key, `sid`). The client passes it in the `CSRF-Token` request header ([API Conventions §9](api-conventions.md#csrf-and-origin-check)). The server computes the HMAC for the `sid` of the verified session (from the access JWT, and for refresh — from the refresh JWT) and compares it with the header in constant time. A token without a valid session or a token of another session is rejected. This check is mandatory regardless of the delivery method.
+- **Signed double-submit is a possible but not mandatory option.** It applies only if, after A2 is approved, delivering the token via a cookie is chosen. The name "double-submit" refers specifically to this option. In it, the server **additionally** checks that the values of the CSRF cookie and the header match. A match of the cookie and the header by itself is insufficient, because a cookie can be planted, for example, from a subdomain. Therefore, the check of the binding to `sid` remains mandatory.
+- **Token delivery method (`OPEN`).** While A2 is open, a specific delivery method is not approved. Therefore, whether the signed double-submit option applies is also not defined.
+- **State-changing requests that have a session** (in particular refresh) require a valid CSRF token **always**, regardless of the presence of `Origin` or `Sec-Fetch-Site`.
+- **Origin check** for all state-changing requests:
+  - if `Origin` is present, it must be in the allowlist;
+  - `Sec-Fetch-Site: cross-site` means rejection;
+  - the absence of the headers **is not considered proof of a safe origin**.
+- **Login and registration** without `Origin` / `Sec-Fetch-Site` are allowed **only in the current educational environment**, to support curl and Postman. This is not a production policy: login CSRF protection must be approved before a public browser client appears ([section 12](#infrastructure-and-architectural-dependencies)).
 
 ### CORS
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- CORS за замовчуванням вимкнений: заголовки `Access-Control-Allow-*` не надсилаються.
-- Коли знадобиться cross-origin браузерний клієнт:
-  - точний allowlist origin у конфігурації (той самий, що й для перевірки походження);
-  - явні списки методів і заголовків;
-  - `Access-Control-Allow-Credentials: true` лише для origin з allowlist;
-  - без `*` і без віддзеркалення `Origin` із запиту.
+- CORS is disabled by default: `Access-Control-Allow-*` headers are not sent.
+- When a cross-origin browser client is needed:
+  - an exact origin allowlist in the configuration (the same as for the origin check);
+  - explicit lists of methods and headers;
+  - `Access-Control-Allow-Credentials: true` only for origins from the allowlist;
+  - no `*` and no reflection of `Origin` from the request.
 
 ### HTTPS
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Поза локальною розробкою сервіс доступний лише через HTTPS. Де термінується TLS, вирішується окремо (A3).
-- Прапорця конфігурації, який вимикає `Secure` (наприклад, `insecure_cookies`), немає.
-- Локально використовується `http://localhost`, якщо середовище підтримує Secure-cookies. Інакше використовується локальний HTTPS.
+- Outside local development, the service is available only via HTTPS. Where TLS is terminated is decided separately (A3).
+- There is no configuration flag that disables `Secure` (for example, `insecure_cookies`).
+- Locally, `http://localhost` is used if the environment supports Secure cookies. Otherwise, local HTTPS is used.
 
-## 6. Паролі
+## 6. Passwords
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Розділ реалізує [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality) і [AR-009](architecture.md#8-архітектурні-інваріанти).
+This section implements [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality) and [AR-009](architecture.md#8-architectural-invariants).
 
-### Хешування
+### Hashing
 
-- Алгоритм — **Argon2id**.
-- Мінімальні параметри (OWASP): пам'ять 19 MiB, 2 ітерації, паралелізм 1. Параметри задаються конфігурацією і не можуть бути нижчими за мінімум.
-- Сіль 16 байт з `crypto/rand`, хеш 32 байти.
-- Зберігається у форматі PHC-рядка (`$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`).
-- Під час перевірки хеш перераховується з параметрів, збережених у рядку, і порівнюється за сталий час (`crypto/subtle`).
-- **Рехешування під час login:** якщо збережені параметри слабші за поточні, після успішної перевірки хеш перераховується. Організацію цієї операції визначає Technical Design для US-002. Ресурсомістке хешування не обов'язково виконується під блокуванням рядка.
+- The algorithm is **Argon2id**.
+- Minimum parameters (OWASP): memory 19 MiB, 2 iterations, parallelism 1. The parameters are set by configuration and cannot be lower than the minimum.
+- A 16-byte salt from `crypto/rand`, a 32-byte hash.
+- Stored in the PHC string format (`$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>`).
+- During verification, the hash is recomputed from the parameters stored in the string and compared in constant time (`crypto/subtle`).
+- **Rehashing during login:** if the stored parameters are weaker than the current ones, the hash is recomputed after a successful verification. The organization of this operation is defined by Technical Design for US-002. Resource-intensive hashing is not necessarily performed under the row lock.
 
-### Обмеження навантаження
+### Load Limiting
 
-- Кількість одночасних операцій Argon2id обмежена. Необмеженої черги немає.
-- Очікування в черзі обмежене часом. Якщо час вийшов, запит отримує «тимчасово недоступно».
-- Конкретні ліміти й timeout-и визначаються перед реалізацією.
+- The number of concurrent Argon2id operations is limited. There is no unbounded queue.
+- Waiting in the queue is time-limited. If the time runs out, the request receives "temporarily unavailable".
+- Specific limits and timeouts are defined before implementation.
 
-### Поводження з паролем
+### Password Handling
 
-- Пароль — непрозора послідовність байтів UTF-8: без trim, без зміни регістру, без Unicode-нормалізації. Свідомо прийнято, що візуально однакові паролі можуть мати різне байтове представлення. NIST SP 800-63B-4 рекомендує NFC. Нормалізацію в MVP не застосовують.
-- Технічна верхня межа довжини — 1024 байти. Це захист від зловживань, а не політика пароля. Мінімальну довжину та склад визначає P4.
-- Пароль не потрапляє у відповіді, логи, повідомлення про помилки валідації, Domain і Redis. Domain отримує лише хеш.
-- Типи з паролем маскують значення під час форматування (`String()` / `LogValue()`). Це додатковий захист, а не заміна заборони логувати секрети ([розділ 9](#9-security-logging)).
+- The password is an opaque sequence of UTF-8 bytes: no trim, no case change, no Unicode normalization. It is deliberately accepted that visually identical passwords may have a different byte representation. NIST SP 800-63B-4 recommends NFC. Normalization is not applied in the MVP.
+- The technical upper length limit is 1024 bytes. This is protection against abuse, not a password policy. The minimum length and composition are defined by P4.
+- The password does not get into responses, logs, validation error messages, Domain and Redis. Domain receives only the hash.
+- Types with a password mask the value during formatting (`String()` / `LogValue()`). This is an additional protection, not a replacement for the prohibition of logging secrets ([section 9](#9-security-logging)).
 
-## 7. Автентифікація та авторизація
+## 7. Authentication and Authorization
 
 ### Login
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Невідомий email, неправильний пароль і заблокований акаунт отримують **однакову зовнішню відповідь** категорії «не автентифіковано»: `401`, `invalid_credentials` ([API Conventions §9](api-conventions.md#відповіді-401)).
-- Для неіснуючого акаунта виконується перевірка Argon2id на заздалегідь підготовленому фіктивному хеші з актуальними параметрами. Це зменшує різницю в часі відповіді, але не гарантує однакового часу.
-- Пароль перевіряється до того, як береться блокування рядка. Рішення про доступ ухвалюється за даними, прочитаними під блокуванням (AR-011).
-- **Актуальність перевіреного стану.** Login не створює сесію на підставі перевірки пароля, якщо стан автентифікації користувача змінився між початковим читанням і отриманням блокування рядка. Наприклад, хеш пароля міг змінити конкурентний ChangePassword. Під блокуванням login підтверджує, що стан, за яким перевірявся пароль, досі актуальний. Якщо це не так, сесія на підставі цієї перевірки не створюється.
-- Argon2id під блокуванням не виконується. Конкретний механізм підтвердження і поведінку, коли стан змінився (відмова чи повторна перевірка поза блокуванням), визначає Technical Design US-002. Він також має врахувати, що рехешування під час login теж змінює збережений хеш.
-- Той самий інваріант діє для рехешування: новий хеш записується, лише якщо стан, за яким перевірявся пароль, досі актуальний. Інакше рехешування старого пароля могло б перезаписати новий пароль, щойно встановлений ChangePassword.
-- **Залежність від US-005.** ChangePassword має змінювати стан автентифікації так, щоб login під блокуванням рядка гарантовано бачив цю зміну, тобто серіалізуватися з login. Конкретний спосіб визначає Technical Design US-005 у межах механізму серіалізації з [Persistence Conventions §5](persistence-conventions.md#рівень-ізоляції-і-блокування) ([розділ 12](#інфраструктурні-та-архітектурні-залежності)).
-- Цей інваріант не вирішує P2. Чи відкликати сесії, створені до зміни пароля, лишається відкритим питанням.
-- Продуктова поведінка (P5) лишається відкритою.
+- An unknown email, a wrong password and a blocked account receive the **same external response** of the "unauthenticated" category: `401`, `invalid_credentials` ([API Conventions §9](api-conventions.md#401-responses)).
+- For a non-existent account, an Argon2id verification is performed on a pre-prepared dummy hash with the current parameters. This reduces the difference in response time, but does not guarantee identical time.
+- The password is verified before the row lock is taken. The access decision is made based on data read under the lock (AR-011).
+- **Freshness of the checked state.** Login does not create a session based on the password verification if the user's authentication state changed between the initial read and acquiring the row lock. For example, the password hash could have been changed by a concurrent ChangePassword. Under the lock, login confirms that the state against which the password was verified is still current. If it is not, a session is not created based on this verification.
+- Argon2id is not performed under the lock. The specific confirmation mechanism and the behavior when the state has changed (rejection or a repeated verification outside the lock) are defined by the Technical Design of US-002. It must also take into account that rehashing during login also changes the stored hash.
+- The same invariant applies to rehashing: the new hash is written only if the state against which the password was verified is still current. Otherwise, rehashing the old password could overwrite a new password just set by ChangePassword.
+- **Dependency on US-005.** ChangePassword must change the authentication state so that login under the row lock is guaranteed to see this change, that is, it must be serialized with login. The specific method is defined by the Technical Design of US-005 within the serialization mechanism from [Persistence Conventions §5](persistence-conventions.md#isolation-level-and-locking) ([section 12](#infrastructure-and-architectural-dependencies)).
+- This invariant does not resolve P2. Whether to revoke sessions created before the password change remains an open question.
+- The product behavior (P5) remains open.
 
-### Захист від автоматизованого перебору
+### Protection Against Automated Guessing
 
-**Статус:** технічна основа `APPROVED`, увімкнення `OPEN` (P3).
+**Status:** the technical basis `APPROVED`, enabling `OPEN` (P3).
 
-Якщо P3 погодять, діють такі технічні правила:
+If P3 is approved, the following technical rules apply:
 
-- лічильники в Redis з TTL, без нових технологій;
-- окремі лічильники за акаунтом і за IP;
-- без безстрокового блокування акаунта;
-- відповідь на перевищення ліміту не розкриває, чи існує акаунт.
+- counters in Redis with a TTL, without new technologies;
+- separate counters per account and per IP;
+- no indefinite account lockout;
+- the response to exceeding the limit does not disclose whether the account exists.
 
-**NFR-001 уточнюється під час Clarification US-002, до початку Implementation. P3 лишається `OPEN`, доки його не вирішено явно, і має бути закритий не пізніше завершення US-002 і до production-доступності. Якщо рішення P3 потрібне для обов'язкових критеріїв NFR-001, воно ухвалюється до реалізації залежної функціональності. Публічний login не запускається без погодженого захисту від автоматизованого перебору.**
+**NFR-001 is clarified during Clarification of US-002, before Implementation begins. P3 remains `OPEN` until it is resolved explicitly, and it must be closed no later than the completion of US-002 and before production availability. If the P3 decision is needed for the mandatory criteria of NFR-001, it is made before implementing the dependent functionality. Public login is not launched without approved protection against automated guessing.**
 
 ### Refresh
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Refresh — публічний маршрут лише в тому сенсі, що не вимагає чинного access JWT. Він перевіряє refresh JWT ([розділ 3](#3-jwt)), Redis-сесію і compare-and-set ([розділ 4](#4-сесії-в-redis-і-відкликання)), а також CSRF-правила ([розділ 5](#csrf)). Статус користувача перевіряється під блокуванням рядка (AR-011).
+Refresh is a public route only in the sense that it does not require a valid access JWT. It checks the refresh JWT ([section 3](#3-jwt)), the Redis session and compare-and-set ([section 4](#4-sessions-in-redis-and-revocation)), as well as the CSRF rules ([section 5](#csrf)). The user status is checked under the row lock (AR-011).
 
-### Авторизація і «хто діє»
+### Authorization and "Who Is Acting"
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- **Ключ контексту** — неекспортований тип у пакеті `httpapi` (наприклад, `type actorKey struct{}`). Значення лежить у `context.Context` запиту, а не в рядковій map Gin, і читається лише через функції-accessor ([Package Map §6](package-map.md#перевірка-сесії-і-хто-діє)).
-- **Actor передається в use case явним параметром.** Application нічого не читає з контексту.
-- **Deny by default.** Кожен маршрут або явно публічний (register, login, refresh), або проходить перевірку сесії ([AR-006](architecture.md#8-архітектурні-інваріанти)). Перелік публічних маршрутів явний і перевіряється на Design Review.
-- **Admin use case** перевіряє роль `admin` до того, як читає цільового користувача ([BR-001](../product/business-rules.md#br-001--admin-only-capabilities), [AR-007](architecture.md#8-архітектурні-інваріанти)). [BR-008](../product/business-rules.md#br-008--administrators-cannot-be-blocked) перевіряється в Domain.
-- **Self-service use case** бере ідентифікатор акаунта лише з Actor і не має параметра з ідентифікатором ([BR-002](../product/business-rules.md#br-002--own-account-self-service)).
-- Немає чинної сесії → «не автентифіковано» (`401`). Сесія є, але прав немає → «заборонено» (`403`). Порядок 401 / 403 / 404 визначено в [API Conventions §8](api-conventions.md#порядок-401--403--404). Політику 403 чи 404 для майбутніх ресурсів, якими володіють користувачі, там відкладено до відповідного модуля.
+- **The context key** is an unexported type in the `httpapi` package (for example, `type actorKey struct{}`). The value lies in the request's `context.Context`, not in Gin's string map, and is read only through accessor functions ([Package Map §6](package-map.md#session-check-and-who-is-acting)).
+- **The Actor is passed to the use case as an explicit parameter.** Application reads nothing from the context.
+- **Deny by default.** Each route is either explicitly public (register, login, refresh) or goes through the session check ([AR-006](architecture.md#8-architectural-invariants)). The list of public routes is explicit and is checked at Design Review.
+- **An admin use case** checks the `admin` role before it reads the target user ([BR-001](../product/business-rules.md#br-001--admin-only-capabilities), [AR-007](architecture.md#8-architectural-invariants)). [BR-008](../product/business-rules.md#br-008--administrators-cannot-be-blocked) is checked in Domain.
+- **A self-service use case** takes the account identifier only from the Actor and has no identifier parameter ([BR-002](../product/business-rules.md#br-002--own-account-self-service)).
+- No valid session → "unauthenticated" (`401`). There is a session, but no permissions → "forbidden" (`403`). The 401 / 403 / 404 order is defined in [API Conventions §8](api-conventions.md#401--403--404-order). The 403 or 404 policy for future resources owned by users is deferred there until the corresponding module.
 
-## 8. Секрети
+## 8. Secrets
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- **Три незалежні ключі:** підпис access JWT, підпис refresh JWT, HMAC для CSRF.
-- Кожен ключ криптографічно випадковий і має щонайменше 256 біт. Довжина перевіряється **після декодування**. Формат подання ключа в конфігурації визначає Infrastructure Bootstrap.
-- Ключі й облікові дані PostgreSQL і Redis передаються через змінні оточення, які читає `platform/config`.
-- **Fail fast:** якщо ключа немає або він закороткий, сервіс не стартує.
-- Секретів немає в репозиторії, у значеннях за замовчуванням і в логах. Структура конфігурації маскує секрети під час форматування, і це лише додатковий захист.
-- **Ротація в MVP — лише заміна ключа.** Після заміни чинні токени стають недійсними, і користувачі входять знову.
-- Якщо з'явиться кілька інстансів сервісу, вони мають використовувати однакові ключі. Деталі визначають Deployment-конвенції.
+- **Three independent keys:** access JWT signing, refresh JWT signing, HMAC for CSRF.
+- Each key is cryptographically random and has at least 256 bits. The length is checked **after decoding**. The key representation format in the configuration is defined by Infrastructure Bootstrap.
+- Keys and PostgreSQL and Redis credentials are passed through environment variables read by `platform/config`.
+- **Fail fast:** if a key is missing or too short, the service does not start.
+- There are no secrets in the repository, in default values or in logs. The configuration structure masks secrets during formatting, and this is only an additional protection.
+- **Rotation in the MVP is only a key replacement.** After the replacement, existing tokens become invalid, and users log in again.
+- If several service instances appear, they must use the same keys. Details are defined by the Deployment conventions.
 
 ## 9. Security logging
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-### Події
+### Events
 
-| Подія | Ключові поля |
+| Event | Key fields |
 |---|---|
-| Login: успіх / невдача | `user_id` (якщо відомий), внутрішній код причини (`unknown_account`, `invalid_password`, `blocked`, `rate_limited`) |
-| Refresh: успіх / невдача | `user_id`, відбиток `sid`, код причини |
-| Reuse refresh JWT, сесію відкликано | `user_id`, відбиток `sid` (рівень warning) |
-| Block / Unblock | `actor_user_id`, `target_user_id`, результат |
-| Відмова в авторизації | `actor_user_id`, use case |
-| Відхилення через CSRF / походження | маршрут, причина |
-| Інфраструктурний збій перевірки сесії | компонент (Redis / PostgreSQL) |
+| Login: success / failure | `user_id` (if known), internal reason code (`unknown_account`, `invalid_password`, `blocked`, `rate_limited`) |
+| Refresh: success / failure | `user_id`, `sid` fingerprint, reason code |
+| Refresh JWT reuse, session revoked | `user_id`, `sid` fingerprint (warning level) |
+| Block / Unblock | `actor_user_id`, `target_user_id`, result |
+| Authorization denial | `actor_user_id`, use case |
+| Rejection due to CSRF / origin | route, reason |
+| Infrastructure failure of the session check | component (Redis / PostgreSQL) |
 
-Спільні поля для всіх подій: назва події, час, request id, результат.
+Common fields for all events: event name, time, request id, result.
 
-- Події, які визначаються в Application, передаються через outbound-порт (наприклад, `SecurityEvents`). Його адаптер пише в `platform/logging` ([Package Map §5](package-map.md#порти)). Події транспортного рівня логує inbound-адаптер.
-- Коди причин видно лише в логах і ніколи у відповідях.
+- Events determined in Application are passed through an outbound port (for example, `SecurityEvents`). Its adapter writes to `platform/logging` ([Package Map §5](package-map.md#ports)). Transport-level events are logged by the inbound adapter.
+- Reason codes are visible only in logs and never in responses.
 
-### Семантика результату
+### Result Semantics
 
-- Подія відображає **фактичний** результат операції.
-- Подію успіху логують лише після того, як операція підтверджено завершилася.
-- Якщо результат транзакції невідомий, подія не логується ні як success, ні як підтверджена невдача. Вона позначається як невідомий результат.
-- У MVP security logging працює best-effort і не блокує бізнес-операцій. Гарантованого audit trail немає.
+- An event reflects the **actual** outcome of the operation.
+- A success event is logged only after the operation has been confirmed to complete.
+- If the outcome of a transaction is unknown, the event is logged neither as success nor as a confirmed failure. It is marked as an unknown outcome.
+- In the MVP, security logging works best-effort and does not block business operations. There is no guaranteed audit trail.
 
-### Заборонені дані
+### Prohibited Data
 
-Ніколи не логуються, навіть із маскуванням:
+Never logged, even with masking:
 
-- паролі в будь-якому вигляді;
-- хеші паролів;
-- JWT;
-- значення cookies;
-- CSRF-токени;
-- ключі та секрети;
-- заголовки `Cookie`, `Set-Cookie`, `Authorization`;
-- тіла запитів і відповідей автентифікації та зміни пароля;
+- passwords in any form;
+- password hashes;
+- JWTs;
+- cookie values;
+- CSRF tokens;
+- keys and secrets;
+- the `Cookie`, `Set-Cookie`, `Authorization` headers;
+- request and response bodies of authentication and password change;
 - **email.**
 
-Додаткові правила:
+Additional rules:
 
-- Для кореляції використовуються `user_id` і **відбиток `sid`**: перші 8 байтів SHA-256 у hex.
-- Технічні помилки PostgreSQL логуються без значень полів і параметрів запитів: лише код помилки та назва обмеження.
-- **Токени ніколи не передаються в URL.**
-- Логування структуроване. Значення від користувача записуються лише як значення полів.
+- For correlation, `user_id` and the **`sid` fingerprint** are used: the first 8 bytes of SHA-256 in hex.
+- Technical PostgreSQL errors are logged without field values and query parameters: only the error code and the constraint name.
+- **Tokens are never passed in URLs.**
+- Logging is structured. User-provided values are written only as field values.
 
-## 10. Збої та timeout-и
+## 10. Failures and Timeouts
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
 ### Redis
 
-- **Fail closed.** Захищений запит не допускається без успішної перевірки сесії.
-- Недоступність Redis не означає невалідної сесії. Відповідь має категорію «тимчасово недоступно» (`503`, `service_unavailable`), cookies не очищуються.
-- Немає локального кешу сесій і немає fallback на перевірку лише JWT.
-- Login, refresh, block: помилка Redis або невідомий результат команди означає rollback за AR-011.
+- **Fail closed.** A protected request is not allowed without a successful session check.
+- Redis unavailability does not mean an invalid session. The response has the "temporarily unavailable" category (`503`, `service_unavailable`), cookies are not cleared.
+- There is no local session cache and no fallback to JWT-only verification.
+- Login, refresh, block: a Redis error or an unknown command outcome means a rollback according to AR-011.
 
 ### PostgreSQL
 
-- **Fail closed** для операцій, яким потрібна БД. Захищені запити, яким БД не потрібна, проходять перевірку сесії лише через Redis.
-- Якщо відповіді на `COMMIT` немає, фактичний результат транзакції **невідомий** (unknown outcome), а не обов'язково невдалий:
-  - login і refresh без підтвердженого commit токенів не видають. Створену чи оновлену сесію в Redis видаляють best-effort;
-  - BlockUser без підтвердженого commit повертає результат «unknown».
-- Операції зі станом доступу автоматично не повторюються, поки не погоджено їхню ідемпотентність.
+- **Fail closed** for operations that need the DB. Protected requests that do not need the DB go through the session check only via Redis.
+- If there is no response to `COMMIT`, the actual outcome of the transaction is **unknown** (unknown outcome), not necessarily a failure:
+  - login and refresh without a confirmed commit do not issue tokens. The created or updated session in Redis is deleted best-effort;
+  - BlockUser without a confirmed commit returns the "unknown" outcome.
+- Access-state operations are not retried automatically until their idempotency is approved.
 
-### Timeout-и
+### Timeouts
 
-- Кожне звернення до Redis і PostgreSQL, зокрема очікування блокування рядка, має timeout.
-- Зовнішні операції мають обмежений максимальний deadline навіть тоді, коли вхідний `context.Context` deadline не має.
-- Очікування черги Argon2id обмежене ([розділ 6](#обмеження-навантаження)).
-- Конкретні значення: для HTTP-сервера — Infrastructure Bootstrap (модель — [API Conventions §11](api-conventions.md#11-модель-timeout-ів-і-лімітів-http-сервера)); для Redis і PostgreSQL — Infrastructure Bootstrap (модель — [Persistence Conventions §5](persistence-conventions.md#модель-timeout-ів)); для окремих операцій — Technical Design відповідних Stories.
+- Every call to Redis and PostgreSQL, including waiting for a row lock, has a timeout.
+- External operations have a bounded maximum deadline even when the incoming `context.Context` has no deadline.
+- Waiting in the Argon2id queue is bounded ([section 6](#load-limiting)).
+- Specific values: for the HTTP server — Infrastructure Bootstrap (model — [API Conventions §11](api-conventions.md#11-http-server-timeout-and-limit-model)); for Redis and PostgreSQL — Infrastructure Bootstrap (model — [Persistence Conventions §5](persistence-conventions.md#timeout-model)); for individual operations — the Technical Design of the corresponding Stories.
 
-### Відповіді
+### Responses
 
-- Panic в обробнику перехоплюється. Клієнт отримує загальну внутрішню помилку, а лог записується без тіла запиту.
-- Відповіді не містять технічних деталей ([AR-008](architecture.md#8-архітектурні-інваріанти)).
-- Категорії помилок і HTTP-коди, зокрема `503 service_unavailable` для «тимчасово недоступно», `500 outcome_unknown` для невідомого результату і `500 internal_error` для panic, визначено в [API Conventions §8](api-conventions.md#категорії-помилок-і-http-коди).
+- A panic in a handler is caught. The client receives a generic internal error, and the log is written without the request body.
+- Responses do not contain technical details ([AR-008](architecture.md#8-architectural-invariants)).
+- Error categories and HTTP codes, in particular `503 service_unavailable` for "temporarily unavailable", `500 outcome_unknown` for an unknown outcome and `500 internal_error` for a panic, are defined in [API Conventions §8](api-conventions.md#error-categories-and-http-codes).
 
-## 11. Відповідність BR / NFR / AR
+## 11. Mapping to BR / NFR / AR
 
-| Джерело | Розділи конвенцій |
+| Source | Sections of the conventions |
 |---|---|
-| [BR-001](../product/business-rules.md#br-001--admin-only-capabilities) | 7 (перевірка ролі в admin use case) |
-| [BR-002](../product/business-rules.md#br-002--own-account-self-service) | 7 (ідентифікатор лише з Actor) |
-| [BR-007](../product/business-rules.md#br-007--blocked-user-access) | 2 (межі гарантій), 4 (index-first, compare-and-set, відкликання, очищення індексу), 10 (fail closed) |
-| [BR-008](../product/business-rules.md#br-008--administrators-cannot-be-blocked) | 7 (перевірка в Domain) |
-| [NFR-001](../product/non-functional-requirements.md#nfr-001--secure-authentication) | 1, 7: статус не змінено, P3 відкрите |
+| [BR-001](../product/business-rules.md#br-001--admin-only-capabilities) | 7 (role check in the admin use case) |
+| [BR-002](../product/business-rules.md#br-002--own-account-self-service) | 7 (identifier only from the Actor) |
+| [BR-007](../product/business-rules.md#br-007--blocked-user-access) | 2 (limits of guarantees), 4 (index-first, compare-and-set, revocation, index cleanup), 10 (fail closed) |
+| [BR-008](../product/business-rules.md#br-008--administrators-cannot-be-blocked) | 7 (check in Domain) |
+| [NFR-001](../product/non-functional-requirements.md#nfr-001--secure-authentication) | 1, 7: status unchanged, P3 open |
 | [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality) | 6, 9 |
-| [AR-006](architecture.md#8-архітектурні-інваріанти) | 4 (умови перевірки сесії), 7 (deny by default) |
-| [AR-007](architecture.md#8-архітектурні-інваріанти) | 7 (явний Actor, перевірка ролі, self-service) |
-| [AR-008](architecture.md#8-архітектурні-інваріанти) | 9 (помилки PostgreSQL у логах), 10 (відповіді без деталей) |
-| [AR-009](architecture.md#8-архітектурні-інваріанти) | 6, 9 |
-| [AR-010](architecture.md#8-архітектурні-інваріанти), [AR-011](architecture.md#8-архітектурні-інваріанти) | 4 (форма Redis-команд у межах схеми AR-011), 7 (login і refresh під блокуванням), 10 (unknown outcome, rollback). AR-011 не змінюється |
-| [AR-012](architecture.md#8-архітектурні-інваріанти) | 1 (бібліотеки як реалізація стеку) |
+| [AR-006](architecture.md#8-architectural-invariants) | 4 (session check conditions), 7 (deny by default) |
+| [AR-007](architecture.md#8-architectural-invariants) | 7 (explicit Actor, role check, self-service) |
+| [AR-008](architecture.md#8-architectural-invariants) | 9 (PostgreSQL errors in logs), 10 (responses without details) |
+| [AR-009](architecture.md#8-architectural-invariants) | 6, 9 |
+| [AR-010](architecture.md#8-architectural-invariants), [AR-011](architecture.md#8-architectural-invariants) | 4 (the form of Redis commands within the AR-011 scheme), 7 (login and refresh under the lock), 10 (unknown outcome, rollback). AR-011 does not change |
+| [AR-012](architecture.md#8-architectural-invariants) | 1 (libraries as an implementation of the stack) |
 
-Ці конвенції закривають такі відкладені рішення:
+These conventions close the following deferred decisions:
 
-- з [Architecture §9](architecture.md#відкладені-рішення): «TTL токенів, ротація refresh-токенів, формат claims» і «Алгоритм і параметри хешування паролів»; частково — «Тип клієнта API і пов'язані з ним налаштування cookies, CORS, CSRF»;
-- з [Package Map §9](package-map.md#відкладені-рішення): «Ключ контексту для "хто діє", формат claims».
+- from [Architecture §9](architecture.md#deferred-decisions): "Token TTLs, refresh token rotation, claims format" and "Password hashing algorithm and parameters"; partially — "API client type and the related cookie, CORS, CSRF settings";
+- from [Package Map §9](package-map.md#deferred-decisions): "Context key for "who is acting", claims format".
 
-Відповідні рядки в обох документах позначено як визначені з посиланнями на цей документ.
+The corresponding rows in both documents are marked as defined with references to this document.
 
-## 12. Відкриті питання та залежності
+## 12. Open Questions and Dependencies
 
-### Продуктові питання
+### Product Questions
 
-**Статус:** `OPEN`. Без окремого погодження власника продукту агент їх не вирішує.
+**Status:** `OPEN`. The agent does not resolve them without separate approval by the product owner.
 
-| ID | Питання | Пов'язані Stories |
+| ID | Question | Related Stories |
 |---|---|---|
-| P1 | Logout. Його немає в [MVP Scope](../product/product-vision.md#mvp-scope) | — |
-| P2 | Чи завершувати інші сесії після зміни пароля | US-005 |
-| P3 | Захист від автоматизованого перебору, відповідна частина NFR-001 | US-002 |
-| P4 | Політика пароля: мінімальна довжина, склад | US-001, US-005 |
-| P5 | Перелічення акаунтів під час реєстрації (BR-003); що бачить заблокований користувач під час login | US-001, US-002 |
+| P1 | Logout. It is not in the [MVP Scope](../product/product-vision.md#mvp-scope) | — |
+| P2 | Whether to terminate other sessions after a password change | US-005 |
+| P3 | Protection against automated guessing, the corresponding part of NFR-001 | US-002 |
+| P4 | Password policy: minimum length, composition | US-001, US-005 |
+| P5 | Account enumeration during registration (BR-003); what a blocked user sees during login | US-001, US-002 |
 | P6 | Administrator Provisioning ([Epic Map](../product/epic-map.md#open-product-dependencies)) | US-006, US-007 |
-| P7 | Чи потрібна повторна автентифікація (поточний пароль) для зміни пароля | US-005 |
+| P7 | Whether re-authentication (the current password) is required for a password change | US-005 |
 
-### Семантика BR-007 для in-flight запитів
+### BR-007 Semantics for In-Flight Requests
 
-**Статус:** вирішено формулюванням [BR-007](../product/business-rules.md#br-007--blocked-user-access) (рішення власника продукту 2026-11-13). Розділ лишено для простежуваності.
+**Status:** resolved by the wording of [BR-007](../product/business-rules.md#br-007--blocked-user-access) (product owner decision 2026-11-13). The section is kept for traceability.
 
-BR-007 забороняє виконувати запити заблокованого користувача, надіслані після завершення блокування. Запити, які пройшли перевірку сесії до завершення блокування (in-flight), під цю заборону не підпадають і можуть завершитися. Це відповідає [Architecture §7](architecture.md#операції-зі-станом-доступу). Timeout-и HTTP-сервера обмежують тривалість таких запитів, але умовою виконання BR-007 не є. Їх відкладено в [Architecture §9](architecture.md#відкладені-рішення).
+BR-007 prohibits executing requests of a blocked user sent after the blocking is completed. Requests that passed the session check before the blocking was completed (in-flight) are not subject to this prohibition and may complete. This corresponds to [Architecture §7](architecture.md#access-state-operations). HTTP server timeouts limit the duration of such requests, but they are not a condition for satisfying BR-007. They are deferred in [Architecture §9](architecture.md#deferred-decisions).
 
-### Питання Backlog і Story Clarification
+### Backlog and Story Clarification Questions
 
-**Статус:** `OPEN`. Рекомендації не є погодженими рішеннями.
+**Status:** `OPEN`. The recommendations are not approved decisions.
 
-| Питання | Рекомендація для майбутнього погодження |
+| Question | Recommendation for future approval |
 |---|---|
-| Refresh Flow не належить жодній Candidate Story в [Epic Map](../product/epic-map.md) | На Backlog Refinement включити Refresh Flow в US-002 як частину погодженої моделі автентифікації |
-| Чи виконувати автоматичний login після Registration (US-001) | На Story Clarification не виконувати автоматичний login у US-001, щоб scope US-001 і US-002 лишався окремим |
+| Refresh Flow does not belong to any Candidate Story in the [Epic Map](../product/epic-map.md) | At Backlog Refinement, include Refresh Flow in US-002 as part of the approved authentication model |
+| Whether to perform automatic login after Registration (US-001) | At Story Clarification, do not perform automatic login in US-001, so that the scope of US-001 and US-002 remains separate |
 
-### Інфраструктурні та архітектурні залежності
+### Infrastructure and Architectural Dependencies
 
-| Залежність | Статус | Що від неї залежить |
+| Dependency | Status | What depends on it |
 |---|---|---|
-| A2 — тип клієнта API | `DEFERRED` до вибору клієнта | Остаточна доставка CSRF-токена, перегляд `SameSite` для cross-site, увімкнення CORS |
-| Доставка CSRF-токена. Якщо frontend на `app.example.com`, а API на `api.example.com`, frontend не може прочитати host-only cookie, встановлену API | `OPEN` | Остаточно — A2. Від способу доставки залежить, чи діє перевірка cookie ↔ заголовок (signed double-submit). Тимчасовий спосіб для навчального середовища потрібен до US-002, бо login створює сесію |
-| ChangePassword серіалізується з login так, щоб login під блокуванням рядка бачив зміну стану автентифікації ([розділ 7](#login)) | `OPEN`, до Technical Design US-005 | Інваріант актуальності перевіреного стану під час login і рехешування. Механізм серіалізації — [Persistence Conventions §5](persistence-conventions.md#рівень-ізоляції-і-блокування) |
-| Захист від login CSRF (fallback через `Referer` або інший механізм) | `OPEN` | Перш ніж з'явиться публічний браузерний клієнт |
-| A3 — де термінується TLS, HSTS | `DEFERRED` до Deployment | HTTPS у production |
-| Redis persistence і failover: відкликані сесії можуть відновитися | `OPEN`, до production readiness | Повнота гарантії BR-007 ([розділ 2](#2-припущення-та-межі-гарантій)). Інваріант і production gate — [Persistence Conventions §2](persistence-conventions.md#production-gate-для-redis); механізм — Deployment-конвенції |
-| Категорії помилок («тимчасово недоступно» тощо), HTTP-коди, шлях refresh для `Path`, 404 чи 403 | **Визначено** в [API Conventions](api-conventions.md) (§3, §8, §9). Політика 403 чи 404 для майбутніх ресурсів, якими володіють користувачі, лишається `DEFERRED` до відповідного модуля | Розділи 5, 7, 10 |
-| Механізм серіалізації в PostgreSQL, значення timeout-ів Redis і PostgreSQL | **Визначено** в [Persistence Conventions §5](persistence-conventions.md#5-серіалізація-по-користувачу-блокування-рядків-timeout-и): механізм серіалізації (`READ COMMITTED`, `SELECT … FOR UPDATE`) і модель timeout-ів. Значення timeout-ів — `DEFERRED` до Infrastructure Bootstrap | Розділ 10 |
-| Ліміти та timeout-и черги Argon2id | `DEFERRED` до реалізації | Розділ 6 |
-| Формат подання ключів, ключі для локальної розробки | `DEFERRED` до Infrastructure Bootstrap | Розділ 8 |
-| Сховище секретів, однакові ключі на всіх інстансах, конфігурація `noeviction` | `DEFERRED` до Deployment-конвенцій | Розділи 4, 8 |
-| Ідемпотентність операцій зі станом доступу, зокрема повторного блокування | `DEFERRED` до Clarification US-006 | Розділ 10 |
-| Плавна ротація ключів (`kid`) | `DEFERRED`, коли знадобиться | Розділ 8 |
-| Гарантований audit trail | `DEFERRED`, окреме рішення | Розділ 9 |
-| Чи відкривати CSRF-middleware через публічний контракт модуля `account` для майбутніх модулів | `DEFERRED`, можливе майбутнє уточнення [Package Map](package-map.md#6-публічний-контракт-модуля) | Захищені маршрути майбутніх модулів, що змінюють стан |
+| A2 — API client type | `DEFERRED` until the client is chosen | Final CSRF token delivery, revisiting `SameSite` for cross-site, enabling CORS |
+| CSRF token delivery. If the frontend is on `app.example.com` and the API is on `api.example.com`, the frontend cannot read a host-only cookie set by the API | `OPEN` | Finally — A2. Whether the cookie ↔ header check (signed double-submit) applies depends on the delivery method. A temporary method for the educational environment is needed before US-002, because login creates a session |
+| ChangePassword is serialized with login so that login under the row lock sees the change of the authentication state ([section 7](#login)) | `OPEN`, until the Technical Design of US-005 | The invariant of the freshness of the checked state during login and rehashing. The serialization mechanism — [Persistence Conventions §5](persistence-conventions.md#isolation-level-and-locking) |
+| Login CSRF protection (fallback via `Referer` or another mechanism) | `OPEN` | Before a public browser client appears |
+| A3 — where TLS is terminated, HSTS | `DEFERRED` until Deployment | HTTPS in production |
+| Redis persistence and failover: revoked sessions may be restored | `OPEN`, until production readiness | Completeness of the BR-007 guarantee ([section 2](#2-assumptions-and-limits-of-guarantees)). The invariant and the production gate — [Persistence Conventions §2](persistence-conventions.md#production-gate-for-redis); the mechanism — the Deployment conventions |
+| Error categories ("temporarily unavailable", etc.), HTTP codes, refresh path for `Path`, 404 or 403 | **Defined** in [API Conventions](api-conventions.md) (§3, §8, §9). The 403 or 404 policy for future resources owned by users remains `DEFERRED` until the corresponding module | Sections 5, 7, 10 |
+| Serialization mechanism in PostgreSQL, Redis and PostgreSQL timeout values | **Defined** in [Persistence Conventions §5](persistence-conventions.md#5-per-user-serialization-row-locks-timeouts): the serialization mechanism (`READ COMMITTED`, `SELECT … FOR UPDATE`) and the timeout model. Timeout values — `DEFERRED` until Infrastructure Bootstrap | Section 10 |
+| Argon2id queue limits and timeouts | `DEFERRED` until implementation | Section 6 |
+| Key representation format, keys for local development | `DEFERRED` until Infrastructure Bootstrap | Section 8 |
+| Secret store, identical keys on all instances, `noeviction` configuration | `DEFERRED` until the Deployment conventions | Sections 4, 8 |
+| Idempotency of access-state operations, in particular repeated blocking | `DEFERRED` until Clarification of US-006 | Section 10 |
+| Smooth key rotation (`kid`) | `DEFERRED`, when needed | Section 8 |
+| Guaranteed audit trail | `DEFERRED`, a separate decision | Section 9 |
+| Whether to expose the CSRF middleware through the `account` module's public contract for future modules | `DEFERRED`, a possible future clarification of the [Package Map](package-map.md#6-module-public-contract) | Future modules' protected state-changing routes |
 
-### Що треба закрити до реалізації US-001 і US-002
+### What Must Be Closed Before Implementing US-001 and US-002
 
-| Story | Що закрити |
+| Story | What to close |
 |---|---|
-| US-001 Register Account | P4; P5 (реєстрація); Clarification щодо автоматичного login; значення timeout-ів і лімітів HTTP-сервера (Infrastructure Bootstrap) |
-| US-002 Log In | NFR-001 (уточнити на Clarification US-002, до Implementation); P3 (не пізніше завершення Story і до production; до реалізації залежної функціональності, якщо його рішення потрібне для обов'язкових критеріїв NFR-001); P5 (заблокований користувач); тимчасова доставка CSRF-токена; розміщення Refresh Flow; формат ключів (Infrastructure Bootstrap); ліміти й timeout-и (Argon2id, Redis, PostgreSQL); очищення cookies у відповідях `401` ([API Conventions §9](api-conventions.md#cookies-у-відповідях-із-помилкою)); Technical Design (підтвердження актуальності перевіреного стану під блокуванням, рехешування, очищення індексу сесій, бібліотеки) |
+| US-001 Register Account | P4; P5 (registration); Clarification on automatic login; HTTP server timeout and limit values (Infrastructure Bootstrap) |
+| US-002 Log In | NFR-001 (clarify at Clarification of US-002, before Implementation); P3 (no later than the completion of the Story and before production; before implementing the dependent functionality, if its decision is needed for the mandatory criteria of NFR-001); P5 (blocked user); temporary CSRF token delivery; placement of Refresh Flow; key format (Infrastructure Bootstrap); limits and timeouts (Argon2id, Redis, PostgreSQL); clearing cookies in `401` responses ([API Conventions §9](api-conventions.md#cookies-in-error-responses)); Technical Design (confirming the freshness of the checked state under the lock, rehashing, session index cleanup, libraries) |
 
-### Суперечності між документами
+### Contradictions Between Documents
 
-| Документи | Суперечність | Статус |
+| Documents | Contradiction | Status |
 |---|---|---|
-| Цей документ ↔ [Architecture §7, «Операції зі станом доступу»](architecture.md#операції-зі-станом-доступу) | Обґрунтування в architecture.md стверджувало, що схема «гарантує BR-007 за будь-якого збою» і що «усі збої зсувають стан у бік суворішого». За [розділом 2](#2-припущення-та-межі-гарантій) це не так для recovery з persistence і failover Redis | Вирішено 2026-11-13: architecture.md синхронізовано, межі гарантії описано там явно. Сама залежність від Redis persistence і failover лишається `OPEN` ([інфраструктурні залежності](#інфраструктурні-та-архітектурні-залежності)) |
+| This document ↔ [Architecture §7, "Access-State Operations"](architecture.md#access-state-operations) | The rationale in architecture.md claimed that the scheme "guarantees BR-007 under any failure" and that "all failures shift the state toward the stricter side". According to [section 2](#2-assumptions-and-limits-of-guarantees), this is not so for recovery from persistence and Redis failover | Resolved 2026-11-13: architecture.md was synchronized, and the limits of the guarantee are described there explicitly. The dependency on Redis persistence and failover itself remains `OPEN` ([infrastructure dependencies](#infrastructure-and-architectural-dependencies)) |

@@ -1,309 +1,309 @@
 # Architecture — Customer Portal
 
-## 1. Призначення
+## 1. Purpose
 
-Документ фіксує загальну логічну архітектуру Customer Portal. Тут зібрано сталі технологічні рішення, на які спираються всі User Stories.
+This document records the overall logical architecture of Customer Portal. It collects the stable technology decisions that all User Stories rely on.
 
-**Що входить:**
+**In scope:**
 
-- логічна архітектура: стиль, шари, модулі, правила залежностей;
-- технологічний стек;
-- наскрізні аспекти на рівні відповідальності компонентів.
+- logical architecture: style, layers, modules, dependency rules;
+- technology stack;
+- cross-cutting concerns at the level of component responsibilities.
 
-**Що не входить:**
+**Out of scope:**
 
-- детальні конвенції (API, Security, Persistence);
-- структура пакетів (Go project layout);
-- тестова стратегія;
-- рішення, які стосуються окремих User Stories.
+- detailed conventions (API, Security, Persistence);
+- package structure (Go project layout);
+- testing strategy;
+- decisions that concern individual User Stories.
 
-Ці теми, якщо вони знадобляться, описуються окремими документами за окремими завданнями.
+These topics, if needed, are described in separate documents under separate tasks.
 
-**Статуси рішень:**
+**Decision statuses:**
 
-- `APPROVED` — рішення явно погоджено. Агенти й люди можуть на нього спиратися.
-- Непогоджене до документа як рішення не потрапляє. Воно записується в розділ [Відкриті питання та відкладені рішення](#9-відкриті-питання-та-відкладені-рішення).
+- `APPROVED` — the decision is explicitly approved. Agents and people may rely on it.
+- Anything not approved does not enter the document as a decision. It is recorded in the section [Open Questions and Deferred Decisions](#9-open-questions-and-deferred-decisions).
 
-Кожне рішення має коротке обґрунтування. Його мета — зберегти намір рішення, щоб під час реалізації рішення не замінили альтернативою, яка цей намір порушує.
+Each decision has a short rationale. Its purpose is to preserve the intent of the decision so that, during implementation, the decision is not replaced with an alternative that violates that intent.
 
-**Зв'язок із продуктовою документацією.** Продуктовий контекст задають документи в [docs/product](../product/). Терміни вживаються у значеннях із [Business Glossary](../product/business-glossary.md). Якщо цей документ суперечить продуктовим документам, агент має повідомити про суперечність. Автоматично віддавати перевагу одному з документів не можна.
+**Relationship to product documentation.** Product context is defined by the documents in [docs/product](../product/). Terms are used in the meanings from the [Business Glossary](../product/business-glossary.md). If this document contradicts the product documents, the agent must report the contradiction. The agent must not automatically prefer one of the documents.
 
-Рішення погоджено 2026-11-13.
+Decisions approved on 2026-11-13.
 
-## 2. Архітектурні драйвери
+## 2. Architectural Drivers
 
-Продуктові вимоги, які впливають на архітектуру:
+Product requirements that affect the architecture:
 
-| Джерело | Вплив на архітектуру |
+| Source | Impact on the architecture |
 |---|---|
-| [NFR-001 — Secure Authentication](../product/non-functional-requirements.md#nfr-001--secure-authentication) | Модель сесій і місце перевірки автентифікації |
-| [NFR-002 — Password Confidentiality](../product/non-functional-requirements.md#nfr-002--password-confidentiality) | Відповідальність компонентів за зберігання, відповіді та логи з паролями |
-| [BR-001 — Admin-Only Capabilities](../product/business-rules.md#br-001--admin-only-capabilities) | Місце перевірки авторизації |
-| [BR-002 — Own Account Self-Service](../product/business-rules.md#br-002--own-account-self-service) | Джерело ідентифікатора власного акаунта |
-| [BR-007 — Blocked User Access](../product/business-rules.md#br-007--blocked-user-access) | Модель сесій і операції зі станом доступу: заблокований користувач негайно втрачає доступ |
-| [Product Vision](../product/product-vision.md#product-vision): майбутні домени (Product Catalog, Orders, Support) | Модульна декомпозиція з явними межами модулів |
+| [NFR-001 — Secure Authentication](../product/non-functional-requirements.md#nfr-001--secure-authentication) | Session model and the place where authentication is checked |
+| [NFR-002 — Password Confidentiality](../product/non-functional-requirements.md#nfr-002--password-confidentiality) | Component responsibility for storage, responses and logs involving passwords |
+| [BR-001 — Admin-Only Capabilities](../product/business-rules.md#br-001--admin-only-capabilities) | The place where authorization is checked |
+| [BR-002 — Own Account Self-Service](../product/business-rules.md#br-002--own-account-self-service) | The source of the identifier of one's own account |
+| [BR-007 — Blocked User Access](../product/business-rules.md#br-007--blocked-user-access) | Session model and access-state operations: a blocked user immediately loses access |
+| [Product Vision](../product/product-vision.md#product-vision): future domains (Product Catalog, Orders, Support) | Modular decomposition with explicit module boundaries |
 
-## 3. Системний контекст
+## 3. System Context
 
-Customer Portal — backend-сервіс, який надає REST API.
+Customer Portal is a backend service that provides a REST API.
 
-| Учасник | Роль |
+| Participant | Role |
 |---|---|
-| Клієнт API | Не визначено. API орієнтоване на майбутній браузерний клієнт. Зараз сервіс використовують через HTTP-інструменти |
-| PostgreSQL | Основне сховище даних |
-| Redis | Сховище сесій |
+| API client | Not defined. The API targets a future browser client. Currently the service is used through HTTP tools |
+| PostgreSQL | Primary data store |
+| Redis | Session store |
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-**Обґрунтування:** конкретного клієнта ще не обрано. Тому рішення, які від нього залежать, винесено у відкриті питання.
+**Rationale:** no specific client has been chosen yet. Therefore, decisions that depend on it have been moved to open questions.
 
-## 4. Архітектурний стиль
+## 4. Architectural Style
 
-### Гексагональна архітектура
+### Hexagonal Architecture
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Кожен модуль складається з таких логічних компонентів:
+Each module consists of the following logical components:
 
-| Компонент | Відповідальність |
+| Component | Responsibility |
 |---|---|
-| **Domain** | Сутності, value objects, бізнес-інваріанти. Чистий Go без залежностей від фреймворків, БД чи HTTP |
-| **Application** | Use cases (сценарії). Оркеструють Domain і викликають порти. Тут визначаються порти (інтерфейси) |
-| **Inbound adapters** | HTTP (Gin): розбір запиту, виклик use case, формування відповіді. Бізнес-логіки не містять |
-| **Outbound adapters** | Реалізації портів: PostgreSQL (pgx), Redis, хешування паролів тощо |
-| **Composition root** | Збирання залежностей (wiring) і запуск застосунку |
+| **Domain** | Entities, value objects, business invariants. Pure Go without dependencies on frameworks, the DB or HTTP |
+| **Application** | Use cases (scenarios). They orchestrate the Domain and call ports. Ports (interfaces) are defined here |
+| **Inbound adapters** | HTTP (Gin): request parsing, use case invocation, response construction. They contain no business logic |
+| **Outbound adapters** | Port implementations: PostgreSQL (pgx), Redis, password hashing, etc. |
+| **Composition root** | Dependency assembly (wiring) and application startup |
 
-**Правило залежностей:** залежності спрямовані лише всередину. Adapters залежать від Application, Application від Domain. Domain не залежить ні від чого. Application не знає про Gin, pgx і Redis.
+**Dependency rule:** dependencies point only inward. Adapters depend on Application, Application on Domain. Domain depends on nothing. Application does not know about Gin, pgx or Redis.
 
-**Обґрунтування:** окремі Domain і Application дають однозначне місце і для бізнес-правил, і для сценаріїв. Ядро можна тестувати без інфраструктури.
+**Rationale:** separate Domain and Application give an unambiguous place both for business rules and for scenarios. The core can be tested without infrastructure.
 
-### Розміщення бізнес-правил
+### Business Rule Placement
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- **Domain:** інваріанти, які можна перевірити, маючи лише саму сутність. Приклади: BR-006 (одна роль), BR-008 (блокувати можна лише роль `user`).
-- **Application:** правила, яким потрібні сховище, зовнішні дані або кілька компонентів. Приклади: BR-003 (унікальний email), BR-005 (роль за замовчуванням), BR-007 (блокування → видалення сесій).
+- **Domain:** invariants that can be checked with only the entity itself. Examples: BR-006 (a single role), BR-008 (only the `user` role can be blocked).
+- **Application:** rules that need storage, external data or several components. Examples: BR-003 (unique email), BR-005 (default role), BR-007 (blocking → session deletion).
 
-Приклади ілюстративні. Остаточне розміщення конкретного правила визначається в User Story.
+The examples are illustrative. The final placement of a specific rule is determined in the User Story.
 
-**Обґрунтування:** принцип однозначний і перевірюваний.
+**Rationale:** the principle is unambiguous and verifiable.
 
-## 5. Модульна декомпозиція
+## 5. Modular Decomposition
 
-### Форма розгортання: модульний моноліт
+### Deployment Form: Modular Monolith
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Один сервіс і один бінарник. Домени ізольовані як модулі з явними межами.
+One service and one binary. Domains are isolated as modules with explicit boundaries.
 
-**Обґрунтування:** такий підхід поєднується з гексагональною архітектурою і готує проєкт до майбутніх доменів без операційної складності мікросервісів.
+**Rationale:** this approach combines with the hexagonal architecture and prepares the project for future domains without the operational complexity of microservices.
 
-### Модулі MVP
+### MVP Modules
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Модуль | Обсяг |
+| Module | Scope |
 |---|---|
-| `account` | Усе, що стосується користувачів: Account, Profile, Password, Registration, Authentication, сесії, Role, User Blocking / Unblocking |
+| `account` | Everything related to users: Account, Profile, Password, Registration, Authentication, sessions, Role, User Blocking / Unblocking |
 
-Майбутні домени стають окремими модулями.
+Future domains become separate modules.
 
-**Обґрунтування:** функціональність MVP — одна предметна область, «спільна основа керування користувачами» з Product Vision. Якщо поділити її зараз, з'являться міжмодульні виклики без реальної користі. Назва `account` — термін із Business Glossary, і на відміну від `user` вона не конфліктує з назвою ролі.
+**Rationale:** the MVP functionality is one subject area, the "shared user management foundation" from the Product Vision. Splitting it now would introduce inter-module calls without real benefit. The name `account` is a term from the Business Glossary and, unlike `user`, it does not conflict with the role name.
 
-### Взаємодія між модулями
+### Inter-Module Interaction
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Модуль звертається до іншого модуля лише через його публічний інтерфейс (визначений контракт). Доступ до внутрішніх пакетів і таблиць БД іншого модуля заборонено.
+A module accesses another module only through its public interface (a defined contract). Access to another module's internal packages and DB tables is prohibited.
 
-Як технічно виражається публічний інтерфейс, визначає Go project layout.
+How the public interface is expressed technically is defined by the Go project layout.
 
-**Обґрунтування:** це зберігає межі модульного моноліту і дає змогу розвивати модулі незалежно.
+**Rationale:** this preserves the boundaries of the modular monolith and makes it possible to evolve modules independently.
 
 ### Platform
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Platform — окрема логічна частина поза модулями. Вона містить спільну технічну інфраструктуру: конфігурацію, логування, базову інфраструктуру HTTP-сервера, підключення до PostgreSQL і Redis.
+Platform is a separate logical part outside the modules. It contains shared technical infrastructure: configuration, logging, basic HTTP server infrastructure, connections to PostgreSQL and Redis.
 
-- Адаптери модулів і composition root можуть залежати від Platform.
-- Platform не залежить від модулів.
-- Platform не містить бізнес-логіки.
+- Module adapters and the composition root may depend on Platform.
+- Platform does not depend on modules.
+- Platform does not contain business logic.
 
-**Обґрунтування:** інфраструктура не дублюється, і межа зрозуміла: усе бізнесове лежить у модулях, усе технічне спільне лежить у Platform.
+**Rationale:** infrastructure is not duplicated, and the boundary is clear: everything business-related lives in modules, everything technical and shared lives in Platform.
 
-### Composition root
+### Composition Root
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Застосунок має один composition root на точці входу.
-- Кожен модуль надає функцію збирання. Вона приймає залежності від Platform і повертає публічний інтерфейс модуля та його HTTP-маршрути.
-- Composition root з'єднує модулі між собою та запускає сервер.
-- Wiring ручний, без DI-фреймворку.
+- The application has one composition root at the entry point.
+- Each module provides an assembly function. It accepts dependencies from Platform and returns the module's public interface and its HTTP routes.
+- The composition root connects the modules to each other and starts the server.
+- Wiring is manual, without a DI framework.
 
-**Обґрунтування:** модуль сам відповідає за свою внутрішню збірку, тож composition root не знає про внутрішні частини модулів. Ручний wiring явний і зрозумілий.
+**Rationale:** a module is itself responsible for its internal assembly, so the composition root does not know about the modules' internal parts. Manual wiring is explicit and understandable.
 
-## 6. Технологічний стек
+## 6. Technology Stack
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Аспект | Технологія | Роль |
+| Aspect | Technology | Role |
 |---|---|---|
-| Мова | Go | Backend-сервіс |
-| Стиль API | REST over HTTP | Зовнішній інтерфейс |
+| Language | Go | Backend service |
+| API style | REST over HTTP | External interface |
 | HTTP | Gin | Inbound adapter |
-| Основна БД | PostgreSQL | Зберігання даних |
-| Драйвер БД | pgx | Outbound adapter до PostgreSQL |
-| Сесії | Redis | Сховище сесій. Сесія перевіряється на кожному захищеному запиті |
-| Токени | JWT access/refresh у cookies | Транспорт сесії. Access-токен несе ідентифікатор сесії |
-| Міграції | golang-migrate | Керування схемою БД |
+| Primary DB | PostgreSQL | Data storage |
+| DB driver | pgx | Outbound adapter to PostgreSQL |
+| Sessions | Redis | Session store. The session is checked on every protected request |
+| Tokens | JWT access/refresh in cookies | Session transport. The access token carries the session identifier |
+| Migrations | golang-migrate | DB schema management |
 
-**Обґрунтування:** стек погоджено власником проєкту. Він узгоджується з моделлю сесій і гексагональною архітектурою, описаними в цьому документі.
+**Rationale:** the stack was approved by the project owner. It is consistent with the session model and the hexagonal architecture described in this document.
 
-## 7. Наскрізні аспекти
+## 7. Cross-Cutting Concerns
 
-### Модель сесій і автентифікація
+### Session Model and Authentication
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Access JWT містить ідентифікатор сесії.
-- На кожному захищеному запиті перевіряються підпис JWT та наявність і активність сесії в Redis.
-- HTTP middleware (inbound adapter) витягує токен із cookie і викликає use case перевірки сесії в Application. Use case звертається до Redis через outbound-порт.
-- Результат перевірки (хто діє: ідентифікатор користувача та роль) передається далі в обробку запиту.
-- Під час блокування сесії користувача видаляються, тож наступний запит отримує відмову. Як блокування узгоджує PostgreSQL і Redis, описано в розділі [Операції зі станом доступу](#операції-зі-станом-доступу).
+- The access JWT contains the session identifier.
+- On every protected request, the JWT signature and the existence and activity of the session in Redis are checked.
+- An HTTP middleware (inbound adapter) extracts the token from the cookie and calls the session validation use case in Application. The use case accesses Redis through an outbound port.
+- The validation result (who is acting: user identifier and role) is passed on to request processing.
+- During blocking, the user's sessions are deleted, so the next request is rejected. How blocking keeps PostgreSQL and Redis consistent is described in the section [Access-State Operations](#access-state-operations).
 
-**Обґрунтування:** [BR-007](../product/business-rules.md#br-007--blocked-user-access) вимагає, щоб заблокований користувач негайно втрачав доступ. Модель сесій це забезпечує, бо не треба чекати, поки спливе термін дії access-токена. Ціна рішення — звернення до Redis на кожен запит, і Redis стає критичною залежністю. Для MVP це прийнятно. Логіка валідності сесії лишається в Application, Redis схований за портом.
+**Rationale:** [BR-007](../product/business-rules.md#br-007--blocked-user-access) requires that a blocked user immediately loses access. The session model ensures this because there is no need to wait for the access token to expire. The cost of the decision is a Redis call on every request, and Redis becomes a critical dependency. This is acceptable for the MVP. Session validity logic stays in Application; Redis is hidden behind a port.
 
-### Авторизація
+### Authorization
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Права остаточно перевіряє use case в Application. Він отримує інформацію про того, хто діє, і сам перевіряє права (BR-001).
-- Для self-service операцій ідентифікатор власного акаунта береться із сесії, а не з параметрів запиту (BR-002).
-- Фільтр у middleware можна використовувати додатково, але він не замінює перевірку в use case.
+- Permissions are finally checked by a use case in Application. It receives information about who is acting and checks permissions itself (BR-001).
+- For self-service operations, the identifier of one's own account is taken from the session, not from request parameters (BR-002).
+- A middleware filter may be used additionally, but it does not replace the check in the use case.
 
-**Обґрунтування:** правила доступу є бізнес-правилами, тож вони мають бути в ядрі. Їх можна тестувати без HTTP, і перевірку не вийде обійти через новий маршрут, який забули захистити.
+**Rationale:** access rules are business rules, so they must be in the core. They can be tested without HTTP, and the check cannot be bypassed through a new route that someone forgot to protect.
 
-### Обробка помилок
+### Error Handling
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Domain і Application повертають бізнес-помилки за семантичними категоріями (наприклад: не знайдено, конфлікт, заборонено, не автентифіковано, невалідні дані).
-- Outbound adapters перекладають технічні помилки (pgx, Redis) у помилки Application або позначають їх як внутрішні.
-- Inbound adapter (HTTP) перетворює категорію помилки на HTTP-відповідь.
-- Внутрішні деталі (SQL-помилки, стектрейси тощо) у відповідь не потрапляють.
+- Domain and Application return business errors by semantic category (for example: not found, conflict, forbidden, unauthenticated, invalid data).
+- Outbound adapters translate technical errors (pgx, Redis) into Application errors or mark them as internal.
+- The inbound adapter (HTTP) converts the error category into an HTTP response.
+- Internal details (SQL errors, stack traces, etc.) do not get into the response.
 
-Перелік категорій, їхня відповідність HTTP-кодам і формат тіла помилки належать до API-конвенцій.
+The list of categories, their mapping to HTTP codes and the error body format belong to the API conventions.
 
-**Обґрунтування:** ядро не знає про HTTP, а відповіді виходять передбачуваними.
+**Rationale:** the core does not know about HTTP, and responses are predictable.
 
-### Конфіденційність паролів
+### Password Confidentiality
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Цей аспект реалізує [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality):
+This concern implements [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality):
 
-- хешування схована за портом в Application, а реалізує її outbound adapter;
-- Domain зберігає лише хеш пароля і ніколи не тримає пароль у відкритому вигляді;
-- жоден компонент, у тому числі логування в Platform та inbound adapters, не логує й не повертає пароль.
+- hashing is hidden behind a port in Application, and an outbound adapter implements it;
+- the Domain stores only the password hash and never holds the password in plain text;
+- no component, including logging in Platform and inbound adapters, logs or returns the password.
 
-**Обґрунтування:** NFR-002 погоджено, і її можна перевірити на рівні відповідальності компонентів. Алгоритм хешування не прив'язаний до ядра.
+**Rationale:** NFR-002 is approved, and it can be verified at the level of component responsibilities. The hashing algorithm is not tied to the core.
 
-### Межі транзакцій
+### Transaction Boundaries
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Межу транзакції визначає use case через абстрактний порт. Реалізує цей порт PostgreSQL-адаптер.
-- Application не знає про pgx.
-- PostgreSQL і Redis не мають спільної транзакції. Як узгоджувати зміни в них, вирішується для кожного use case окремо.
+- The transaction boundary is defined by the use case through an abstract port. The PostgreSQL adapter implements this port.
+- Application does not know about pgx.
+- PostgreSQL and Redis do not have a shared transaction. How to keep changes in them consistent is decided for each use case separately.
 
-**Обґрунтування:** сценарій знає, що має бути атомарним, тож межу визначає він. Правило залежностей при цьому не порушується.
+**Rationale:** the scenario knows what must be atomic, so it defines the boundary. The dependency rule is not violated.
 
-### Операції зі станом доступу
+### Access-State Operations
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Операції, що змінюють стан доступу користувача, — це блокування, login і refresh. Вони виконуються за такою схемою (транзактор):
+Operations that change a user's access state are blocking, login and refresh. They are performed according to the following scheme (the transactor):
 
-1. Use case відкриває транзакцію PostgreSQL через порт транзакцій і бере ексклюзивне блокування рядка користувача. Так операції для одного користувача виконуються по черзі.
-2. Після отримання блокування use case перевіряє стан, від якого залежить рішення надати доступ. Перевіряються дані, прочитані під блокуванням: для login це статус користувача, для refresh статус користувача й наявність сесії в Redis. Перевірки, виконані до отримання блокування (наприклад, пошук користувача за email і перевірка пароля), не вважаються достатніми для рішення про доступ.
-3. У межах транзакції змінюються дані в PostgreSQL, якщо операція їх змінює (наприклад, статус користувача під час блокування).
-4. До commit виконується дія в Redis: видалення сесій під час блокування або створення чи оновлення сесії під час login чи refresh.
-5. Якщо в Redis сталася помилка, транзакція PostgreSQL відкочується. Інакше виконується commit.
-6. Login і refresh віддають токени клієнту лише після успішного commit. Якщо commit не вдався, клієнт отримує помилку, а створена чи оновлена сесія видаляється за принципом best-effort.
+1. The use case opens a PostgreSQL transaction through the transaction port and takes an exclusive lock on the user row. This way, operations for one user are performed one at a time.
+2. After acquiring the lock, the use case checks the state on which the decision to grant access depends. The data read under the lock is checked: for login, the user status; for refresh, the user status and the existence of the session in Redis. Checks performed before acquiring the lock (for example, looking up the user by email and checking the password) are not considered sufficient for the access decision.
+3. Within the transaction, data in PostgreSQL is changed if the operation changes it (for example, the user status during blocking).
+4. Before commit, the Redis action is performed: deleting sessions during blocking, or creating or updating a session during login or refresh.
+5. If an error occurred in Redis, the PostgreSQL transaction is rolled back. Otherwise, commit is performed.
+6. Login and refresh return tokens to the client only after a successful commit. If the commit failed, the client receives an error, and the created or updated session is deleted on a best-effort basis.
 
-**Застереження:**
+**Caveats:**
 
-- Це не розподілена транзакція: дію в Redis не можна відкотити. Схема коректна лише для операцій, у яких дія в Redis безпечна навіть без commit у PostgreSQL. Для блокування це так: якщо commit не вдався, сесії видалено, але користувач не заблокований, і адміністратор отримує помилку.
-- Серіалізація по користувачу закриває race між блокуванням і створенням нової сесії. Інакше login чи refresh, що виконуються одночасно з блокуванням, могли б створити сесію для заблокованого користувача.
-- Транзактор — не окремий компонент. Це вже погоджений порт транзакцій з Application. Application звертається до Redis лише через свій порт.
-- Сесія, яку після невдалого commit не вдалося видалити, не дає доступу, бо токени клієнту не передано. Вона зникає, коли спливає її TTL. Якщо не вдався refresh, користувачу, можливо, доведеться увійти знову.
-- Кожна операція блокує лише один рядок користувача. Блокування одного рядка користувача зменшує ризик deadlock, але не виключає його, якщо транзакції також отримують інші конфліктні блокування ([Persistence Conventions §5](persistence-conventions.md#рівень-ізоляції-і-блокування)). Block User тримає блокування рядка, поки звертається до Redis, тому час очікування для login і refresh обмежений timeout-ом Redis.
-- Гарантія [BR-007](../product/business-rules.md#br-007--blocked-user-access) стосується запитів, надісланих після завершення блокування: їхня перевірка сесії дає відмову. Запити, які пройшли перевірку сесії до завершення блокування (in-flight), можуть завершитися.
-- Unblock User до цих операцій не входить: він відкриває доступ і дії в Redis не має.
+- This is not a distributed transaction: the Redis action cannot be rolled back. The scheme is correct only for operations in which the Redis action is safe even without a commit in PostgreSQL. For blocking this holds: if the commit failed, the sessions are deleted, but the user is not blocked, and the administrator receives an error.
+- Serialization per user closes the race between blocking and creating a new session. Otherwise, a login or refresh performed concurrently with blocking could create a session for a blocked user.
+- The transactor is not a separate component. It is the already approved transaction port from Application. Application accesses Redis only through its port.
+- A session that could not be deleted after a failed commit does not grant access, because the tokens were not passed to the client. It disappears when its TTL expires. If a refresh failed, the user may have to log in again.
+- Each operation locks only one user row. Locking a single user row reduces the risk of deadlock, but does not exclude it if transactions also acquire other conflicting locks ([Persistence Conventions §5](persistence-conventions.md#isolation-level-and-locking)). Block User holds the row lock while it accesses Redis, so the wait time for login and refresh is bounded by the Redis timeout.
+- The [BR-007](../product/business-rules.md#br-007--blocked-user-access) guarantee applies to requests sent after the blocking is completed: their session check results in rejection. Requests that passed the session check before the blocking was completed (in-flight) may complete.
+- Unblock User is not part of these operations: it opens access and has no Redis action.
 
-Конкретний механізм серіалізації відкладено, див. розділ [Відкладені рішення](#відкладені-рішення).
+The specific serialization mechanism is deferred; see the section [Deferred Decisions](#deferred-decisions).
 
-**Обґрунтування:** схема виконує BR-007 за збоїв мережі, timeout-ів і невідомих результатів команд Redis і PostgreSQL. Такі збої зсувають стан у бік суворішого: перевірка сесії працює за принципом fail closed, помилка Redis спричиняє rollback, а токени видаються лише після підтвердженого commit. На захищеному запиті при цьому звертаються лише до Redis, і нових компонентів немає.
+**Rationale:** the scheme satisfies BR-007 under network failures, timeouts and unknown outcomes of Redis and PostgreSQL commands. Such failures shift the state toward the stricter side: the session check works on a fail-closed basis, a Redis error causes a rollback, and tokens are issued only after a confirmed commit. At the same time, a protected request accesses only Redis, and there are no new components.
 
-Межі цієї гарантії:
+Limits of this guarantee:
 
-- Між PostgreSQL і Redis немає спільної ACID-транзакції. Узгодженість тримається на порядку операцій і умовних змінах у Redis, а не на атомарності ([Security Conventions §4](security-conventions.md#4-сесії-в-redis-і-відкликання), [§10](security-conventions.md#10-збої-та-timeout-и)).
-- Схема не гарантує відкликання сесій, якщо Redis відновлюється з persistence, зробленого до блокування, або після failover переходить на репліку, яка ще не отримала видалення. Це відкрита залежність, яку треба закрити до production ([Security Conventions §2](security-conventions.md#2-припущення-та-межі-гарантій), [§12](security-conventions.md#інфраструктурні-та-архітектурні-залежності)).
+- There is no shared ACID transaction between PostgreSQL and Redis. Consistency relies on the order of operations and conditional changes in Redis, not on atomicity ([Security Conventions §4](security-conventions.md#4-sessions-in-redis-and-revocation), [§10](security-conventions.md#10-failures-and-timeouts)).
+- The scheme does not guarantee session revocation if Redis is restored from persistence made before the blocking or, after a failover, switches to a replica that has not yet received the deletion. This is an open dependency that must be closed before production ([Security Conventions §2](security-conventions.md#2-assumptions-and-limits-of-guarantees), [§12](security-conventions.md#infrastructure-and-architectural-dependencies)).
 
-### Конфігурація та логування
+### Configuration and Logging
 
-Конфігурація та логування — частина Platform. Детальні правила для них цим документом не визначаються.
+Configuration and logging are part of Platform. Detailed rules for them are not defined by this document.
 
-## 8. Архітектурні інваріанти
+## 8. Architectural Invariants
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Правила (Architecture Rules), які перевіряються під час Design Review та Implementation Verification кожної User Story.
+Rules (Architecture Rules) that are checked during Design Review and Implementation Verification of every User Story.
 
-Ідентифікатори стабільні. Ідентифікатор не змінюється і не використовується повторно, навіть якщо правило змінено або вилучено.
+Identifiers are stable. An identifier does not change and is not reused, even if the rule is changed or removed.
 
-| ID | Правило | Критерій перевірки | Джерело |
+| ID | Rule | Verification criterion | Source |
 |---|---|---|---|
-| AR-001 | Domain не залежить від Application, адаптерів, Platform, фреймворків, БД чи HTTP | Пакети Domain не імпортують пакети Application, адаптерів, Platform, Gin, pgx, Redis-клієнта, `net/http` | [§4](#гексагональна-архітектура) |
-| AR-002 | Application не залежить від конкретних технологій. До зовнішнього світу Application звертається лише через порти | Пакети Application не імпортують Gin, pgx, Redis-клієнт, `net/http`. Зовнішні виклики йдуть лише через інтерфейси-порти | [§4](#гексагональна-архітектура) |
-| AR-003 | Inbound adapters не містять бізнес-логіки | Handler розбирає запит, викликає use case і формує відповідь. Перевірок бізнес-правил у ньому немає | [§4](#гексагональна-архітектура) |
-| AR-004 | Модуль звертається до іншого модуля лише через його публічний інтерфейс | Пакети модуля не імпортують внутрішні пакети іншого модуля. Запити до БД модуля не звертаються до таблиць іншого модуля | [§5](#взаємодія-між-модулями) |
-| AR-005 | Platform не містить бізнес-логіки і не залежить від модулів | Пакети Platform не імпортують пакети модулів і не містять перевірок бізнес-правил | [§5](#platform) |
-| AR-006 | Кожен захищений запит проходить перевірку сесії в Redis через use case Application | Кожен захищений маршрут проходить middleware, який викликає use case перевірки сесії | [§7](#модель-сесій-і-автентифікація) |
-| AR-007 | Авторизацію остаточно перевіряє use case. Ідентифікатор власного акаунта береться із сесії | Use case адміністративної дії перевіряє роль. Self-service use case не приймає ідентифікатор акаунта із запиту | [§7](#авторизація) |
-| AR-008 | Технічні помилки адаптерів не виходять за їхні межі. Внутрішні деталі не потрапляють у відповіді | Адаптери не повертають помилки pgx чи Redis за свої межі. Відповіді не містять SQL, внутрішніх повідомлень і стектрейсів | [§7](#обробка-помилок) |
-| AR-009 | Пароль не логується, не повертається у відповідях і не зберігається у відновлюваному вигляді | Сутності Domain містять лише хеш пароля. Пароль відсутній у відповідях і логах | [§7](#конфіденційність-паролів), [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality) |
-| AR-010 | Межу транзакції визначає use case | Транзакції відкриваються лише use case через порт транзакцій | [§7](#межі-транзакцій) |
-| AR-011 | Операції зі станом доступу (Block User, login, refresh) виконуються в транзакції PostgreSQL з ексклюзивним блокуванням рядка користувача | Use cases Block User, login і refresh: (1) беруть ексклюзивне блокування рядка користувача; (2) рішення про доступ ухвалюють лише за даними, прочитаними під блокуванням (статус, а для refresh ще й наявність сесії); (3) виконують дію в Redis до commit, помилка Redis спричиняє rollback; (4) login і refresh віддають токени лише після успішного commit | [§7](#операції-зі-станом-доступу), [BR-007](../product/business-rules.md#br-007--blocked-user-access) |
-| AR-012 | Використовуються лише технології з розділу 6. Нова технологія або заміна наявної потребує погодження й оновлення цього документа. Технологією вважається те, що замінює або доповнює позиції таблиці розділу 6 | Залежності, які замінюють або доповнюють позиції §6, відсутні, поки документ не оновлено | [§6](#6-технологічний-стек) |
+| AR-001 | Domain does not depend on Application, adapters, Platform, frameworks, the DB or HTTP | Domain packages do not import Application packages, adapters, Platform, Gin, pgx, the Redis client, `net/http` | [§4](#hexagonal-architecture) |
+| AR-002 | Application does not depend on specific technologies. Application accesses the outside world only through ports | Application packages do not import Gin, pgx, the Redis client, `net/http`. External calls go only through port interfaces | [§4](#hexagonal-architecture) |
+| AR-003 | Inbound adapters do not contain business logic | A handler parses the request, calls a use case and constructs the response. It contains no business rule checks | [§4](#hexagonal-architecture) |
+| AR-004 | A module accesses another module only through its public interface | A module's packages do not import another module's internal packages. A module's DB queries do not access another module's tables | [§5](#inter-module-interaction) |
+| AR-005 | Platform does not contain business logic and does not depend on modules | Platform packages do not import module packages and do not contain business rule checks | [§5](#platform) |
+| AR-006 | Every protected request goes through a session check in Redis via an Application use case | Every protected route goes through a middleware that calls the session validation use case | [§7](#session-model-and-authentication) |
+| AR-007 | Authorization is finally checked by the use case. The identifier of one's own account is taken from the session | An administrative action use case checks the role. A self-service use case does not accept the account identifier from the request | [§7](#authorization) |
+| AR-008 | Technical errors of adapters do not go beyond their boundaries. Internal details do not get into responses | Adapters do not return pgx or Redis errors beyond their boundaries. Responses do not contain SQL, internal messages or stack traces | [§7](#error-handling) |
+| AR-009 | The password is not logged, not returned in responses and not stored in a recoverable form | Domain entities contain only the password hash. The password is absent from responses and logs | [§7](#password-confidentiality), [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality) |
+| AR-010 | The transaction boundary is defined by the use case | Transactions are opened only by a use case through the transaction port | [§7](#transaction-boundaries) |
+| AR-011 | Access-state operations (Block User, login, refresh) are performed in a PostgreSQL transaction with an exclusive lock on the user row | The Block User, login and refresh use cases: (1) take an exclusive lock on the user row; (2) make the access decision only based on data read under the lock (status, and for refresh also the existence of the session); (3) perform the Redis action before commit, a Redis error causes a rollback; (4) login and refresh return tokens only after a successful commit | [§7](#access-state-operations), [BR-007](../product/business-rules.md#br-007--blocked-user-access) |
+| AR-012 | Only technologies from section 6 are used. A new technology or a replacement of an existing one requires approval and an update of this document. A technology is anything that replaces or supplements entries of the table in section 6 | Dependencies that replace or supplement entries of §6 are absent until the document is updated | [§6](#6-technology-stack) |
 
 ### Retired
 
-Ідентифікатори вилучених правил зарезервовано. Повторно їх не використовують.
+Identifiers of removed rules are reserved. They are not reused.
 
-Вилучених правил немає.
+There are no removed rules.
 
-## 9. Відкриті питання та відкладені рішення
+## 9. Open Questions and Deferred Decisions
 
-### Відкриті питання
+### Open Questions
 
-Невирішені питання, які впливають на коректність погодженої архітектури. Поки питання не закрито, агент не реалізує функціональність, яка від нього залежить.
+Unresolved questions that affect the correctness of the approved architecture. Until a question is closed, the agent does not implement functionality that depends on it.
 
-Немає.
+None.
 
-### Відкладені рішення
+### Deferred Decisions
 
-Ці рішення свідомо відкладено. Погодженої архітектури вони не блокують, але визначаються до реалізації функціональності, яка від них залежить. До того часу агент не може спиратися на жоден варіант.
+These decisions are deliberately deferred. They do not block the approved architecture, but they are determined before implementing the functionality that depends on them. Until then, the agent cannot rely on any option.
 
-Рядки з позначкою «Визначено» вже закрито відповідним документом. Їх лишено для простежуваності.
+Rows marked "Defined" have already been closed by the corresponding document. They are kept for traceability.
 
-| Рішення | Куди відкладено |
+| Decision | Deferred to |
 |---|---|
-| Тип клієнта API і пов'язані з ним налаштування cookies, CORS, CSRF | **Частково визначено** в [Security Conventions §5](security-conventions.md#5-cookies-csrf-cors-https): початкова політика cookies для same-site клієнта, session-bound CSRF-токен, CORS вимкнено. Тип клієнта (A2) і спосіб доставки CSRF-токена лишаються відкритими до вибору клієнта ([Security Conventions §12](security-conventions.md#інфраструктурні-та-архітектурні-залежності)) |
-| TTL токенів, ротація refresh-токенів, формат claims | **Визначено:** [Security Conventions §3](security-conventions.md#3-jwt) (claims, TTL), [§4](security-conventions.md#ротація-refresh-і-reuse-detection) (ротація refresh) |
-| Алгоритм і параметри хешування паролів | **Визначено:** [Security Conventions §6](security-conventions.md#6-паролі). Ліміти й timeout-и черги Argon2id відкладено до реалізації ([Security Conventions §12](security-conventions.md#інфраструктурні-та-архітектурні-залежності)) |
-| Механізм серіалізації по користувачу для операцій зі станом доступу (тип блокування рядка, рівень ізоляції транзакцій, timeout-и Redis) | **Визначено:** [Persistence Conventions §5](persistence-conventions.md#5-серіалізація-по-користувачу-блокування-рядків-timeout-и): `READ COMMITTED`, `SELECT … FOR UPDATE` рядка користувача, модель timeout-ів PostgreSQL і Redis. Значення timeout-ів лишаються відкладеними до Infrastructure Bootstrap |
-| Timeout-и HTTP-сервера та graceful shutdown | **Частково визначено:** модель timeout-ів, лімітів і graceful shutdown — [API Conventions §11](api-conventions.md#11-модель-timeout-ів-і-лімітів-http-сервера). Значення лишаються відкладеними до Infrastructure Bootstrap |
-| Перелік категорій помилок, їхня відповідність HTTP-кодам, формат тіла помилки | **Визначено:** [API Conventions §8](api-conventions.md#8-помилки) |
-| Версії Go, PostgreSQL, Redis і спосіб запуску міграцій | **Визначено:** PostgreSQL 18 і Redis 8.x ([Persistence Conventions §2](persistence-conventions.md#середовище)); міграції запускає CLI golang-migrate окремим кроком перед стартом застосунку ([Persistence Conventions §7](persistence-conventions.md#7-міграції)); версію Go визначає директива `go` у `go.mod` ([Package Map §8](package-map.md#версія-go)). Minor- і patch-версії та образи лишаються відкладеними до Infrastructure Bootstrap |
+| API client type and the related cookie, CORS, CSRF settings | **Partially defined** in [Security Conventions §5](security-conventions.md#5-cookies-csrf-cors-https): an initial cookie policy for a same-site client, a session-bound CSRF token, CORS disabled. The client type (A2) and the CSRF token delivery method remain open until the client is chosen ([Security Conventions §12](security-conventions.md#infrastructure-and-architectural-dependencies)) |
+| Token TTLs, refresh token rotation, claims format | **Defined:** [Security Conventions §3](security-conventions.md#3-jwt) (claims, TTL), [§4](security-conventions.md#refresh-rotation-and-reuse-detection) (refresh rotation) |
+| Password hashing algorithm and parameters | **Defined:** [Security Conventions §6](security-conventions.md#6-passwords). Argon2id queue limits and timeouts are deferred until implementation ([Security Conventions §12](security-conventions.md#infrastructure-and-architectural-dependencies)) |
+| Per-user serialization mechanism for access-state operations (row lock type, transaction isolation level, Redis timeouts) | **Defined:** [Persistence Conventions §5](persistence-conventions.md#5-per-user-serialization-row-locks-timeouts): `READ COMMITTED`, `SELECT … FOR UPDATE` of the user row, the PostgreSQL and Redis timeout model. Timeout values remain deferred until Infrastructure Bootstrap |
+| HTTP server timeouts and graceful shutdown | **Partially defined:** the model of timeouts, limits and graceful shutdown — [API Conventions §11](api-conventions.md#11-http-server-timeout-and-limit-model). The values remain deferred until Infrastructure Bootstrap |
+| List of error categories, their mapping to HTTP codes, error body format | **Defined:** [API Conventions §8](api-conventions.md#8-errors) |
+| Go, PostgreSQL, Redis versions and how migrations are run | **Defined:** PostgreSQL 18 and Redis 8.x ([Persistence Conventions §2](persistence-conventions.md#environment)); migrations are run by the golang-migrate CLI as a separate step before the application starts ([Persistence Conventions §7](persistence-conventions.md#7-migrations)); the Go version is defined by the `go` directive in `go.mod` ([Package Map §8](package-map.md#go-version)). Minor and patch versions and images remain deferred until Infrastructure Bootstrap |

@@ -1,632 +1,632 @@
 # Persistence Conventions — Customer Portal
 
-## 1. Призначення
+## 1. Purpose
 
-Документ визначає сталі правила роботи з PostgreSQL і Redis у Customer Portal для всіх User Stories. Агенти застосовують їх під час Technical Design, Implementation, Verification та Debugging.
+This document defines the stable rules for working with PostgreSQL and Redis in Customer Portal for all User Stories. Agents apply them during Technical Design, Implementation, Verification and Debugging.
 
-Документ деталізує [Architecture](architecture.md), [Package Map](package-map.md), [Security Conventions](security-conventions.md) і [API Conventions](api-conventions.md), але не змінює їх. Конвенції не можуть послабити жодне Architecture Rule (AR) чи правило Security Conventions. Модель сесій Redis (index-first, compare-and-set, відкликання, очищення індексу) визначено в [Security Conventions §4](security-conventions.md#4-сесії-в-redis-і-відкликання). Тут вона не повторюється, а лише доповнюється правилами реалізації.
+The document details [Architecture](architecture.md), [Package Map](package-map.md), [Security Conventions](security-conventions.md) and [API Conventions](api-conventions.md), but does not change them. The conventions cannot weaken any Architecture Rule (AR) or Security Conventions rule. The Redis session model (index-first, compare-and-set, revocation, index cleanup) is defined in [Security Conventions §4](security-conventions.md#4-sessions-in-redis-and-revocation). It is not repeated here, only supplemented with implementation rules.
 
-**Що входить:**
+**In scope:**
 
-- підключення до PostgreSQL і Redis, пули, поведінка на старті;
-- транзакції, серіалізація по користувачу, блокування рядків, модель timeout-ів;
-- конвенції схеми та SQL, constraints, ідентифікатори, час;
-- правила міграцій;
-- переклад помилок PostgreSQL і класифікація unknown outcome;
-- конвенції Redis: клієнт, ключі, TTL, атомарні операції, Lua, подання значень;
-- узгодженість PostgreSQL ↔ Redis;
-- обов'язкові сценарії тестування persistence.
+- connections to PostgreSQL and Redis, pools, startup behavior;
+- transactions, per-user serialization, row locks, the timeout model;
+- schema and SQL conventions, constraints, identifiers, time;
+- migration rules;
+- translation of PostgreSQL errors and classification of unknown outcome;
+- Redis conventions: client, keys, TTL, atomic operations, Lua, value representation;
+- PostgreSQL ↔ Redis consistency;
+- mandatory persistence testing scenarios.
 
-**Що не входить:**
+**Out of scope:**
 
-- схема конкретних таблиць, SQL-запити, міграції та Lua-скрипти конкретних Stories (Technical Design Story);
-- значення timeout-ів, параметрів пулів, точні версії та образи (Infrastructure Bootstrap);
-- механізм Redis persistence і failover, TLS, rollback-політика у спільних середовищах (Deployment-конвенції);
-- тестова інфраструктура та бібліотеки (Testing Strategy);
-- Go-код.
+- the schema of specific tables, SQL queries, migrations and Lua scripts of specific Stories (Story Technical Design);
+- timeout values, pool parameters, exact versions and images (Infrastructure Bootstrap);
+- the Redis persistence and failover mechanism, TLS, the rollback policy in shared environments (Deployment conventions);
+- test infrastructure and libraries (Testing Strategy);
+- Go code.
 
-**Статуси:**
+**Statuses:**
 
-- `APPROVED` — рішення явно погоджено. Агенти й люди можуть на нього спиратися.
-- `OPEN` — питання не вирішено. Функціональність, яка від нього залежить, не реалізується, поки питання не закрито.
-- `DEFERRED` — рішення свідомо відкладено до вказаного моменту. До того часу агент не спирається на жоден варіант.
+- `APPROVED` — the decision is explicitly approved. Agents and people may rely on it.
+- `OPEN` — the question is not resolved. Functionality that depends on it is not implemented until the question is closed.
+- `DEFERRED` — the decision is deliberately deferred until the stated point. Until then, the agent does not rely on any option.
 
-Пункти зі статусом `OPEN` і `DEFERRED` зібрано в [розділі 13](#13-відкриті-питання-відкладені-рішення-та-залежності).
+Items with the `OPEN` and `DEFERRED` statuses are collected in [section 13](#13-open-questions-deferred-decisions-and-dependencies).
 
-**Обов'язковість значень.** Назви параметрів, SQLSTATE, імена ключів, формати й шаблони імен у цьому документі обов'язкові. Приклади, позначені словом «наприклад», ілюстративні.
+**Mandatory values.** Parameter names, SQLSTATE, key names, formats and name templates in this document are mandatory. Examples marked with the word "for example" are illustrative.
 
-**Зв'язок з іншими документами.** Терміни вживаються у значеннях із [Business Glossary](../product/business-glossary.md). Якщо цей документ суперечить іншим документам, агент має повідомити про суперечність. Автоматично віддавати перевагу одному з документів не можна.
+**Relationship to other documents.** Terms are used in the meanings from the [Business Glossary](../product/business-glossary.md). If this document contradicts other documents, the agent must report the contradiction. The agent must not automatically prefer one of the documents.
 
-Рішення погоджено 2026-11-16.
+Decisions approved on 2026-11-16.
 
-## 2. Припущення, межі та production gate
+## 2. Assumptions, Limits and Production Gate
 
-### Середовище
+### Environment
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- PostgreSQL і Redis — довірені сховища ([Security Conventions §2](security-conventions.md#2-припущення-та-межі-гарантій)).
-- Major-версії: **PostgreSQL 18**, **Redis 8.x**. Minor- і patch-версії та образи визначає Infrastructure Bootstrap.
-- Мінімально потрібні можливості: `gen_random_uuid()` у PostgreSQL; hash, sorted set і Lua-скрипти в Redis.
-- Для Development і Testing використовується **standalone Redis** без гарантій durability.
-- **Redis Cluster не використовується.** Перехід на Cluster потребує окремого архітектурного review: multi-key операції та Lua-скрипти в Cluster вимагають, щоб ключі були в одному hash slot.
-- Нові технології та альтернативи PostgreSQL і Redis не вводяться ([AR-012](architecture.md#8-архітектурні-інваріанти)).
+- PostgreSQL and Redis are trusted stores ([Security Conventions §2](security-conventions.md#2-assumptions-and-limits-of-guarantees)).
+- Major versions: **PostgreSQL 18**, **Redis 8.x**. Minor and patch versions and images are defined by Infrastructure Bootstrap.
+- Minimum required capabilities: `gen_random_uuid()` in PostgreSQL; hash, sorted set and Lua scripts in Redis.
+- For Development and Testing, a **standalone Redis** without durability guarantees is used.
+- **Redis Cluster is not used.** Moving to Cluster requires a separate architectural review: multi-key operations and Lua scripts in Cluster require the keys to be in one hash slot.
+- New technologies and alternatives to PostgreSQL and Redis are not introduced ([AR-012](architecture.md#8-architectural-invariants)).
 
-### Production gate для Redis
+### Production Gate for Redis
 
-**Статус:** `OPEN` до Deployment / production readiness.
+**Status:** `OPEN` until Deployment / production readiness.
 
-Інваріант, який має виконуватися в production:
+The invariant that must hold in production:
 
-> Після успішного BlockUser раніше відкликані сесії не повинні знову надавати доступ через restart, persistence recovery або failover Redis.
+> After a successful BlockUser, previously revoked sessions must not grant access again through a Redis restart, persistence recovery or failover.
 
-- Standalone Redis без durability цей інваріант не забезпечує і питання не закриває ([Security Conventions §2](security-conventions.md#2-припущення-та-межі-гарантій)).
-- Для production потрібен погоджений механізм, що забезпечує інваріант, і перевірка цього механізму. Конкретний механізм (налаштування persistence, реплікація, підтвердження запису тощо) цей документ не обирає.
-- Якщо інваріант неможливо гарантувати, це блокер production readiness або підстава для явного перегляду [BR-007](../product/business-rules.md#br-007--blocked-user-access), Security Conventions і Architecture. Прийняття ризику власником продукту не є автоматичним дозволом порушувати чинне BR-007.
-- Вимога `maxmemory-policy=noeviction` ([Security Conventions §4](security-conventions.md#вимога-до-redis)) перевіряється в Infrastructure Bootstrap або Deployment Verification. `PING` її не перевіряє. Застосунок конфігурацію Redis не змінює.
+- A standalone Redis without durability does not ensure this invariant and does not close the question ([Security Conventions §2](security-conventions.md#2-assumptions-and-limits-of-guarantees)).
+- Production requires an approved mechanism that ensures the invariant, and a verification of this mechanism. This document does not choose the specific mechanism (persistence settings, replication, write acknowledgement, etc.).
+- If the invariant cannot be guaranteed, this is a production readiness blocker or grounds for an explicit revision of [BR-007](../product/business-rules.md#br-007--blocked-user-access), the Security Conventions and the Architecture. Risk acceptance by the product owner is not an automatic permission to violate the current BR-007.
+- The `maxmemory-policy=noeviction` requirement ([Security Conventions §4](security-conventions.md#redis-requirement)) is checked in Infrastructure Bootstrap or Deployment Verification. `PING` does not check it. The application does not change the Redis configuration.
 
-## 3. PostgreSQL: підключення та пул
+## 3. PostgreSQL: Connection and Pool
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Один `pgxpool` на процес. Його створює і закриває `internal/platform/postgres`. Composition root передає пул PostgreSQL-адаптерам модулів ([Package Map §4](package-map.md#4-platform)).
-- Конфігуруються:
+- One `pgxpool` per process. It is created and closed by `internal/platform/postgres`. The composition root passes the pool to the modules' PostgreSQL adapters ([Package Map §4](package-map.md#4-platform)).
+- The following are configured:
 
-| Параметр | Примітка |
+| Parameter | Note |
 |---|---|
-| Максимальна кількість підключень | |
-| Мінімальна кількість підключень | |
-| Максимальний час життя підключення | |
-| Максимальний час простою підключення | |
-| Період health check | |
-| Timeout встановлення з'єднання | |
-| Обмеження очікування вільного підключення з пулу | [Розділ 5](#модель-timeout-ів) |
-| `TimeZone=UTC` | Параметр сесії підключення ([розділ 6](#час)) |
-| `application_name` | Параметр сесії підключення, для діагностики |
-| `statement_timeout` | Параметр сесії підключення, серверний захист ([розділ 5](#модель-timeout-ів)) |
-| Облікові дані | З конфігурації, через змінні оточення ([Security Conventions §8](security-conventions.md#8-секрети)) |
+| Maximum number of connections | |
+| Minimum number of connections | |
+| Maximum connection lifetime | |
+| Maximum connection idle time | |
+| Health check period | |
+| Connection establishment timeout | |
+| Limit on waiting for a free connection from the pool | [Section 5](#timeout-model) |
+| `TimeZone=UTC` | A connection session parameter ([section 6](#time)) |
+| `application_name` | A connection session parameter, for diagnostics |
+| `statement_timeout` | A connection session parameter, server-side protection ([section 5](#timeout-model)) |
+| Credentials | From the configuration, through environment variables ([Security Conventions §8](security-conventions.md#8-secrets)) |
 
-- Значення визначає Infrastructure Bootstrap.
-- Конфігурація має бути валідною й обмеженою. Безумовної заборони нуля немає: для кожного параметра перевіряється його семантика. Значення, яке означає необмежене очікування там, де потрібне обмеження, невалідне.
-- TLS до PostgreSQL визначають Deployment-конвенції.
-- **Старт.** Застосунок перевіряє підключення до PostgreSQL з timeout-ом. Якщо PostgreSQL недоступний, застосунок не стартує (fail fast).
-- Успішна перевірка на старті не замінює обробки збоїв під час роботи ([розділ 8](#8-помилки-postgresql-і-unknown-outcome)).
-- Endpoint-и liveness і readiness відкладено до Deployment.
+- The values are defined by Infrastructure Bootstrap.
+- The configuration must be valid and bounded. There is no unconditional prohibition of zero: the semantics of each parameter is checked. A value that means unbounded waiting where a limit is needed is invalid.
+- TLS to PostgreSQL is defined by the Deployment conventions.
+- **Startup.** The application checks the connection to PostgreSQL with a timeout. If PostgreSQL is unavailable, the application does not start (fail fast).
+- A successful check at startup does not replace failure handling during operation ([section 8](#8-postgresql-errors-and-unknown-outcome)).
+- Liveness and readiness endpoints are deferred until Deployment.
 
-**Обґрунтування:** один пул на процес і створення підключень лише в Platform відповідають Package Map. Fail fast узгоджується з [Security Conventions §8](security-conventions.md#8-секрети).
+**Rationale:** one pool per process and creating connections only in Platform correspond to the Package Map. Fail fast is consistent with [Security Conventions §8](security-conventions.md#8-secrets).
 
-## 4. Транзакції
+## 4. Transactions
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-### Порт і власник транзакції
+### Transaction Port and Owner
 
-- Межу транзакції визначає use case через порт транзакцій ([AR-010](architecture.md#8-архітектурні-інваріанти)).
-- Порт — модульний `Transactor` у формі callback (наприклад, `WithinTx(ctx, fn func(ctx context.Context) error) error`). Його оголошує пакет `application` модуля, а реалізує `adapters/outbound/postgres` того самого модуля ([Package Map §5](package-map.md#порти)). Міжмодульних транзакцій немає.
-- Транзакцію створює, завершує й очищує PostgreSQL-адаптер. `pgx.Tx` передається через `context.Context`.
-- Application не знає `pgx.Tx` і не читає транзакцію з контексту. Application лише передає `ctx` далі в порти. Це відповідає тлумаченню з [API Conventions §10](api-conventions.md#request-id): технічні метадані в `context.Context` використовують Platform і адаптери, а Application нічого прикладного з контексту не витягує ([Security Conventions §7](security-conventions.md#авторизація-і-хто-діє)).
-- Завершення транзакції визначається в такому порядку пріоритету:
-  1. Callback повернув помилку або стався panic → `COMMIT` не ініціюється, адаптер переходить до rollback і cleanup.
-  2. Callback повернув `nil`, але `ctx` уже скасовано або його deadline минув до початку `COMMIT` → `COMMIT` не ініціюється, адаптер переходить до rollback і cleanup.
-  3. Callback повернув `nil`, `ctx` чинний → адаптер ініціює `COMMIT`.
-  4. Cancellation або timeout виникли під час уже розпочатого `COMMIT` → діють правила [unknown outcome](#unknown-outcome-commit).
-- **Вкладені транзакції заборонені.** Виклик `WithinTx` усередині активної транзакції — помилка. Savepoints не використовуються.
-- **Redis не входить у транзакцію.** Виклики Redis усередині callback виконуються незалежно від PostgreSQL. Їхній порядок відносно `COMMIT` визначає [AR-011](architecture.md#8-архітектурні-інваріанти) або Consistency Analysis use case ([розділ 10](#10-узгодженість-postgresql--redis)).
-- Загальний Unit of Work і нові технології не вводяться.
+- The transaction boundary is defined by the use case through the transaction port ([AR-010](architecture.md#8-architectural-invariants)).
+- The port is a module `Transactor` in callback form (for example, `WithinTx(ctx, fn func(ctx context.Context) error) error`). It is declared by the module's `application` package and implemented by `adapters/outbound/postgres` of the same module ([Package Map §5](package-map.md#ports)). There are no cross-module transactions.
+- The transaction is created, completed and cleaned up by the PostgreSQL adapter. `pgx.Tx` is passed through `context.Context`.
+- Application does not know `pgx.Tx` and does not read the transaction from the context. Application only passes `ctx` on to the ports. This corresponds to the interpretation from [API Conventions §10](api-conventions.md#request-id): technical metadata in `context.Context` is used by Platform and adapters, and Application extracts nothing application-level from the context ([Security Conventions §7](security-conventions.md#authorization-and-who-is-acting)).
+- The completion of the transaction is determined in the following order of priority:
+  1. The callback returned an error or a panic occurred → `COMMIT` is not initiated, the adapter proceeds to rollback and cleanup.
+  2. The callback returned `nil`, but `ctx` has already been canceled or its deadline passed before `COMMIT` started → `COMMIT` is not initiated, the adapter proceeds to rollback and cleanup.
+  3. The callback returned `nil`, `ctx` is valid → the adapter initiates `COMMIT`.
+  4. Cancellation or timeout occurred during an already started `COMMIT` → the [unknown outcome](#unknown-outcome-commit) rules apply.
+- **Nested transactions are prohibited.** Calling `WithinTx` inside an active transaction is an error. Savepoints are not used.
+- **Redis is not part of the transaction.** Redis calls inside the callback are performed independently of PostgreSQL. Their order relative to `COMMIT` is defined by [AR-011](architecture.md#8-architectural-invariants) or the use case's Consistency Analysis ([section 10](#10-postgresql--redis-consistency)).
+- A general Unit of Work and new technologies are not introduced.
 
-### Операції, що потребують транзакції
+### Operations That Require a Transaction
 
-- Repository-операція, яка за контрактом потребує активної транзакції (наприклад, `SELECT … FOR UPDATE`), **не переходить мовчки на pool**, якщо транзакції в контексті немає. Відсутність потрібної транзакції — явна помилка.
-- Звичайні нетранзакційні операції можуть виконуватися через pool.
-- Спосіб розмежування транзакційних і нетранзакційних операцій визначає Technical Design. Вимога не виконувати критичну операцію мовчки поза транзакцією обов'язкова.
+- A repository operation that by contract requires an active transaction (for example, `SELECT … FOR UPDATE`) **does not silently fall back to the pool** if there is no transaction in the context. The absence of the required transaction is an explicit error.
+- Regular non-transactional operations may be performed through the pool.
+- The way transactional and non-transactional operations are distinguished is defined by Technical Design. The requirement not to perform a critical operation silently outside a transaction is mandatory.
 
-### Cleanup, rollback і результат
+### Cleanup, Rollback and Outcome
 
-Transactor розмежовує чотири різні речі:
+The Transactor distinguishes four different things:
 
-| Що | Гарантія |
+| What | Guarantee |
 |---|---|
-| Обов'язок cleanup | Transactor **завжди** намагається виконати rollback і звільняє підключення й ресурси при помилці callback, panic і cancellation |
-| Успішність rollback | **Не гарантується** за будь-якого інфраструктурного збою. Команда `ROLLBACK` сама може завершитися помилкою. Помилка rollback не маскує початкову помилку і не перетворюється на успіх |
-| Результат PostgreSQL | Визначається за [розділом 8](#unknown-outcome-commit). Помилка `COMMIT` обробляється окремо від помилки callback, з урахуванням unknown outcome |
-| Побічні ефекти Redis | Незалежні від результату PostgreSQL. Rollback PostgreSQL їх не відкочує |
+| Cleanup obligation | The Transactor **always** attempts to perform rollback and releases the connection and resources on a callback error, panic and cancellation |
+| Rollback success | **Not guaranteed** under any infrastructure failure. The `ROLLBACK` command itself may fail. A rollback error does not mask the original error and is not turned into success |
+| PostgreSQL outcome | Determined according to [section 8](#unknown-outcome-commit). A `COMMIT` error is handled separately from a callback error, taking unknown outcome into account |
+| Redis side effects | Independent of the PostgreSQL outcome. A PostgreSQL rollback does not roll them back |
 
-**Обґрунтування:** callback-форма не дає забути rollback, а передача транзакції в `ctx` не змінює сигнатур репозиторіїв і не відкриває pgx для Application ([AR-002](architecture.md#8-архітектурні-інваріанти)). Явна помилка за відсутності транзакції не дає критичній операції непомітно виконатися без блокування.
+**Rationale:** the callback form makes it impossible to forget the rollback, and passing the transaction in `ctx` does not change repository signatures and does not expose pgx to Application ([AR-002](architecture.md#8-architectural-invariants)). An explicit error when the transaction is absent prevents a critical operation from silently executing without a lock.
 
-## 5. Серіалізація по користувачу, блокування рядків, timeout-и
+## 5. Per-User Serialization, Row Locks, Timeouts
 
-### Рівень ізоляції і блокування
+### Isolation Level and Locking
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Рівень ізоляції за замовчуванням для всіх транзакцій — `READ COMMITTED`.
-- Операції зі станом доступу (Block User, login, refresh) беруть ексклюзивне блокування рядка користувача через `SELECT … FOR UPDATE` у транзакції ([AR-011](architecture.md#8-архітектурні-інваріанти), [Architecture §7](architecture.md#операції-зі-станом-доступу)).
-- `NOWAIT` і `SKIP LOCKED` не використовуються. Очікування блокування обмежене `lock_timeout` ([модель timeout-ів](#модель-timeout-ів)).
-- `FOR NO KEY UPDATE` поки не використовується. Рішення можна переглянути, якщо знадобиться оптимізувати блокування.
-- **Deadlock.** Блокування одного рядка користувача зменшує ризик deadlock, але не виключає його, якщо транзакції також отримують інші конфліктні блокування (наприклад, через додаткові SQL-операції). Deadlock класифікується за [розділом 8](#класифікація-sqlstate).
-- Конкурентні сценарії перевіряються інтеграційними тестами ([розділ 11](#11-тестування-persistence)).
+- The default isolation level for all transactions is `READ COMMITTED`.
+- Access-state operations (Block User, login, refresh) take an exclusive lock on the user row via `SELECT … FOR UPDATE` in a transaction ([AR-011](architecture.md#8-architectural-invariants), [Architecture §7](architecture.md#access-state-operations)).
+- `NOWAIT` and `SKIP LOCKED` are not used. Waiting for a lock is bounded by `lock_timeout` ([timeout model](#timeout-model)).
+- `FOR NO KEY UPDATE` is not used for now. The decision may be revisited if locking needs to be optimized.
+- **Deadlock.** Locking a single user row reduces the risk of deadlock, but does not exclude it if transactions also acquire other conflicting locks (for example, through additional SQL operations). Deadlock is classified according to [section 8](#sqlstate-classification).
+- Concurrent scenarios are checked by integration tests ([section 11](#11-persistence-testing)).
 
-Не визначаються тут:
+Not defined here:
 
-- як ChangePassword серіалізується з login (Technical Design US-005, [Security Conventions §7](security-conventions.md#login));
-- як login підтверджує актуальність перевіреного стану під блокуванням і як організовано рехешування (Technical Design US-002).
+- how ChangePassword is serialized with login (Technical Design of US-005, [Security Conventions §7](security-conventions.md#login));
+- how login confirms the freshness of the state checked under the lock and how rehashing is organized (Technical Design of US-002).
 
-Обидва рішення мають використовувати механізм із цього розділу або явно погоджене його розширення.
+Both decisions must use the mechanism from this section or an explicitly approved extension of it.
 
-**Обґрунтування:** `READ COMMITTED` з явним `FOR UPDATE` прямо втілює AR-011. `SERIALIZABLE` може призводити до `40001` serialization_failure. Автоматичний повтор після такої помилки не обов'язковий, але без окремої політики повторів операція не завершується прозоро для клієнта. Для операцій зі станом доступу така політика ускладнена: побічні ефекти Redis незалежні від rollback PostgreSQL, а Security Conventions обмежують повтори таких операцій ([Security Conventions §10](security-conventions.md#10-збої-та-timeout-и)).
+**Rationale:** `READ COMMITTED` with an explicit `FOR UPDATE` directly embodies AR-011. `SERIALIZABLE` can lead to `40001` serialization_failure. An automatic retry after such an error is not mandatory, but without a separate retry policy the operation does not complete transparently for the client. For access-state operations, such a policy is complicated: Redis side effects are independent of the PostgreSQL rollback, and the Security Conventions restrict retries of such operations ([Security Conventions §10](security-conventions.md#10-failures-and-timeouts)).
 
-### Модель timeout-ів
+### Timeout Model
 
-**Статус:** `APPROVED` — модель. Значення — `DEFERRED` до Infrastructure Bootstrap.
+**Status:** `APPROVED` — the model. Values — `DEFERRED` until Infrastructure Bootstrap.
 
-Кожна операція з PostgreSQL і Redis має скінченний deadline, навіть якщо вхідний `context.Context` deadline не має ([Security Conventions §10](security-conventions.md#timeout-и)).
+Every operation with PostgreSQL and Redis has a finite deadline, even if the incoming `context.Context` has no deadline ([Security Conventions §10](security-conventions.md#timeouts)).
 
-| Сховище | Обмеження |
+| Store | Limit |
 |---|---|
-| PostgreSQL | Очікування підключення з пулу |
-| | Виконання SQL: deadline `ctx` і `statement_timeout` як серверний захист |
-| | `lock_timeout` для очікування блокування рядка |
-| | Загальний deadline транзакції |
+| PostgreSQL | Waiting for a connection from the pool |
+| | SQL execution: the `ctx` deadline and `statement_timeout` as server-side protection |
+| | `lock_timeout` for waiting for a row lock |
+| | The overall transaction deadline |
 | Redis | `DialTimeout`, `ReadTimeout`, `WriteTimeout` |
-| | Deadline операції |
-| | `PoolTimeout` — очікування підключення з пулу |
+| | The operation deadline |
+| | `PoolTimeout` — waiting for a connection from the pool |
 
-- **Узгодженість значень.** Значення погоджуються між собою з урахуванням latency, навантаження, загального deadline HTTP-запиту ([API Conventions §11](api-conventions.md#11-модель-timeout-ів-і-лімітів-http-сервера)) і допустимої поведінки при відмові.
-- Block User тримає блокування рядка, поки звертається до Redis ([Architecture §7](architecture.md#операції-зі-станом-доступу)). `lock_timeout` для login і refresh **не обов'язково** довший за цей час. Коротший `lock_timeout` свідомо призводить до відповіді «тимчасово недоступно». Це компроміс на користь доступності, а не порушення BR-007: транзакція відкочується без створення сесії.
+- **Consistency of values.** The values are agreed with each other taking into account latency, load, the overall HTTP request deadline ([API Conventions §11](api-conventions.md#11-http-server-timeout-and-limit-model)) and acceptable behavior on failure.
+- Block User holds the row lock while it accesses Redis ([Architecture §7](architecture.md#access-state-operations)). The `lock_timeout` for login and refresh is **not necessarily** longer than this time. A shorter `lock_timeout` deliberately leads to a "temporarily unavailable" response. This is a trade-off in favor of availability, not a violation of BR-007: the transaction is rolled back without creating a session.
 
-## 6. Схема і SQL-конвенції
+## 6. Schema and SQL Conventions
 
-### Імена
+### Names
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Таблиці, колонки, constraints та індекси — `snake_case`.
-- Таблиці — іменники в множині (наприклад, `users`). Імена таблиць унікальні в межах проєкту. Модульного префікса немає.
-- Первинний ключ — `id`. Посилання — `<entity>_id`.
-- Constraints та індекси мають **явні й стабільні імена**. Типові автоматичні імена PostgreSQL не використовуються, бо вони залежать від форми DDL. Шаблон:
+- Tables, columns, constraints and indexes — `snake_case`.
+- Tables are plural nouns (for example, `users`). Table names are unique within the project. There is no module prefix.
+- The primary key is `id`. A reference is `<entity>_id`.
+- Constraints and indexes have **explicit and stable names**. PostgreSQL's default automatic names are not used, because they depend on the form of the DDL. Template:
 
-| Об'єкт | Шаблон |
+| Object | Template |
 |---|---|
 | Primary key | `<table>_pkey` |
 | Unique | `<table>_<columns>_key` |
 | Foreign key | `<table>_<columns>_fkey` |
 | Check | `<table>_<columns>_check` |
-| Індекс | `<table>_<columns>_idx` |
+| Index | `<table>_<columns>_idx` |
 
-Назви constraints — частина контракту: за ними перекладаються помилки ([розділ 8](#класифікація-sqlstate)) і їх записують у логи ([Security Conventions §9](security-conventions.md#9-security-logging)). Перейменування constraint, до якого прив'язано переклад, потребує одночасної зміни перекладу.
+Constraint names are part of the contract: errors are translated by them ([section 8](#sqlstate-classification)) and they are written to logs ([Security Conventions §9](security-conventions.md#9-security-logging)). Renaming a constraint to which a translation is bound requires a simultaneous change of the translation.
 
-### Схема PostgreSQL і межі модулів
+### PostgreSQL Schema and Module Boundaries
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Усі таблиці лежать в одній схемі `public`.
-- Власника таблиці визначають модульна архітектура, PostgreSQL-адаптер модуля і назва файлу міграції ([Package Map §8](package-map.md#міграції)).
-- [AR-004](architecture.md#8-архітектурні-інваріанти) обов'язкове: модуль не звертається напряму до таблиць іншого модуля.
-- Окремі схеми та ролі БД для модулів відкладено.
+- All tables lie in one `public` schema.
+- The owner of a table is determined by the modular architecture, the module's PostgreSQL adapter and the migration file name ([Package Map §8](package-map.md#migrations)).
+- [AR-004](architecture.md#8-architectural-invariants) is mandatory: a module does not access another module's tables directly.
+- Separate DB schemas and roles for modules are deferred.
 
 ### SQL
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- SQL пишеться вручну в PostgreSQL-адаптерах модуля і виконується через pgx.
-- Лише параметризовані запити (`$1`, `$2`, …). Значення ніколи не вставляються в текст запиту.
-- `SELECT *` не використовується, колонки перелічуються явно.
-- Рядки читаються в типи адаптера, а потім перекладаються в сутності Domain. Типи pgx не виходять за межі адаптера ([AR-008](architecture.md#8-архітектурні-інваріанти)).
-- ORM, query builders і генерація коду не використовуються.
+- SQL is written manually in the module's PostgreSQL adapters and executed through pgx.
+- Only parameterized queries (`$1`, `$2`, …). Values are never inserted into the query text.
+- `SELECT *` is not used; columns are listed explicitly.
+- Rows are read into adapter types and then translated into Domain entities. pgx types do not go beyond the adapter's boundaries ([AR-008](architecture.md#8-architectural-invariants)).
+- ORMs, query builders and code generation are not used.
 
 ### NULL
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Колонки за замовчуванням `NOT NULL`. `NULL` допускається лише для значення, яке справді необов'язкове.
+Columns are `NOT NULL` by default. `NULL` is allowed only for a value that is truly optional.
 
 ### Constraints
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Database constraints — остання лінія захисту цілісності даних. Бізнес-правила лишаються в Domain і Application ([Architecture §4](architecture.md#розміщення-бізнес-правил)).
-- PK, `NOT NULL`, `UNIQUE`, `CHECK` і FK використовуються там, де відповідають погодженим інваріантам.
-- **Унікальність, якої вимагають бізнес-правила, гарантує `UNIQUE` constraint.** Попередня перевірка в Application його не замінює через конкурентні записи. Вона допустима лише як додаткова. Порушення перекладається за [розділом 8](#класифікація-sqlstate).
-- Для [BR-003](../product/business-rules.md#br-003--unique-email) форма constraint залежить від регістру й нормалізації email, які лишаються відкритими ([розділ 13](#відкриті-питання)).
-- Прості переліки (наприклад, `role`, статус) — `text` + `CHECK`. Тип `ENUM` PostgreSQL за замовчуванням не використовується.
-- `ON DELETE CASCADE` не використовується без окремого рішення. За замовчуванням — `NO ACTION` / `RESTRICT`.
-- FK між таблицями одного модуля дозволені.
-- Політику FK між таблицями різних модулів відкладено до появи другого модуля й окремого архітектурного погодження. Глобальної заборони немає, але AR-004 діє незалежно від неї.
+- Database constraints are the last line of defense of data integrity. Business rules stay in Domain and Application ([Architecture §4](architecture.md#business-rule-placement)).
+- PK, `NOT NULL`, `UNIQUE`, `CHECK` and FK are used where they correspond to approved invariants.
+- **Uniqueness required by business rules is guaranteed by a `UNIQUE` constraint.** A preliminary check in Application does not replace it because of concurrent writes. It is acceptable only as an additional one. A violation is translated according to [section 8](#sqlstate-classification).
+- For [BR-003](../product/business-rules.md#br-003--unique-email), the form of the constraint depends on the case and normalization of email, which remain open ([section 13](#open-questions)).
+- Simple enumerations (for example, `role`, status) — `text` + `CHECK`. The PostgreSQL `ENUM` type is not used by default.
+- `ON DELETE CASCADE` is not used without a separate decision. By default — `NO ACTION` / `RESTRICT`.
+- FKs between tables of one module are allowed.
+- The policy for FKs between tables of different modules is deferred until a second module appears and a separate architectural approval is given. There is no global prohibition, but AR-004 applies independently of it.
 
-### Ідентифікатори
+### Identifiers
 
-**Статус:** `APPROVED` для Account/User.
+**Status:** `APPROVED` for Account/User.
 
-- Ідентифікатор Account/User — **UUID v4**, тип колонки `uuid`.
-- Генерує PostgreSQL через `gen_random_uuid()` під час `INSERT`. Адаптер отримує значення через `RETURNING id`.
-- Текстове подання — канонічний рядок UUID у нижньому регістрі. Воно використовується в API ([API Conventions §7](api-conventions.md#формат-json)) і в значеннях Redis (`user_id`, ключ `user_sessions:<user_id>`).
-- Domain і Application працюють із непрозорим типом `AccountID`. Його Go-подання визначає Technical Design.
-- Нова UUID-бібліотека не вводиться без потреби.
-- UUID v7 не використовується.
-- Рішення не поширюється автоматично на сутності майбутніх модулів.
-- `sid` і `jti` — окремі значення за Security Conventions ([розділ 9](#подання-значень-сесії)).
+- The Account/User identifier is a **UUID v4**, column type `uuid`.
+- It is generated by PostgreSQL via `gen_random_uuid()` during `INSERT`. The adapter obtains the value via `RETURNING id`.
+- The text representation is the canonical lowercase UUID string. It is used in the API ([API Conventions §7](api-conventions.md#json-format)) and in Redis values (`user_id`, the key `user_sessions:<user_id>`).
+- Domain and Application work with the opaque type `AccountID`. Its Go representation is defined by Technical Design.
+- A new UUID library is not introduced without need.
+- UUID v7 is not used.
+- The decision does not automatically extend to the entities of future modules.
+- `sid` and `jti` are separate values according to the Security Conventions ([section 9](#session-value-representation)).
 
-### Час
+### Time
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-**Зберігання:**
+**Storage:**
 
-- Моменти часу — `timestamptz`. `timestamp` без часової зони не використовується.
-- Для календарних дат, які не є моментом часу, допускається `date`.
-- Application працює з часом у UTC. Сесії підключень мають `TimeZone=UTC`.
-- PostgreSQL зберігає мікросекунди. Якщо момент записується, а потім порівнюється, його точність нормалізується до мікросекунд до запису.
+- Points in time — `timestamptz`. `timestamp` without a time zone is not used.
+- For calendar dates that are not points in time, `date` is allowed.
+- Application works with time in UTC. Connection sessions have `TimeZone=UTC`.
+- PostgreSQL stores microseconds. If a point in time is written and then compared, its precision is normalized to microseconds before writing.
 
-**Джерело часу — контрольований гібрид:**
+**Time source — a controlled hybrid:**
 
-1. Бізнесові та security-sensitive моменти, зокрема строки дії JWT і сесій, задає Application через контрольоване джерело часу.
-2. Значення, які мають бути узгодженими між JWT, PostgreSQL і Redis, беруться з одного обчисленого моменту, а не генеруються незалежно в кожному адаптері.
-3. Для технічних timestamps, які не беруть участі в міжкомпонентних порівняннях для бізнесу чи безпеки, допускається `DEFAULT now()`. `now()` у PostgreSQL повертає час **початку транзакції**, а не момент запису.
-4. Загального правила «кожну колонку часу встановлює Application» немає.
-5. Окремий порт годинника для кожного модуля не створюється без потреби. Мінімальний контракт джерела часу визначається там, де він реально потрібен.
+1. Business and security-sensitive points in time, in particular the expiration times of JWTs and sessions, are set by Application through a controlled time source.
+2. Values that must be consistent between JWT, PostgreSQL and Redis are taken from one computed point in time, not generated independently in each adapter.
+3. For technical timestamps that do not take part in cross-component comparisons for business or security, `DEFAULT now()` is allowed. `now()` in PostgreSQL returns the time of the **start of the transaction**, not the moment of writing.
+4. There is no general rule "every time column is set by Application".
+5. A separate clock port for each module is not created without need. The minimum contract of the time source is defined where it is actually needed.
 
-Час у Redis-сесіях — [розділ 9](#подання-значень-сесії).
+Time in Redis sessions — [section 9](#session-value-representation).
 
-## 7. Міграції
+## 7. Migrations
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-### Запуск
+### Execution
 
-- Міграції виконує CLI golang-migrate окремим кроком перед стартом застосунку.
-- Застосунок міграцій не запускає.
-- Спосіб інтеграції CLI визначає Infrastructure Bootstrap.
+- Migrations are executed by the golang-migrate CLI as a separate step before the application starts.
+- The application does not run migrations.
+- The way the CLI is integrated is defined by Infrastructure Bootstrap.
 
-### Файли
+### Files
 
-- Одна директорія `migrations/`, одна послідовність ([Package Map §8](package-map.md#міграції)).
-- Нумерація послідовна, 6 цифр. У назві вказується модуль-власник (наприклад, `000001_account_create_users.up.sql`).
-- Міграцію, яку вже застосовано або злито в основну гілку, не редагують. Виправлення робиться новою міграцією.
-- Міграції не містять секретів.
-- Міграції не створюють облікових записів адміністраторів, поки не закрито P6 Administrator Provisioning ([Epic Map](../product/epic-map.md#open-product-dependencies)).
+- One `migrations/` directory, one sequence ([Package Map §8](package-map.md#migrations)).
+- Sequential numbering, 6 digits. The name states the owner module (for example, `000001_account_create_users.up.sql`).
+- A migration that has already been applied or merged into the main branch is not edited. A correction is made with a new migration.
+- Migrations do not contain secrets.
+- Migrations do not create administrator accounts until P6 Administrator Provisioning is closed ([Epic Map](../product/epic-map.md#open-product-dependencies)).
 
-### Транзакційність
+### Transactionality
 
-- Міграції транзакційні там, де PostgreSQL це дозволяє.
-- Не кожна міграція атомарна. `CREATE INDEX CONCURRENTLY` та інші операції, які не можна виконати в транзакції, допускаються як явно задокументовані винятки. Для них враховуються можливість часткового результату й потреба ручного відновлення.
-- Як драйвер golang-migrate виконує SQL-файл і чи обгортає його в транзакцію, перевіряється для конкретного драйвера в Technical Design першої міграції.
+- Migrations are transactional where PostgreSQL allows it.
+- Not every migration is atomic. `CREATE INDEX CONCURRENTLY` and other operations that cannot be performed in a transaction are allowed as explicitly documented exceptions. For them, the possibility of a partial result and the need for manual recovery are taken into account.
+- How the golang-migrate driver executes an SQL file and whether it wraps it in a transaction is checked for the specific driver in the Technical Design of the first migration.
 
 ### Down
 
-- Для зворотної міграції створюється коректний `down`.
-- Фіктивний `down`, який мовчки імітує відкат, заборонено.
-- `RAISE EXCEPTION` не є універсальним способом обробки незворотного `down`, бо залишає БД у стані dirty.
-- У спільних середовищах `down` не запускається автоматично. Rollback-політику визначає Deployment.
+- For a reversible migration, a correct `down` is created.
+- A fake `down` that silently imitates a rollback is prohibited.
+- `RAISE EXCEPTION` is not a universal way to handle an irreversible `down`, because it leaves the DB in the dirty state.
+- In shared environments, `down` is not run automatically. The rollback policy is defined by Deployment.
 
-### Незворотні міграції
+### Irreversible Migrations
 
-- У MVP незворотна міграція допускається **лише за окремим погодженням**.
-- Якщо її погоджено:
-  - Technical Design явно описує незворотність і причини;
-  - файл міграції позначається зрозумілим коментарем-маркером;
-  - автоматичний `down` через таку міграцію не підтримується;
-  - локально стан відновлюють перестворенням БД і застосуванням `up` з нуля;
-  - rollback у спільних середовищах визначає окреме рішення Deployment.
-- **Відсутність файлу `down` — не захист.** golang-migrate може трактувати відсутній `down` як порожню міграцію: версія зміниться, а схема — ні. До першої погодженої незворотної міграції треба визначити спосіб, який не дає випадково виконати `down` через неї (наприклад, перевірку в скрипті запуску міграцій).
-- Expand/contract рекомендований для складних змін, але не обов'язковий для кожної міграції.
+- In the MVP, an irreversible migration is allowed **only by separate approval**.
+- If it is approved:
+  - Technical Design explicitly describes the irreversibility and its reasons;
+  - the migration file is marked with a clear marker comment;
+  - an automatic `down` through such a migration is not supported;
+  - locally, the state is restored by recreating the DB and applying `up` from scratch;
+  - rollback in shared environments is defined by a separate Deployment decision.
+- **The absence of a `down` file is not a protection.** golang-migrate may treat a missing `down` as an empty migration: the version will change, but the schema will not. Before the first approved irreversible migration, a way must be defined that prevents accidentally running `down` through it (for example, a check in the migration run script).
+- Expand/contract is recommended for complex changes, but is not mandatory for every migration.
 
-### Dirty state
+### Dirty State
 
-- Автоматичного `force` немає.
-- Стан dirty усувається лише після перевірки фактичного стану схеми.
-- `force` не є механізмом rollback.
+- There is no automatic `force`.
+- The dirty state is resolved only after checking the actual state of the schema.
+- `force` is not a rollback mechanism.
 
-## 8. Помилки PostgreSQL і unknown outcome
+## 8. PostgreSQL Errors and Unknown Outcome
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-### Принципи
+### Principles
 
-- PostgreSQL-адаптер модуля перекладає помилки pgx у помилки Application за семантичними категоріями ([Architecture §7](architecture.md#обробка-помилок), [AR-008](architecture.md#8-архітектурні-інваріанти)). HTTP-коди категорій визначає [API Conventions §8](api-conventions.md#категорії-помилок-і-http-коди).
-- Класифікація живе в адаптері модуля. `platform/postgres` не розширюється, універсальна бібліотека перекладу не створюється.
-- Бізнесові порушення перекладаються за **назвою constraint**, а не за текстом повідомлення.
-- У логи потрапляють лише SQLSTATE і назва constraint. Значення полів, SQL і облікові дані не логуються ([Security Conventions §9](security-conventions.md#9-security-logging)).
+- The module's PostgreSQL adapter translates pgx errors into Application errors by semantic category ([Architecture §7](architecture.md#error-handling), [AR-008](architecture.md#8-architectural-invariants)). The HTTP codes of the categories are defined by [API Conventions §8](api-conventions.md#error-categories-and-http-codes).
+- The classification lives in the module's adapter. `platform/postgres` is not extended, and no universal translation library is created.
+- Business violations are translated by **constraint name**, not by message text.
+- Only the SQLSTATE and the constraint name get into logs. Field values, SQL and credentials are not logged ([Security Conventions §9](security-conventions.md#9-security-logging)).
 
-### Класифікація SQLSTATE
+### SQLSTATE Classification
 
-| Помилка | Категорія Application |
+| Error | Application category |
 |---|---|
-| `23505` unique_violation, відомий constraint, контракт визначає бізнесову помилку | Погоджена бізнесова помилка (наприклад, «конфлікт») |
-| `23505`, невідомий constraint або без погодженого перекладу | Внутрішня |
-| `23503`, `23502`, `23514`, відомий constraint, Story явно визначила семантичну помилку | Відповідна помилка Application |
-| `23503`, `23502`, `23514` без погодженого перекладу | Внутрішня |
-| Клас `22` (data exception) без погодженого бізнесового перекладу | Внутрішня |
-| `pgx.ErrNoRows` | За контрактом методу: «не знайдено» або порожній результат |
-| `55P03` lock_not_available (спрацював `lock_timeout`) | Тимчасово недоступно |
-| `40P01` deadlock_detected | Тимчасово недоступно |
-| `40001` serialization_failure | Тимчасово недоступно |
-| Клас `08` (помилки з'єднання) | Тимчасово недоступно |
-| Клас `53` (нестача ресурсів) | Тимчасово недоступно |
-| `57P01` admin_shutdown | Тимчасово недоступно |
-| Timeout очікування підключення з пулу, timeout залежності | Тимчасово недоступно |
-| `57014` query_canceled | За причиною: `statement_timeout` або deadline операції → тимчасово недоступно. Якщо запит скасовано через розрив з'єднання клієнтом, HTTP-відповідь може бути неможливо сформувати ([API Conventions §8](api-conventions.md#збої-залежностей-і-невідомий-результат)). Під час `COMMIT` — [unknown outcome](#unknown-outcome-commit) |
+| `23505` unique_violation, a known constraint, the contract defines a business error | An approved business error (for example, "conflict") |
+| `23505`, an unknown constraint or without an approved translation | Internal |
+| `23503`, `23502`, `23514`, a known constraint, the Story explicitly defined a semantic error | The corresponding Application error |
+| `23503`, `23502`, `23514` without an approved translation | Internal |
+| Class `22` (data exception) without an approved business translation | Internal |
+| `pgx.ErrNoRows` | According to the method contract: "not found" or an empty result |
+| `55P03` lock_not_available (`lock_timeout` fired) | Temporarily unavailable |
+| `40P01` deadlock_detected | Temporarily unavailable |
+| `40001` serialization_failure | Temporarily unavailable |
+| Class `08` (connection errors) | Temporarily unavailable |
+| Class `53` (insufficient resources) | Temporarily unavailable |
+| `57P01` admin_shutdown | Temporarily unavailable |
+| Timeout waiting for a connection from the pool, dependency timeout | Temporarily unavailable |
+| `57014` query_canceled | By cause: `statement_timeout` or the operation deadline → temporarily unavailable. If the query was canceled because the client broke the connection, it may be impossible to produce an HTTP response ([API Conventions §8](api-conventions.md#dependency-failures-and-unknown-outcome)). During `COMMIT` — [unknown outcome](#unknown-outcome-commit) |
 | `40003` statement_completion_unknown | Unknown outcome |
-| Будь-яка інша помилка, невідомий SQLSTATE | Внутрішня |
+| Any other error, an unknown SQLSTATE | Internal |
 
-- Жодна категорія «тимчасово недоступно» не спричиняє автоматичного повтору ([API Conventions §4](api-conventions.md#4-http-методи-та-ідемпотентність)).
-- **Deadline або cancellation `ctx` до початку `COMMIT`:**
-  - Transactor не ініціює `COMMIT` і ініціює rollback та cleanup ([розділ 4](#порт-і-власник-транзакції));
-  - успішність rollback за інфраструктурного збою не гарантується ([розділ 4](#cleanup-rollback-і-результат));
-  - оскільки `COMMIT` не виконувався, незавершені зміни PostgreSQL не мають бути зафіксовані;
-  - ситуація зазвичай класифікується як «тимчасово недоступно»;
-  - окремі побічні ефекти Redis rollback PostgreSQL не відкочує.
-- Невідомий результат самого `COMMIT` обробляється за правилами [unknown outcome](#unknown-outcome-commit).
+- No "temporarily unavailable" category causes an automatic retry ([API Conventions §4](api-conventions.md#4-http-methods-and-idempotency)).
+- **Deadline or cancellation of `ctx` before `COMMIT` starts:**
+  - the Transactor does not initiate `COMMIT` and initiates rollback and cleanup ([section 4](#transaction-port-and-owner));
+  - rollback success under an infrastructure failure is not guaranteed ([section 4](#cleanup-rollback-and-outcome));
+  - since `COMMIT` was not performed, uncommitted PostgreSQL changes must not be committed;
+  - the situation is usually classified as "temporarily unavailable";
+  - a PostgreSQL rollback does not roll back separate Redis side effects.
+- An unknown outcome of `COMMIT` itself is handled according to the [unknown outcome](#unknown-outcome-commit) rules.
 
 ### Unknown outcome COMMIT
 
-| Ситуація | Результат PostgreSQL |
+| Situation | PostgreSQL outcome |
 |---|---|
-| PostgreSQL підтвердив `COMMIT` | Зміни зафіксовано |
-| PostgreSQL достовірно відхилив транзакцію або підтвердив rollback | Зміни не зафіксовано, результат відомий |
-| Мережеве переривання, втрата відповіді, timeout, скасування `ctx` під час `COMMIT`, `40003` або інший випадок, коли результат достовірно не встановлено | **Unknown outcome** |
-| Помилка до `COMMIT` | Транзакцію треба відкотити ([розділ 4](#cleanup-rollback-і-результат)). Це не гарантує відсутності ефектів у Redis |
+| PostgreSQL confirmed `COMMIT` | The changes are committed |
+| PostgreSQL reliably rejected the transaction or confirmed rollback | The changes are not committed, the outcome is known |
+| A network interruption, a lost response, a timeout, cancellation of `ctx` during `COMMIT`, `40003` or another case where the outcome has not been reliably established | **Unknown outcome** |
+| An error before `COMMIT` | The transaction must be rolled back ([section 4](#cleanup-rollback-and-outcome)). This does not guarantee the absence of effects in Redis |
 
-- Наявність SQLSTATE у відповіді на `COMMIT` **не є автоматичним доказом rollback**. Результат вважається відомим, лише якщо його достовірно встановлено.
-- Результат PostgreSQL і побічні ефекти Redis розглядаються окремо. Команда Redis могла виконатися, навіть якщо її відповідь загубилася або стався timeout. Rollback PostgreSQL Redis не відкочує.
+- The presence of an SQLSTATE in the response to `COMMIT` is **not automatic proof of rollback**. The outcome is considered known only if it has been reliably established.
+- The PostgreSQL outcome and Redis side effects are considered separately. A Redis command may have executed even if its response was lost or a timeout occurred. A PostgreSQL rollback does not roll back Redis.
 
-Поведінка use cases при unknown outcome (без змін):
+Behavior of use cases on unknown outcome (unchanged):
 
-| Use case | Поведінка |
+| Use case | Behavior |
 |---|---|
-| BlockUser | Результат «unknown» → `500 outcome_unknown` ([Security Conventions §10](security-conventions.md#postgresql), [API Conventions §8](api-conventions.md#збої-залежностей-і-невідомий-результат)) |
-| Login, refresh | Токени не видаються, створена чи оновлена сесія видаляється best-effort ([AR-011](architecture.md#8-архітектурні-інваріанти), [Architecture §7](architecture.md#операції-зі-станом-доступу)) |
+| BlockUser | Outcome "unknown" → `500 outcome_unknown` ([Security Conventions §10](security-conventions.md#postgresql), [API Conventions §8](api-conventions.md#dependency-failures-and-unknown-outcome)) |
+| Login, refresh | Tokens are not issued, the created or updated session is deleted best-effort ([AR-011](architecture.md#8-architectural-invariants), [Architecture §7](architecture.md#access-state-operations)) |
 
-Автоматичних повторів операцій із невідомим результатом немає ([розділ 10](#повтори-та-ідемпотентність)).
+There are no automatic retries of operations with an unknown outcome ([section 10](#retries-and-idempotency)).
 
 ## 9. Redis
 
-### Клієнт
+### Client
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Клієнт — `github.com/redis/go-redis/v9`. Це реалізація позиції «Redis-клієнт» погодженого стеку ([Security Conventions §1](security-conventions.md#1-призначення)).
-- Клієнт створює і закриває `internal/platform/redisclient` ([Package Map §4](package-map.md#4-platform)).
-- Конфігурація:
+- The client is `github.com/redis/go-redis/v9`. It is an implementation of the "Redis client" entry of the approved stack ([Security Conventions §1](security-conventions.md#1-purpose)).
+- The client is created and closed by `internal/platform/redisclient` ([Package Map §4](package-map.md#4-platform)).
+- Configuration:
 
-| Параметр | Значення |
+| Parameter | Value |
 |---|---|
-| `MaxRetries` | **`-1`**. Автоматичні повтори команд вимкнено. `0` повторів не вимикає (означає типову кількість повторів) і для цього не використовується |
-| `DialTimeout`, `ReadTimeout`, `WriteTimeout`, `PoolTimeout` | Скінченні, з конфігурації ([розділ 5](#модель-timeout-ів)) |
+| `MaxRetries` | **`-1`**. Automatic command retries are disabled. `0` does not disable retries (it means the default number of retries) and is not used for this |
+| `DialTimeout`, `ReadTimeout`, `WriteTimeout`, `PoolTimeout` | Finite, from the configuration ([section 5](#timeout-model)) |
 | `ContextTimeoutEnabled` | `true` |
-| Логічна БД | `0`. Модулі розділяються іменами ключів, а не номерами БД |
+| Logical DB | `0`. Modules are separated by key names, not by DB numbers |
 
-- На типові налаштування повторів бібліотеки не покладаються.
-- Значення timeout-ів визначає Infrastructure Bootstrap, а TLS — Deployment-конвенції. Облікові дані беруться з конфігурації ([Security Conventions §8](security-conventions.md#8-секрети)).
-- **Старт.** Застосунок виконує `PING` з timeout-ом. Якщо Redis недоступний, застосунок не стартує (fail fast).
+- The library's default retry settings are not relied on.
+- Timeout values are defined by Infrastructure Bootstrap, and TLS by the Deployment conventions. Credentials are taken from the configuration ([Security Conventions §8](security-conventions.md#8-secrets)).
+- **Startup.** The application performs `PING` with a timeout. If Redis is unavailable, the application does not start (fail fast).
 
-**Обґрунтування:** автоматичний повтор команди з невідомим результатом приховує unknown outcome від use case. Наприклад, повтор compare-and-set може побачити вже змінений `refresh_jti`, і тоді наступний легітимний refresh виглядатиме як reuse.
+**Rationale:** an automatic retry of a command with an unknown outcome hides the unknown outcome from the use case. For example, a compare-and-set retry may see an already changed `refresh_jti`, and then the next legitimate refresh will look like reuse.
 
-### Імена ключів
+### Key Names
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Ключі з Security Conventions не змінюються: `session:<sid>`, `user_sessions:<user_id>` ([Security Conventions §4](security-conventions.md#структура)).
-- Нові ключі мають форму `<entity>:<id>`. Складні назви — `snake_case`, розділювач — `:`.
-- Назви entity унікальні в межах системи, а власник ключа однозначний. Модуль не звертається до ключів іншого модуля, за аналогією з AR-004.
-- Модульний префікс до наявних ключів заднім числом не додається.
-- Імена ключів не містять секретів і персональних даних у відкритому вигляді.
+- The keys from the Security Conventions do not change: `session:<sid>`, `user_sessions:<user_id>` ([Security Conventions §4](security-conventions.md#structure)).
+- New keys have the form `<entity>:<id>`. Compound names — `snake_case`, the separator — `:`.
+- Entity names are unique within the system, and the key owner is unambiguous. A module does not access another module's keys, by analogy with AR-004.
+- A module prefix is not added retroactively to existing keys.
+- Key names do not contain secrets and personal data in plain form.
 
 ### TTL
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- За замовчуванням кожен ключ має TTL.
-- Ключ без TTL допускається лише як явно погоджений виняток. Поточний виняток — `user_sessions:<user_id>` ([Security Conventions §4](security-conventions.md#очищення-індексу)).
-- Ключ і його TTL встановлюються атомарно, а не двома незалежними командами.
+- By default, every key has a TTL.
+- A key without a TTL is allowed only as an explicitly approved exception. The current exception is `user_sessions:<user_id>` ([Security Conventions §4](security-conventions.md#index-cleanup)).
+- A key and its TTL are set atomically, not with two independent commands.
 
-### Сесії
+### Sessions
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Правила реалізації моделі з [Security Conventions §4](security-conventions.md#4-сесії-в-redis-і-відкликання):
+Implementation rules for the model from [Security Conventions §4](security-conventions.md#4-sessions-in-redis-and-revocation):
 
-- **Index-first обов'язковий.** `ZADD` в `user_sessions:<user_id>` виконується і підтверджується до створення `session:<sid>` ([Security Conventions §4](security-conventions.md#створення-сесії-index-first)).
-- Hash `session:<sid>` і його TTL створюються **атомарно**. Ця атомарність стосується лише Redis і не означає спільної транзакції з PostgreSQL.
-- `expires_at` — єдиний погоджений момент завершення сесії. TTL встановлюється абсолютним `EXPIREAT` зі значенням `expires_at` в Unix-секундах.
-- `expires_at` має бути валідним майбутнім моментом.
-- Точність і округлення `expires_at` однакові в `exp` JWT, полі hash, score в ZSET і TTL ([Security Conventions §3](security-conventions.md#3-jwt)).
-- Правила compare-and-set, відкликання, очищення індексу та fail-closed поведінка не змінюються ([Security Conventions §4](security-conventions.md#зміна-наявної-сесії-compare-and-set), [§10](security-conventions.md#redis)).
+- **Index-first is mandatory.** `ZADD` into `user_sessions:<user_id>` is performed and confirmed before `session:<sid>` is created ([Security Conventions §4](security-conventions.md#session-creation-index-first)).
+- The hash `session:<sid>` and its TTL are created **atomically**. This atomicity applies only to Redis and does not mean a shared transaction with PostgreSQL.
+- `expires_at` is the single approved moment of session end. The TTL is set with an absolute `EXPIREAT` with the `expires_at` value in Unix seconds.
+- `expires_at` must be a valid future moment.
+- The precision and rounding of `expires_at` are the same in the JWT `exp`, the hash field, the ZSET score and the TTL ([Security Conventions §3](security-conventions.md#3-jwt)).
+- The rules of compare-and-set, revocation, index cleanup and fail-closed behavior do not change ([Security Conventions §4](security-conventions.md#changing-an-existing-session-compare-and-set), [§10](security-conventions.md#redis)).
 
-### Атомарні операції
+### Atomic Operations
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Дозволено обидва механізми з [Security Conventions §4](security-conventions.md#зміна-наявної-сесії-compare-and-set): Lua-скрипти і `WATCH` / `MULTI` / `EXEC`.
-- Для складних умовних і multi-key змін стану сесій перевага за Lua, якщо це спрощує коректність і реалізацію.
-- Конкретний механізм compare-and-set для кожної security-sensitive операції визначає її Technical Design за Security Conventions.
-- **Результат `EXEC`:**
+- Both mechanisms from [Security Conventions §4](security-conventions.md#changing-an-existing-session-compare-and-set) are allowed: Lua scripts and `WATCH` / `MULTI` / `EXEC`.
+- For complex conditional and multi-key changes of session state, Lua is preferred if it simplifies correctness and implementation.
+- The specific compare-and-set mechanism for each security-sensitive operation is defined by its Technical Design according to the Security Conventions.
+- **The result of `EXEC`:**
 
-| Ситуація | Результат |
+| Situation | Result |
 |---|---|
-| `EXEC` підтверджено виконано | Команди виконано |
-| `EXEC` підтверджено скасовано через зміну watched key | Операція не виконалася. Це конфлікт, а не unknown outcome |
-| Відповідь `EXEC` загублена, timeout | Результат невідомий. Автоматичний повтор заборонено |
+| `EXEC` confirmed executed | The commands were executed |
+| `EXEC` confirmed canceled due to a change of a watched key | The operation was not executed. This is a conflict, not an unknown outcome |
+| The `EXEC` response is lost, timeout | The outcome is unknown. Automatic retry is prohibited |
 
-- Timeout або втрачена відповідь на будь-яку команду чи скрипт Redis — невідомий результат. Для операцій зі станом доступу це помилка Redis і rollback за AR-011 ([Security Conventions §10](security-conventions.md#redis)).
-- Універсальний фреймворк транзакцій Redis не створюється.
+- A timeout or a lost response to any Redis command or script is an unknown outcome. For access-state operations, this is a Redis error and a rollback according to AR-011 ([Security Conventions §10](security-conventions.md#redis)).
+- A universal Redis transaction framework is not created.
 
-### Lua-скрипти
+### Lua Scripts
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Скрипти операцій модуля лежать поруч із відповідним Redis-адаптером (`adapters/outbound/redisstore`).
-- Ключі передаються через `KEYS`, параметри — через `ARGV`.
-- Моменти часу передає Application з погодженого джерела часу ([розділ 6](#час)). `TIME` Redis не використовується як альтернативне джерело часу для бізнесових і security-sensitive рішень.
-- Runtime-помилка Lua-скрипта після частини записів **не відкочує** попередні команди скрипта. Тому передумови й очікувані типи даних перевіряються до виконання змін, наскільки це можливо.
-- Окремий фреймворк для Lua не створюється.
+- The scripts of the module's operations lie next to the corresponding Redis adapter (`adapters/outbound/redisstore`).
+- Keys are passed through `KEYS`, parameters through `ARGV`.
+- Points in time are passed by Application from the approved time source ([section 6](#time)). Redis `TIME` is not used as an alternative time source for business and security-sensitive decisions.
+- A runtime error of a Lua script after some writes **does not roll back** the script's previous commands. Therefore, preconditions and expected data types are checked before changes are made, as far as possible.
+- A separate framework for Lua is not created.
 
-### Заборонені прийоми
+### Prohibited Techniques
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- `KEYS` і `SCAN` не використовуються для пошуку сесій і для забезпечення коректності бізнесових чи security-sensitive операцій. Сесії користувача шукаються лише через індекс `user_sessions:<user_id>`.
-- Застосунок не виконує `FLUSHDB` і `FLUSHALL`.
-- `SCAN` для окремо погоджених diagnostic- чи maintenance-інструментів абсолютно не заборонено.
+- `KEYS` and `SCAN` are not used to search for sessions or to ensure the correctness of business or security-sensitive operations. A user's sessions are found only through the `user_sessions:<user_id>` index.
+- The application does not perform `FLUSHDB` and `FLUSHALL`.
+- `SCAN` is not absolutely prohibited for separately approved diagnostic or maintenance tools.
 
-### Подання значень сесії
+### Session Value Representation
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Значення | Подання |
+| Value | Representation |
 |---|---|
-| `sid`, `jti` | Канонічний hex у нижньому регістрі. Щонайменше 128 біт із `crypto/rand`; для 128 біт — 32 символи. `sid` і `jti` — окремі незалежні значення |
-| `user_id` | Канонічний UUID у нижньому регістрі ([розділ 6](#ідентифікатори)) |
-| `role` | `user` або `admin` |
-| `created_at`, `expires_at`, score у `user_sessions` | Unix-час у секундах, ціле число |
+| `sid`, `jti` | Canonical lowercase hex. At least 128 bits from `crypto/rand`; for 128 bits — 32 characters. `sid` and `jti` are separate independent values |
+| `user_id` | Canonical lowercase UUID ([section 6](#identifiers)) |
+| `role` | `user` or `admin` |
+| `created_at`, `expires_at`, the score in `user_sessions` | Unix time in seconds, an integer |
 
-- Подання `sid` і `jti` однакове в claims JWT, ключах, member ZSET, полях hash і під час обчислення відбитка `sid` для логів ([Security Conventions §9](security-conventions.md#9-security-logging)).
-- Секретні значення не логуються у відкритому вигляді.
-- Unix-секунди — формат сесійних даних, а не універсальний формат для майбутніх Redis-модулів.
+- The representation of `sid` and `jti` is the same in JWT claims, keys, ZSET members, hash fields and when computing the `sid` fingerprint for logs ([Security Conventions §9](security-conventions.md#9-security-logging)).
+- Secret values are not logged in plain form.
+- Unix seconds are the format of session data, not a universal format for future Redis modules.
 
-## 10. Узгодженість PostgreSQL ↔ Redis
+## 10. PostgreSQL ↔ Redis Consistency
 
 ### Consistency Analysis
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Кожен use case, який змінює і PostgreSQL, і Redis, має в Technical Design явний **Consistency Analysis**:
+Every use case that changes both PostgreSQL and Redis has an explicit **Consistency Analysis** in its Technical Design:
 
-| Пункт | Що визначити |
+| Item | What to define |
 |---|---|
-| Порядок операцій | Послідовність змін у PostgreSQL і Redis відносно `COMMIT` |
-| Тимчасові розбіжності | Які стани розбіжності між сховищами допустимі |
-| Інваріанти | Бізнесові та security-інваріанти, які мають зберігатися |
-| Помилки | Поведінка при помилці та unknown outcome **кожного** сховища ([розділ 8](#unknown-outcome-commit), [розділ 9](#атомарні-операції)) |
-| Cleanup / reconciliation | Чи потрібні і як виконуються |
-| Транзакції й серіалізація | Чи потрібна транзакція PostgreSQL і серіалізація по користувачу |
+| Order of operations | The sequence of changes in PostgreSQL and Redis relative to `COMMIT` |
+| Temporary discrepancies | Which states of discrepancy between the stores are acceptable |
+| Invariants | Business and security invariants that must be preserved |
+| Errors | Behavior on error and unknown outcome of **each** store ([section 8](#unknown-outcome-commit), [section 9](#atomic-operations)) |
+| Cleanup / reconciliation | Whether they are needed and how they are performed |
+| Transactions and serialization | Whether a PostgreSQL transaction and per-user serialization are needed |
 
-- Для Login, Refresh і Block застосовується погоджена схема [AR-011](architecture.md#8-архітектурні-інваріанти) ([Architecture §7](architecture.md#операції-зі-станом-доступу)).
-- AR-011 не поширюється автоматично на всі майбутні use cases з PostgreSQL і Redis.
-- Новий use case, що змінює стан доступу, зберігає погоджені security-інваріанти. Чи застосовувати або розширювати схему серіалізації, вирішується окремим погодженням. Механізм ChangePassword (US-005) тут не визначається.
-- Принцип «зсув у бік суворішого» (fail toward stricter) стосується security-sensitive стану. Для інших бізнес-доменів допустиму розбіжність визначають відповідні бізнесові вимоги.
-- Outbox, розподілені транзакції, розподілені блокування та інші механізми не вводяться без окремого архітектурного рішення.
+- For Login, Refresh and Block, the approved [AR-011](architecture.md#8-architectural-invariants) scheme applies ([Architecture §7](architecture.md#access-state-operations)).
+- AR-011 does not automatically extend to all future use cases with PostgreSQL and Redis.
+- A new use case that changes the access state preserves the approved security invariants. Whether to apply or extend the serialization scheme is decided by separate approval. The ChangePassword mechanism (US-005) is not defined here.
+- The "fail toward stricter" principle applies to security-sensitive state. For other business domains, the acceptable discrepancy is defined by the corresponding business requirements.
+- Outbox, distributed transactions, distributed locks and other mechanisms are not introduced without a separate architectural decision.
 
-### Повтори та ідемпотентність
+### Retries and Idempotency
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Redis-клієнт не повторює команд автоматично ([розділ 9](#клієнт)).
-- Для pgx не додаються автоматичні повтори PostgreSQL-операцій із невідомим результатом.
-- Application не повторює автоматично операції зі станом доступу і state-changing операції з невідомим результатом ([Security Conventions §10](security-conventions.md#postgresql), [API Conventions §4](api-conventions.md#4-http-методи-та-ідемпотентність)).
-- Політику повторів read-only операцій відкладено.
-- Ідемпотентність Block / Unblock визначає Clarification US-006/007.
+- The Redis client does not retry commands automatically ([section 9](#client)).
+- No automatic retries of PostgreSQL operations with an unknown outcome are added for pgx.
+- Application does not automatically retry access-state operations and state-changing operations with an unknown outcome ([Security Conventions §10](security-conventions.md#postgresql), [API Conventions §4](api-conventions.md#4-http-methods-and-idempotency)).
+- The retry policy for read-only operations is deferred.
+- The idempotency of Block / Unblock is defined by Clarification of US-006/007.
 
-## 11. Тестування persistence
+## 11. Persistence Testing
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Інфраструктуру тестування, бібліотеки й tooling визначає Testing Strategy. Розміщення тестів — [Package Map §8](package-map.md#інтеграційні-тести-адаптерів).
+Testing infrastructure, libraries and tooling are defined by the Testing Strategy. Test placement — [Package Map §8](package-map.md#adapter-integration-tests).
 
-### Загальні правила
+### General Rules
 
-- Кожен сценарій стає обов'язковим тоді, коли реалізується відповідний механізм, а не для всіх Stories одразу.
-- Транзакції, блокування рядків і атомарні операції Redis перевіряються **інтеграційними тестами зі справжніми PostgreSQL і Redis**.
-- Конкурентні сценарії AR-011 перевіряють реальну взаємодію PostgreSQL і Redis, а не лише Application з тестовими дублями.
-- Конкурентні тести детерміновані й мають явні точки синхронізації (наприклад, тест сам відкриває транзакцію і тримає `FOR UPDATE`, а потім запускає конкурентну операцію). `time.Sleep` не використовується, щоб спровокувати гонку.
-- Обидва порядки конкурентного виконання перевіряються там, де це важливо для інваріанта BR-007.
+- Each scenario becomes mandatory when the corresponding mechanism is implemented, not for all Stories at once.
+- Transactions, row locks and atomic Redis operations are checked by **integration tests with real PostgreSQL and Redis**.
+- AR-011 concurrent scenarios check the real interaction of PostgreSQL and Redis, not only Application with test doubles.
+- Concurrent tests are deterministic and have explicit synchronization points (for example, the test itself opens a transaction and holds `FOR UPDATE`, and then starts a concurrent operation). `time.Sleep` is not used to provoke a race.
+- Both orders of concurrent execution are checked where it matters for the BR-007 invariant.
 
-### Обов'язкові сценарії
+### Mandatory Scenarios
 
-| Механізм | Сценарій | Рівень |
+| Mechanism | Scenario | Level |
 |---|---|---|
-| Transactor | Callback повернув `nil` → зміни зафіксовано | Інтеграційний |
-| Transactor | Помилка callback, panic, cancellation → rollback, ресурси звільнено | Інтеграційний |
-| Transactor | Вкладений `WithinTx` → помилка | Інтеграційний |
-| Transactor | Операція, що потребує транзакції, без неї → явна помилка, а не виконання через pool | Інтеграційний |
-| AR-011 | Block і Login одного користувача конкурентно, в обох порядках: після завершення Block немає сесії, яка дає доступ | Інтеграційний (PostgreSQL + Redis) |
-| AR-011 | Block і Refresh одного користувача конкурентно, в обох порядках — те саме | Інтеграційний (PostgreSQL + Redis) |
-| AR-011 | Очікування блокування довше за `lock_timeout` → «тимчасово недоступно», сесію не створено | Інтеграційний |
-| Index-first | `sid` з'являється в індексі до появи `session:<sid>` | Інтеграційний (Redis) |
-| Index-first | Збій між `ZADD` і створенням `session:<sid>`: сесії немає, а запис індексу без сесії нешкідливий | Інтеграційний (Redis) |
-| Сесія | Hash і TTL створюються атомарно; TTL відповідає `expires_at` | Інтеграційний (Redis) |
-| Compare-and-set | Не створює відсутній ключ | Інтеграційний (Redis) |
-| Compare-and-set | Не змінює стан за невідповідності очікуваного `refresh_jti` | Інтеграційний (Redis) |
-| Відкликання | Block видаляє всі сесії з індексу; `ZREM` лише після підтвердженого видалення | Інтеграційний (Redis) |
-| Unknown outcome | Login / Refresh з непідтвердженим `COMMIT` → токенів немає, cleanup викликано | Unit, тестові реалізації портів |
-| Unknown outcome | BlockUser з непідтвердженим `COMMIT` → результат «unknown» | Unit, тестові реалізації портів |
-| Класифікація | SQLSTATE і помилки `COMMIT` класифікуються за [розділом 8](#8-помилки-postgresql-і-unknown-outcome) | Unit-тест адаптера |
-| Constraints | Порушення відомого unique constraint → погоджена бізнесова помилка | Інтеграційний |
-| Час | Момент `timestamptz` після запису й читання дорівнює записаному з точністю до мікросекунд | Інтеграційний |
-| Міграції | `up` з порожньої БД до останньої версії проходить (коли з'являться міграції) | Інтеграційний |
+| Transactor | The callback returned `nil` → the changes are committed | Integration |
+| Transactor | Callback error, panic, cancellation → rollback, resources released | Integration |
+| Transactor | Nested `WithinTx` → error | Integration |
+| Transactor | An operation that requires a transaction, without one → an explicit error, not execution through the pool | Integration |
+| AR-011 | Block and Login of the same user concurrently, in both orders: after Block completes, there is no session that grants access | Integration (PostgreSQL + Redis) |
+| AR-011 | Block and Refresh of the same user concurrently, in both orders — the same | Integration (PostgreSQL + Redis) |
+| AR-011 | Waiting for a lock longer than `lock_timeout` → "temporarily unavailable", no session created | Integration |
+| Index-first | `sid` appears in the index before `session:<sid>` appears | Integration (Redis) |
+| Index-first | A failure between `ZADD` and creating `session:<sid>`: there is no session, and the index entry without a session is harmless | Integration (Redis) |
+| Session | Hash and TTL are created atomically; the TTL corresponds to `expires_at` | Integration (Redis) |
+| Compare-and-set | Does not create a missing key | Integration (Redis) |
+| Compare-and-set | Does not change state when the expected `refresh_jti` does not match | Integration (Redis) |
+| Revocation | Block deletes all sessions from the index; `ZREM` only after a confirmed deletion | Integration (Redis) |
+| Unknown outcome | Login / Refresh with an unconfirmed `COMMIT` → no tokens, cleanup invoked | Unit, test port implementations |
+| Unknown outcome | BlockUser with an unconfirmed `COMMIT` → outcome "unknown" | Unit, test port implementations |
+| Classification | SQLSTATE and `COMMIT` errors are classified according to [section 8](#8-postgresql-errors-and-unknown-outcome) | Adapter unit test |
+| Constraints | Violation of a known unique constraint → an approved business error | Integration |
+| Time | A `timestamptz` moment after writing and reading equals the written one with microsecond precision | Integration |
+| Migrations | `up` from an empty DB to the latest version passes (when migrations appear) | Integration |
 
-Справжні мережеві збої під час `COMMIT` і тести recovery / failover Redis відкладено до Testing Strategy / Deployment Verification.
+Real network failures during `COMMIT` and Redis recovery / failover tests are deferred until Testing Strategy / Deployment Verification.
 
-## 12. Відповідність AR / BR / Security / API
+## 12. Mapping to AR / BR / Security / API
 
-| Джерело | Розділи цього документа |
+| Source | Sections of this document |
 |---|---|
-| [AR-002](architecture.md#8-архітектурні-інваріанти) | 4 (Application не знає pgx), 6 (типи pgx не виходять за межі адаптера) |
-| [AR-004](architecture.md#8-архітектурні-інваріанти) | 6 (власник таблиць, межі модулів), 9 (власник ключів) |
-| [AR-008](architecture.md#8-архітектурні-інваріанти) | 6, 8 (переклад помилок у адаптері) |
-| [AR-010](architecture.md#8-архітектурні-інваріанти) | 4 (Transactor, межу визначає use case) |
-| [AR-011](architecture.md#8-архітектурні-інваріанти) | 5 (`READ COMMITTED` + `FOR UPDATE`, `lock_timeout`), 8 (unknown outcome), 9 (без повторів клієнта), 10, 11 (конкурентні тести). AR-011 не змінюється |
-| [AR-012](architecture.md#8-архітектурні-інваріанти) | 2, 6 (без ORM, query builders, codegen), 9 (go-redis як реалізація стеку) |
-| [BR-003](../product/business-rules.md#br-003--unique-email) | 6 (unique constraint як гарантія; нормалізація email — OPEN) |
+| [AR-002](architecture.md#8-architectural-invariants) | 4 (Application does not know pgx), 6 (pgx types do not go beyond the adapter's boundaries) |
+| [AR-004](architecture.md#8-architectural-invariants) | 6 (table owner, module boundaries), 9 (key owner) |
+| [AR-008](architecture.md#8-architectural-invariants) | 6, 8 (error translation in the adapter) |
+| [AR-010](architecture.md#8-architectural-invariants) | 4 (Transactor, the boundary is defined by the use case) |
+| [AR-011](architecture.md#8-architectural-invariants) | 5 (`READ COMMITTED` + `FOR UPDATE`, `lock_timeout`), 8 (unknown outcome), 9 (no client retries), 10, 11 (concurrent tests). AR-011 does not change |
+| [AR-012](architecture.md#8-architectural-invariants) | 2, 6 (no ORMs, query builders, codegen), 9 (go-redis as an implementation of the stack) |
+| [BR-003](../product/business-rules.md#br-003--unique-email) | 6 (unique constraint as the guarantee; email normalization — OPEN) |
 | [BR-007](../product/business-rules.md#br-007--blocked-user-access) | 2 (production gate), 5, 9, 10, 11 |
-| [Security Conventions §4](security-conventions.md#4-сесії-в-redis-і-відкликання) | 9 (ключі, index-first, атомарне створення, `EXPIREAT`, compare-and-set, заборона `KEYS` / `SCAN`, подання значень) |
-| [Security Conventions §7](security-conventions.md#7-автентифікація-та-авторизація) | 5 (ChangePassword, login — залежності TD) |
-| [Security Conventions §9](security-conventions.md#9-security-logging) | 6 (назви constraints у логах), 8 (що логується), 9 (відбиток `sid`) |
-| [Security Conventions §10](security-conventions.md#10-збої-та-timeout-и) | 5 (timeout-и), 8 (unknown outcome), 10 (без повторів) |
-| [API Conventions §8](api-conventions.md#8-помилки) | 8 (категорії → HTTP-коди) |
-| [API Conventions §15](api-conventions.md#15-відкриті-питання-відкладені-рішення-та-залежності) | 6 (формат ідентифікаторів Account/User), 8 (розпізнавання непідтвердженого `COMMIT`) |
+| [Security Conventions §4](security-conventions.md#4-sessions-in-redis-and-revocation) | 9 (keys, index-first, atomic creation, `EXPIREAT`, compare-and-set, prohibition of `KEYS` / `SCAN`, value representation) |
+| [Security Conventions §7](security-conventions.md#7-authentication-and-authorization) | 5 (ChangePassword, login — TD dependencies) |
+| [Security Conventions §9](security-conventions.md#9-security-logging) | 6 (constraint names in logs), 8 (what is logged), 9 (the `sid` fingerprint) |
+| [Security Conventions §10](security-conventions.md#10-failures-and-timeouts) | 5 (timeouts), 8 (unknown outcome), 10 (no retries) |
+| [API Conventions §8](api-conventions.md#8-errors) | 8 (categories → HTTP codes) |
+| [API Conventions §15](api-conventions.md#15-open-questions-deferred-decisions-and-dependencies) | 6 (Account/User identifier format), 8 (recognizing an unconfirmed `COMMIT`) |
 
-**Закриті відкладені рішення.** Цей документ закриває такі відкладені рішення:
+**Closed deferred decisions.** This document closes the following deferred decisions:
 
-- з [Architecture §9](architecture.md#відкладені-рішення): «Механізм серіалізації по користувачу для операцій зі станом доступу» (тип блокування, рівень ізоляції, модель timeout-ів; значення — Infrastructure Bootstrap); «Версії … PostgreSQL, Redis і спосіб запуску міграцій» (major-версії та спосіб запуску);
-- з [Package Map §9](package-map.md#відкладені-рішення): «Версії PostgreSQL і Redis, спосіб запуску міграцій»;
-- з [Security Conventions §12](security-conventions.md#інфраструктурні-та-архітектурні-залежності): «Механізм серіалізації в PostgreSQL, значення timeout-ів Redis і PostgreSQL» (механізм і модель; значення — Infrastructure Bootstrap);
-- з [API Conventions §15](api-conventions.md#15-відкриті-питання-відкладені-рішення-та-залежності): «Фізичний формат ідентифікаторів» для Account/User і залежності від Persistence-конвенцій.
+- from [Architecture §9](architecture.md#deferred-decisions): "Per-user serialization mechanism for access-state operations" (lock type, isolation level, timeout model; values — Infrastructure Bootstrap); "Go, PostgreSQL, Redis versions and how migrations are run" (major versions and how they are run);
+- from [Package Map §9](package-map.md#deferred-decisions): "PostgreSQL and Redis versions, how migrations are run";
+- from [Security Conventions §12](security-conventions.md#infrastructure-and-architectural-dependencies): "Serialization mechanism in PostgreSQL, Redis and PostgreSQL timeout values" (mechanism and model; values — Infrastructure Bootstrap);
+- from [API Conventions §15](api-conventions.md#15-open-questions-deferred-decisions-and-dependencies): "The physical identifier format" for Account/User and the dependencies on the Persistence conventions.
 
-Відповідні рядки в тих документах позначено як визначені з посиланнями на цей документ. Значення timeout-ів і точні версії там позначено як відкладені до Infrastructure Bootstrap.
+The corresponding rows in those documents are marked as defined with references to this document. Timeout values and exact versions are marked there as deferred until Infrastructure Bootstrap.
 
-## 13. Відкриті питання, відкладені рішення та залежності
+## 13. Open Questions, Deferred Decisions and Dependencies
 
-### Відкриті питання
+### Open Questions
 
-**Статус:** `OPEN`. Без окремого погодження агент їх не вирішує.
+**Status:** `OPEN`. The agent does not resolve them without separate approval.
 
-| Питання | Тип | Що від нього залежить |
+| Question | Type | What depends on it |
 |---|---|---|
-| Регістр і нормалізація email для [BR-003](../product/business-rules.md#br-003--unique-email) | Продуктове, Clarification US-001 | Форма unique constraint, спосіб нормалізації, тип індексу |
-| Серіалізація ChangePassword з login ([Security Conventions §12](security-conventions.md#інфраструктурні-та-архітектурні-залежності)); P2 ([Security Conventions §12](security-conventions.md#продуктові-питання)) | Архітектурне / продуктове, Technical Design US-005 | Інваріант актуальності перевіреного стану під час login |
-| Redis persistence і failover для production ([розділ 2](#production-gate-для-redis)) | Інфраструктурне, Deployment | Production readiness, повнота гарантії BR-007 |
-| Імена ключів і модель лічильників для P3 | Продуктове, разом із P3 | Захист від автоматизованого перебору |
+| Email case and normalization for [BR-003](../product/business-rules.md#br-003--unique-email) | Product, Clarification of US-001 | The form of the unique constraint, the normalization method, the index type |
+| Serialization of ChangePassword with login ([Security Conventions §12](security-conventions.md#infrastructure-and-architectural-dependencies)); P2 ([Security Conventions §12](security-conventions.md#product-questions)) | Architectural / product, Technical Design of US-005 | The invariant of the freshness of the checked state during login |
+| Redis persistence and failover for production ([section 2](#production-gate-for-redis)) | Infrastructure, Deployment | Production readiness, completeness of the BR-007 guarantee |
+| Key names and the counter model for P3 | Product, together with P3 | Protection against automated guessing |
 
-### Відкладені рішення
+### Deferred Decisions
 
-**Статус:** `DEFERRED`. До вказаного моменту агент не спирається на жоден варіант.
+**Status:** `DEFERRED`. Until the stated point, the agent does not rely on any option.
 
-| Рішення | Куди відкладено |
+| Decision | Deferred to |
 |---|---|
-| Значення всіх timeout-ів і параметрів пулів PostgreSQL і Redis | Infrastructure Bootstrap |
-| Minor- і patch-версії, образи PostgreSQL і Redis (рекомендовано розглянути extended release Redis 8.2) | Infrastructure Bootstrap |
-| Інтеграція CLI golang-migrate | Infrastructure Bootstrap |
-| Перевірка `noeviction` | Infrastructure Bootstrap / Deployment Verification |
-| Підтвердження актуальності стану під час login, рехешування, очищення індексу сесій | Technical Design US-002 |
-| Розмежування транзакційних і нетранзакційних repository-операцій, Go-подання `AccountID` | Technical Design |
-| Механізм compare-and-set для кожної security-sensitive операції | Technical Design відповідної Story |
-| Транзакційність виконання SQL-файлів драйвером golang-migrate | Technical Design першої міграції |
-| Захист від `down` через незворотну міграцію | До першої погодженої незворотної міграції |
-| Rollback-політика міграцій у спільних середовищах | Deployment |
-| TLS до PostgreSQL і Redis | Deployment |
+| Values of all timeouts and pool parameters of PostgreSQL and Redis | Infrastructure Bootstrap |
+| Minor and patch versions, images of PostgreSQL and Redis (it is recommended to consider the Redis 8.2 extended release) | Infrastructure Bootstrap |
+| golang-migrate CLI integration | Infrastructure Bootstrap |
+| `noeviction` check | Infrastructure Bootstrap / Deployment Verification |
+| Confirming the freshness of the state during login, rehashing, session index cleanup | Technical Design of US-002 |
+| Distinguishing transactional and non-transactional repository operations, Go representation of `AccountID` | Technical Design |
+| The compare-and-set mechanism for each security-sensitive operation | Technical Design of the corresponding Story |
+| Transactionality of SQL file execution by the golang-migrate driver | Technical Design of the first migration |
+| Protection against `down` through an irreversible migration | Before the first approved irreversible migration |
+| Migration rollback policy in shared environments | Deployment |
+| TLS to PostgreSQL and Redis | Deployment |
 | Liveness / readiness | Deployment |
-| Політика FK між модулями, окремі schemas і roles | Поява другого модуля, окреме архітектурне погодження |
-| `FOR NO KEY UPDATE` | Коли знадобиться оптимізувати блокування |
-| Політика повторів read-only операцій | Окреме рішення |
-| Ідемпотентність Block / Unblock | Clarification US-006/007 |
-| Redis Cluster | Окреме архітектурне review |
-| Формат ідентифікаторів сутностей майбутніх модулів | Відповідний модуль |
-| Тестова інфраструктура, бібліотеки, fault injection на `COMMIT`, тести recovery / failover | Testing Strategy / Deployment Verification |
+| Cross-module FK policy, separate schemas and roles | The appearance of a second module, a separate architectural approval |
+| `FOR NO KEY UPDATE` | When locking needs to be optimized |
+| Retry policy for read-only operations | A separate decision |
+| Idempotency of Block / Unblock | Clarification of US-006/007 |
+| Redis Cluster | A separate architectural review |
+| Identifier format of future modules' entities | The corresponding module |
+| Test infrastructure, libraries, fault injection on `COMMIT`, recovery / failover tests | Testing Strategy / Deployment Verification |
 
-### Залежності від інших етапів
+### Dependencies on Other Stages
 
-| Етап | Що потрібно |
+| Stage | What is needed |
 |---|---|
-| Infrastructure Bootstrap | Значення timeout-ів і пулів, точні версії та образи, інтеграція CLI міграцій, локальне середовище, перевірка `noeviction` |
-| Testing Strategy | Інфраструктура й бібліотеки інтеграційних тестів, fault injection, запуск тестів міграцій |
-| Deployment | Механізм Redis persistence / failover і його перевірка (production gate), TLS, rollback-політика міграцій, liveness / readiness, Deployment Verification `noeviction` |
+| Infrastructure Bootstrap | Timeout and pool values, exact versions and images, migration CLI integration, local environment, `noeviction` check |
+| Testing Strategy | Integration test infrastructure and libraries, fault injection, running migration tests |
+| Deployment | The Redis persistence / failover mechanism and its verification (production gate), TLS, the migration rollback policy, liveness / readiness, Deployment Verification of `noeviction` |

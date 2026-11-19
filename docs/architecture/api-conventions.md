@@ -1,265 +1,265 @@
 # API Conventions — Customer Portal
 
-## 1. Призначення
+## 1. Purpose
 
-Документ визначає сталі правила проєктування HTTP API Customer Portal для всіх User Stories. Агенти застосовують їх під час Clarification, Technical Design, Implementation та Verification.
+This document defines the stable HTTP API design rules of Customer Portal for all User Stories. Agents apply them during Clarification, Technical Design, Implementation and Verification.
 
-Документ деталізує [Architecture](architecture.md), [Package Map](package-map.md) і [Security Conventions](security-conventions.md), але не змінює їх. Конвенції не можуть послабити жодне Architecture Rule (AR) чи правило Security Conventions.
+The document details [Architecture](architecture.md), [Package Map](package-map.md) and [Security Conventions](security-conventions.md), but does not change them. The conventions cannot weaken any Architecture Rule (AR) or Security Conventions rule.
 
-**Що входить:**
+**In scope:**
 
-- найменування ресурсів, URL, версіонування, групи маршрутів;
-- HTTP-методи, ідемпотентність, success-коди;
-- правила розбору запитів і формат JSON;
-- формат помилок, HTTP-коди, каталог загальних кодів помилок;
-- HTTP-рівень автентифікації та CSRF (з посиланнями на Security Conventions);
-- поведінка маршрутизатора, кешування, Request ID;
-- модель timeout-ів і лімітів HTTP-сервера;
-- загальні правила для колекцій;
-- правила ведення OpenAPI.
+- resource naming, URLs, versioning, route groups;
+- HTTP methods, idempotency, success codes;
+- request parsing rules and the JSON format;
+- error format, HTTP codes, catalog of common error codes;
+- the HTTP level of authentication and CSRF (with references to Security Conventions);
+- router behavior, caching, Request ID;
+- the HTTP server timeout and limit model;
+- general rules for collections;
+- OpenAPI maintenance rules.
 
-**Що не входить:**
+**Out of scope:**
 
-- контракти маршрутів конкретних Stories. Їх визначає Technical Design Story за цими конвенціями;
-- правила безпеки: JWT, сесії, cookies, CSRF-механізм, паролі (Security Conventions);
-- значення timeout-ів і лімітів (Infrastructure Bootstrap);
-- механізм серіалізації та timeout-и PostgreSQL і Redis (Persistence-конвенції);
-- клієнтський застосунок і його refresh flow;
-- Go-код.
+- route contracts of specific Stories. They are defined by the Story's Technical Design according to these conventions;
+- security rules: JWT, sessions, cookies, the CSRF mechanism, passwords (Security Conventions);
+- timeout and limit values (Infrastructure Bootstrap);
+- the serialization mechanism and PostgreSQL and Redis timeouts (Persistence conventions);
+- the client application and its refresh flow;
+- Go code.
 
-**Статуси:**
+**Statuses:**
 
-- `APPROVED` — рішення явно погоджено. Агенти й люди можуть на нього спиратися.
-- `OPEN` — питання не вирішено. Функціональність, яка від нього залежить, не реалізується, поки питання не закрито.
-- `DEFERRED` — рішення свідомо відкладено до вказаного моменту. До того часу агент не спирається на жоден варіант.
+- `APPROVED` — the decision is explicitly approved. Agents and people may rely on it.
+- `OPEN` — the question is not resolved. Functionality that depends on it is not implemented until the question is closed.
+- `DEFERRED` — the decision is deliberately deferred until the stated point. Until then, the agent does not rely on any option.
 
-Пункти зі статусом `OPEN` і `DEFERRED` зібрано в [розділі 15](#15-відкриті-питання-відкладені-рішення-та-залежності).
+Items with the `OPEN` and `DEFERRED` statuses are collected in [section 15](#15-open-questions-deferred-decisions-and-dependencies).
 
-**Обов'язковість значень.** Шляхи, назви заголовків, HTTP-коди, коди помилок і media types у цьому документі обов'язкові. Приклади, позначені словом «наприклад», ілюстративні.
+**Mandatory values.** Paths, header names, HTTP codes, error codes and media types in this document are mandatory. Examples marked with the word "for example" are illustrative.
 
-**Зв'язок з іншими документами.** Терміни вживаються у значеннях із [Business Glossary](../product/business-glossary.md). Якщо цей документ суперечить іншим документам, агент має повідомити про суперечність. Автоматично віддавати перевагу одному з документів не можна.
+**Relationship to other documents.** Terms are used in the meanings from the [Business Glossary](../product/business-glossary.md). If this document contradicts other documents, the agent must report the contradiction. The agent must not automatically prefer one of the documents.
 
-Рішення погоджено 2026-11-13.
+Decisions approved on 2026-11-13.
 
-## 2. Загальні принципи та найменування ресурсів
+## 2. General Principles and Resource Naming
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- API ресурсне (REST): шлях називає ресурс, метод — дію.
-- Ресурси називаються іменниками. Колекції — іменники в множині (наприклад, `/users`).
-- Command-style endpoint допускається як виняток для дій із бізнес-значенням, які не зводяться до зміни ресурсу. Форма: `POST /{resource}/{id}/{command}`, де `command` — дієслово в kebab-case.
-- Сегменти шляху у нижньому регістрі. Складні назви — kebab-case.
-- Path-параметри в описі контракту — camelCase (наприклад, `{userId}`).
-- Без завершального `/` і без розширень файлів (`.json`).
+- The API is resource-oriented (REST): the path names a resource, the method names an action.
+- Resources are named with nouns. Collections are plural nouns (for example, `/users`).
+- A command-style endpoint is allowed as an exception for actions with business meaning that do not reduce to changing a resource. Form: `POST /{resource}/{id}/{command}`, where `command` is a verb in kebab-case.
+- Path segments are lowercase. Compound names are kebab-case.
+- Path parameters in the contract description are camelCase (for example, `{userId}`).
+- No trailing `/` and no file extensions (`.json`).
 
-### Дані в URL
+### Data in URLs
 
-- Email, інші персональні дані та секрети не передаються в URL: ні в шляху, ні в query-параметрах. Пошук за такими даними передає їх у тілі запиту.
-- Токени не передаються в URL ([Security Conventions §9](security-conventions.md#9-security-logging)).
-- Ідентифікатори в URL не містять персональних даних. Клієнт трактує їх як непрозорі значення.
-- Ідентифікатор Account/User — UUID v4, канонічний рядок у нижньому регістрі ([Persistence Conventions §6](persistence-conventions.md#ідентифікатори)). Формат ідентифікаторів сутностей майбутніх модулів не визначено, див. [розділ 15](#відкладені-рішення).
+- Email, other personal data and secrets are not passed in URLs: neither in the path nor in query parameters. A search by such data passes them in the request body.
+- Tokens are not passed in URLs ([Security Conventions §9](security-conventions.md#9-security-logging)).
+- Identifiers in URLs do not contain personal data. The client treats them as opaque values.
+- The Account/User identifier is a UUID v4, a canonical lowercase string ([Persistence Conventions §6](persistence-conventions.md#identifiers)). The identifier format of future modules' entities is not defined, see [section 15](#deferred-decisions).
 
-**Обґрунтування:** однакові правила найменування не змушують агентів вигадувати форму маршруту в кожній Story. URL потрапляють у логи, історію та проксі, тож персональним даним там не місце.
+**Rationale:** uniform naming rules do not force agents to invent the route form in every Story. URLs get into logs, history and proxies, so personal data has no place there.
 
-## 3. URL, версіонування, групи маршрутів
+## 3. URLs, Versioning, Route Groups
 
-### Префікс і версіонування
+### Prefix and Versioning
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Усі маршрути API розміщуються під префіксом `/api/v1`.
-- Версія одна для всього API. У шляху вказується лише major-версія.
-- Breaking change потребує нової major-версії. Додавання необов'язкового поля відповіді не є breaking change.
-- Composition root створює групу `/api/v1` і передає її модулю. Модуль реєструє свої маршрути всередині групи і префікс не визначає ([Package Map §6](package-map.md#http-маршрути)).
+- All API routes are placed under the `/api/v1` prefix.
+- There is one version for the whole API. Only the major version is stated in the path.
+- A breaking change requires a new major version. Adding an optional response field is not a breaking change.
+- The composition root creates the `/api/v1` group and passes it to the module. The module registers its routes inside the group and does not define the prefix ([Package Map §6](package-map.md#http-routes)).
 
-Політику одночасної підтримки кількох major-версій відкладено ([розділ 15](#відкладені-рішення)).
+The policy of supporting several major versions simultaneously is deferred ([section 15](#deferred-decisions)).
 
-### Групи маршрутів
+### Route Groups
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Група | Призначення | Правила |
+| Group | Purpose | Rules |
 |---|---|---|
-| `/api/v1/me` | Self-service ресурси власного Account | Користувач визначається лише з Actor. Маршрути не мають параметра з ідентифікатором акаунта ([BR-002](../product/business-rules.md#br-002--own-account-self-service), [AR-007](architecture.md#8-архітектурні-інваріанти)). Підресурси визначають відповідні Stories |
-| `/api/v1/auth` | Операції із сесіями | Маршрути login і registration визначають відповідні Stories. Logout — продуктове питання P1 |
-| `/api/v1/admin/...` | Адміністративна поверхня API | Це конвенція найменування, а не механізм авторизації. Роль `admin` остаточно перевіряє use case в Application ([BR-001](../product/business-rules.md#br-001--admin-only-capabilities), [AR-007](architecture.md#8-архітектурні-інваріанти)) |
+| `/api/v1/me` | Self-service resources of one's own Account | The user is determined only from the Actor. Routes have no parameter with an account identifier ([BR-002](../product/business-rules.md#br-002--own-account-self-service), [AR-007](architecture.md#8-architectural-invariants)). Subresources are defined by the corresponding Stories |
+| `/api/v1/auth` | Session operations | The login and registration routes are defined by the corresponding Stories. Logout is product question P1 |
+| `/api/v1/admin/...` | Administrative API surface | This is a naming convention, not an authorization mechanism. The `admin` role is finally checked by a use case in Application ([BR-001](../product/business-rules.md#br-001--admin-only-capabilities), [AR-007](architecture.md#8-architectural-invariants)) |
 
 ### Refresh
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Маршрут refresh: `POST /api/v1/auth/refresh`.
-- `Path` refresh-cookie дорівнює `/api/v1/auth/refresh` ([Security Conventions §5](security-conventions.md#cookies)).
-- Після переходу на нову major-версію шлях refresh зміниться, а чинні refresh-cookie перестануть надсилатися. Це прийнятний наслідок breaking change.
+- Refresh route: `POST /api/v1/auth/refresh`.
+- The `Path` of the refresh cookie equals `/api/v1/auth/refresh` ([Security Conventions §5](security-conventions.md#cookies)).
+- After switching to a new major version, the refresh path will change, and existing refresh cookies will no longer be sent. This is an acceptable consequence of a breaking change.
 
-**Обґрунтування:** версія в шляху проста, видима в логах і сумісна з групами маршрутів Gin. Окремий корінь `/me` без ідентифікатора не дає передати чужий ідентифікатор у self-service операцію.
+**Rationale:** a version in the path is simple, visible in logs and compatible with Gin route groups. A separate `/me` root without an identifier makes it impossible to pass someone else's identifier into a self-service operation.
 
-## 4. HTTP-методи та ідемпотентність
+## 4. HTTP Methods and Idempotency
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Метод | Призначення | Безпечний | Ідемпотентний |
+| Method | Purpose | Safe | Idempotent |
 |---|---|---|---|
-| `GET`, `HEAD` | Читання | так | так |
-| `POST` | Створення ресурсу, команда | ні | без гарантії за замовчуванням |
-| `PUT` | Повна заміна ресурсу або погоджене ідемпотентне встановлення стану | ні | так |
-| `PATCH` | Часткове оновлення ([розділ 7](#часткові-оновлення)) | ні | без гарантії за замовчуванням |
-| `DELETE` | Видалення | ні | так |
+| `GET`, `HEAD` | Reading | yes | yes |
+| `POST` | Resource creation, command | no | no guarantee by default |
+| `PUT` | Full replacement of a resource or an approved idempotent state setting | no | yes |
+| `PATCH` | Partial update ([section 7](#partial-updates)) | no | no guarantee by default |
+| `DELETE` | Deletion | no | yes |
 
-- `GET`, `HEAD` і `OPTIONS` не змінюють стану ([Security Conventions §5](security-conventions.md#csrf)).
-- Ідемпотентність означає, що повторні запити мають той самий кінцевий ефект, а не однакову HTTP-відповідь. Наприклад, повторний `DELETE` може повернути `404` після першого `204`.
-- Якщо операція `POST` або `PATCH` ідемпотентна, це явно зазначається в її контракті. Без такого запису агент не вважає операцію ідемпотентною.
-- `Idempotency-Key` у MVP не використовується.
-- Сервер не повторює автоматично state-changing операції з невідомим результатом. Клієнт також не повинен цього робити, поки для операції не погоджено гарантію безпечного повтору ([Security Conventions §10](security-conventions.md#10-збої-та-timeout-и)).
-- Глобальної заборони повторювати read-only операції немає. Політику retry для них можна визначити пізніше.
+- `GET`, `HEAD` and `OPTIONS` do not change state ([Security Conventions §5](security-conventions.md#csrf)).
+- Idempotency means that repeated requests have the same end effect, not an identical HTTP response. For example, a repeated `DELETE` may return `404` after the first `204`.
+- If a `POST` or `PATCH` operation is idempotent, this is explicitly stated in its contract. Without such a statement, the agent does not consider the operation idempotent.
+- `Idempotency-Key` is not used in the MVP.
+- The server does not automatically retry state-changing operations with an unknown outcome. The client also must not do this until a safe-retry guarantee is approved for the operation ([Security Conventions §10](security-conventions.md#10-failures-and-timeouts)).
+- There is no global prohibition on retrying read-only operations. A retry policy for them may be defined later.
 
-Ідемпотентність і форму Block / Unblock відкладено ([розділ 15](#відкладені-рішення)).
+The idempotency and form of Block / Unblock are deferred ([section 15](#deferred-decisions)).
 
-**Обґрунтування:** семантика RFC 9110 загальновідома і не потребує нових механізмів. `Idempotency-Key` потребує сховища ключів і не має споживача в MVP.
+**Rationale:** RFC 9110 semantics are well known and do not require new mechanisms. `Idempotency-Key` requires a key store and has no consumer in the MVP.
 
-## 5. Success-коди
+## 5. Success Codes
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Код | Коли |
+| Code | When |
 |---|---|
-| `200 OK` | Успіх із тілом відповіді |
-| `201 Created` | Запит створив новий ресурс |
-| `204 No Content` | Успіх без тіла відповіді |
+| `200 OK` | Success with a response body |
+| `201 Created` | The request created a new resource |
+| `204 No Content` | Success without a response body |
 
-- `Location` у відповіді `201` повертається, якщо створений ресурс має визначений канонічний URI. Не обов'язково, щоб клієнт міг прочитати ресурс за цим URI зараз. Штучний URI лише заради `Location` не створюється.
-- Тіло `201` — подання створеного ресурсу або відсутнє. Визначає Story.
-- `202 Accepted` не використовується, бо в MVP немає асинхронних операцій. Майбутня Story може його ввести.
-- Відповідь `2xx` не має тіла помилки. Помилка ніколи не повертається з кодом `2xx`.
-- Конкретний success-код і тіло маршруту визначає Story за цими правилами.
+- `Location` in a `201` response is returned if the created resource has a defined canonical URI. It is not required that the client can read the resource at this URI now. An artificial URI is not created just for the sake of `Location`.
+- The `201` body is a representation of the created resource or is absent. The Story decides.
+- `202 Accepted` is not used, because there are no asynchronous operations in the MVP. A future Story may introduce it.
+- A `2xx` response does not have an error body. An error is never returned with a `2xx` code.
+- The specific success code and body of a route are defined by the Story according to these rules.
 
-## 6. Запити
+## 6. Requests
 
 ### Content-Type
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Непорожнє тіло запиту має мати `Content-Type: application/json`. Допускається параметр `charset=utf-8`.
-- Для запиту без тіла `Content-Type` не обов'язковий.
+- A non-empty request body must have `Content-Type: application/json`. The `charset=utf-8` parameter is allowed.
+- For a request without a body, `Content-Type` is not required.
 
-Пріоритет перевірок:
+Check priority:
 
-| Маршрут | Запит | Відповідь |
+| Route | Request | Response |
 |---|---|---|
-| Не приймає тіла | Непорожнє тіло з будь-яким `Content-Type` або без нього | `400`, `invalid_request_body` |
-| Приймає JSON-тіло | Непорожнє тіло з media type, відмінним від `application/json` | `415`, `unsupported_media_type` |
-- Заголовок `Accept` не узгоджується. Відповідь `406` не використовується.
+| Does not accept a body | A non-empty body with any `Content-Type` or without one | `400`, `invalid_request_body` |
+| Accepts a JSON body | A non-empty body with a media type other than `application/json` | `415`, `unsupported_media_type` |
+- The `Accept` header is not negotiated. The `406` response is not used.
 
-### Розмір тіла
+### Body Size
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Діє один глобальний ліміт розміру тіла запиту. Він застосовується до читання тіла, тобто до розбору JSON і до будь-якої обробки.
-- Перевищення → `413`, `request_too_large`.
-- Значення ліміту задає конфігурація ([розділ 11](#11-модель-timeout-ів-і-лімітів-http-сервера)).
+- One global request body size limit applies. It applies to reading the body, that is, to JSON parsing and to any processing.
+- Exceeding it → `413`, `request_too_large`.
+- The limit value is set by the configuration ([section 11](#11-http-server-timeout-and-limit-model)).
 
-Перевизначення ліміту для окремих маршрутів відкладено ([розділ 15](#відкладені-рішення)).
+Overriding the limit for individual routes is deferred ([section 15](#deferred-decisions)).
 
 ### JSON decoding
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Тіло розбирається строго, засобами Go stdlib. Відхиляються з `400`:
+The body is parsed strictly, using Go stdlib. The following are rejected with `400`:
 
-| Випадок | `code` |
+| Case | `code` |
 |---|---|
-| Синтаксично невалідний JSON | `malformed_json` |
-| Невідоме поле | `invalid_request_body`, елемент `errors[]` з `code: unknown_field` |
-| Невідповідність типу поля | `invalid_request_body`, елемент `errors[]` з `code: invalid_type` |
-| Дані після одного JSON-значення | `invalid_request_body` |
-| Неочікуваний тип кореневого значення (за замовчуванням очікується об'єкт) | `invalid_request_body` |
-| Порожнє тіло там, де воно обов'язкове | `invalid_request_body` |
-| Порушення правил полів | `validation_failed` |
+| Syntactically invalid JSON | `malformed_json` |
+| Unknown field | `invalid_request_body`, an `errors[]` element with `code: unknown_field` |
+| Field type mismatch | `invalid_request_body`, an `errors[]` element with `code: invalid_type` |
+| Data after a single JSON value | `invalid_request_body` |
+| Unexpected root value type (an object is expected by default) | `invalid_request_body` |
+| Empty body where it is required | `invalid_request_body` |
+| Violation of field rules | `validation_failed` |
 
-**Прийняті обмеження `encoding/json`.** Для MVP власний парсер не створюється. Свідомо прийнято, що:
+**Accepted limitations of `encoding/json`.** No custom parser is created for the MVP. It is deliberately accepted that:
 
-- дубльовані ключі обробляються послідовно: пізніше значення може замінити попереднє або об'єднатися з ним залежно від Go-типу;
-- імена полів можуть зіставлятися без урахування регістру.
+- duplicate keys are processed sequentially: a later value may replace the earlier one or be merged with it depending on the Go type;
+- field names may be matched case-insensitively.
 
-### Query-параметри
+### Query Parameters
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Query-параметри — camelCase.
-- Невідомий для контракту маршруту query-параметр → `400`, `unknown_query_parameter`.
-- Персональні дані та секрети в query не передаються ([розділ 2](#дані-в-url)).
+- Query parameters are camelCase.
+- A query parameter unknown to the route contract → `400`, `unknown_query_parameter`.
+- Personal data and secrets are not passed in the query ([section 2](#data-in-urls)).
 
-Семантику field-level помилок валідації для query-параметрів відкладено ([розділ 15](#відкладені-рішення)). JSON Pointer для query-параметрів не використовується.
+The semantics of field-level validation errors for query parameters are deferred ([section 15](#deferred-decisions)). JSON Pointer is not used for query parameters.
 
-**Обґрунтування:** строгий розбір перетворює друкарські помилки і спроби передати зайві поля (наприклад `role`) на явну відмову. Вимога `application/json` додатково закриває cross-site запити з «простими» media types, але не замінює захисту від CSRF.
+**Rationale:** strict parsing turns typos and attempts to pass extra fields (for example `role`) into an explicit rejection. The `application/json` requirement additionally closes cross-site requests with "simple" media types, but does not replace CSRF protection.
 
-## 7. JSON-конвенції, DTO, часткові оновлення
+## 7. JSON Conventions, DTOs, Partial Updates
 
-### Формат JSON
+### JSON Format
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Імена полів — camelCase.
-- Успішна відповідь повертає ресурс без універсального конверта (`data` тощо).
-- Дати й час у відповідях — RFC 3339 в UTC (наприклад, `2026-11-13T10:00:00Z`).
-- Ідентифікатори в JSON — рядки.
-- Необов'язкові поля відповіді за замовчуванням пропускаються. Глобальної заборони `null` немає.
-- Media types відповідей: успіх із тілом — `application/json`; помилка — `application/problem+json` ([розділ 8](#problem-details)).
+- Field names are camelCase.
+- A successful response returns the resource without a universal envelope (`data`, etc.).
+- Dates and times in responses are RFC 3339 in UTC (for example, `2026-11-13T10:00:00Z`).
+- Identifiers in JSON are strings.
+- Optional response fields are omitted by default. There is no global prohibition of `null`.
+- Response media types: success with a body — `application/json`; error — `application/problem+json` ([section 8](#problem-details)).
 
 ### DTO
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Request і response DTO — окремі типи в пакеті inbound-адаптера `httpapi` ([Package Map §5](package-map.md#адаптери)).
-- Сутності Domain напряму не серіалізуються.
-- DTO не містять пароля у відповідях і хеша пароля ([AR-009](architecture.md#8-архітектурні-інваріанти)).
+- Request and response DTOs are separate types in the `httpapi` inbound adapter package ([Package Map §5](package-map.md#adapters)).
+- Domain entities are not serialized directly.
+- DTOs do not contain the password in responses or the password hash ([AR-009](architecture.md#8-architectural-invariants)).
 
-### Часткові оновлення
+### Partial Updates
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Часткові оновлення виконуються через `PATCH` з `Content-Type: application/json`. Модель називається **field-level partial update**. Це не RFC 7396 JSON Merge Patch, і media type `application/merge-patch+json` не використовується.
+Partial updates are performed via `PATCH` with `Content-Type: application/json`. The model is called **field-level partial update**. This is not RFC 7396 JSON Merge Patch, and the `application/merge-patch+json` media type is not used.
 
-| Поле в запиті | Дія |
+| Field in the request | Action |
 |---|---|
-| Відсутнє | Не змінювати |
-| Має значення | Встановити значення |
-| `null`, поле явно дозволено очищати | Очистити |
-| `null`, поле не дозволено очищати | `400`, `validation_failed` |
+| Absent | Do not change |
+| Has a value | Set the value |
+| `null`, the field is explicitly allowed to be cleared | Clear |
+| `null`, the field is not allowed to be cleared | `400`, `validation_failed` |
 
-- Рекурсивного merge для вкладених структур немає.
-- Які поля можна очищати, а також контракт вкладених об'єктів і колекцій визначає Story.
-- Спосіб, у який DTO розрізняє «поле відсутнє» і `null`, визначає Technical Design без нових технологій.
-- `PUT` використовується лише для повної заміни ресурсу або погодженого ідемпотентного встановлення стану.
+- There is no recursive merge for nested structures.
+- Which fields can be cleared, as well as the contract of nested objects and collections, is defined by the Story.
+- How a DTO distinguishes "field absent" from `null` is defined by Technical Design without new technologies.
+- `PUT` is used only for full replacement of a resource or an approved idempotent state setting.
 
-Склад полів Profile не визначено ([Business Glossary — Profile](../product/business-glossary.md#profile)).
+The composition of Profile fields is not defined ([Business Glossary — Profile](../product/business-glossary.md#profile)).
 
-## 8. Помилки
+## 8. Errors
 
 ### Problem Details
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Усі відповіді з помилкою, які формує застосунок, мають формат RFC 9457 Problem Details з `Content-Type: application/problem+json`. Межі цієї гарантії описано в [розділі 10](#межі-гарантій-http-відповідей).
+All error responses produced by the application have the RFC 9457 Problem Details format with `Content-Type: application/problem+json`. The limits of this guarantee are described in [section 10](#limits-of-http-response-guarantees).
 
-Стандартні обмеження HTTP мають пріоритет над правилом наявності тіла:
+Standard HTTP restrictions take precedence over the body presence rule:
 
-- відповідь на `HEAD` не містить тіла незалежно від HTTP-статусу, зокрема й помилкового;
-- відповідь `204 No Content` не містить тіла.
+- a response to `HEAD` contains no body regardless of the HTTP status, including an error status;
+- a `204 No Content` response contains no body.
 
-Для решти відповідей із помилкою, у яких тіло допускається, Problem Details обов'язкові.
+For the remaining error responses in which a body is allowed, Problem Details are mandatory.
 
-| Поле | Обов'язкове | Зміст |
+| Field | Required | Content |
 |---|---|---|
-| `type` | так | `about:blank` |
-| `title` | так | Стандартна HTTP status phrase за RFC 9110 англійською. Наприклад, для `413` — `Content Too Large` |
-| `status` | так | HTTP-код відповіді |
-| `detail` | ні | Пояснення англійською, без локалізації |
-| `code` | так | Стабільний машинний код помилки в snake_case |
-| `requestId` | так | Request ID запиту ([розділ 10](#request-id)) |
-| `errors` | лише для помилок валідації | Масив помилок окремих полів |
+| `type` | yes | `about:blank` |
+| `title` | yes | The standard HTTP status phrase per RFC 9110 in English. For example, for `413` — `Content Too Large` |
+| `status` | yes | The HTTP response code |
+| `detail` | no | An explanation in English, without localization |
+| `code` | yes | A stable machine error code in snake_case |
+| `requestId` | yes | The request's Request ID ([section 10](#request-id)) |
+| `errors` | only for validation errors | An array of errors for individual fields |
 
-Приклад:
+Example:
 
 ```json
 {
@@ -275,345 +275,345 @@
 }
 ```
 
-- Клієнт використовує `code` для програмної логіки. `detail` не є машинним кодом.
-- `title`, `detail` і `errors` не містять внутрішніх технічних деталей: SQL, повідомлень драйверів, stacktrace ([AR-008](architecture.md#8-архітектурні-інваріанти)).
-- Помилки не містять введених секретів чи інших чутливих значень, зокрема пароля ([AR-009](architecture.md#8-архітектурні-інваріанти)).
-- Можливі розбіжності `http.StatusText` у Go з фразами RFC 9110 перевіряються під час реалізації.
+- The client uses `code` for program logic. `detail` is not a machine code.
+- `title`, `detail` and `errors` do not contain internal technical details: SQL, driver messages, stacktrace ([AR-008](architecture.md#8-architectural-invariants)).
+- Errors do not contain entered secrets or other sensitive values, in particular the password ([AR-009](architecture.md#8-architectural-invariants)).
+- Possible discrepancies between Go's `http.StatusText` and the RFC 9110 phrases are checked during implementation.
 
-### Помилки валідації
+### Validation Errors
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Елемент `errors[]`:
+An `errors[]` element:
 
-| Поле | Зміст |
+| Field | Content |
 |---|---|
-| `field` | Шлях до поля тіла запиту в нотації JSON Pointer (RFC 6901), наприклад `/email` |
-| `code` | Стабільний код у snake_case |
-| `detail` | Пояснення англійською, без чутливих значень |
+| `field` | The path to the request body field in JSON Pointer notation (RFC 6901), for example `/email` |
+| `code` | A stable code in snake_case |
+| `detail` | An explanation in English, without sensitive values |
 
-- `errors[]` додається лише до помилок валідації тіла: обов'язково для `validation_failed`, а для `invalid_request_body` — коли помилка стосується конкретного поля.
-- Загальні коди елементів: `unknown_field`, `invalid_type`. Вони не використовуються як `code` верхнього рівня.
-- Коди елементів для правил конкретних полів (наприклад, `invalid_format` у прикладі) визначає Story.
+- `errors[]` is added only to body validation errors: mandatorily for `validation_failed`, and for `invalid_request_body` when the error concerns a specific field.
+- Common element codes: `unknown_field`, `invalid_type`. They are not used as a top-level `code`.
+- Element codes for the rules of specific fields (for example, `invalid_format` in the example) are defined by the Story.
 
-### Категорії помилок і HTTP-коди
+### Error Categories and HTTP Codes
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Категорії з [Architecture §7](architecture.md#обробка-помилок) перекладає в HTTP inbound-адаптер:
+The categories from [Architecture §7](architecture.md#error-handling) are translated into HTTP by the inbound adapter:
 
-| Категорія | HTTP | Загальний `code` |
+| Category | HTTP | Common `code` |
 |---|---|---|
-| Невалідні дані | `400` | `malformed_json`, `invalid_request_body`, `validation_failed`, `unknown_query_parameter` |
-| Не автентифіковано | `401` | `unauthenticated`, `invalid_credentials` |
-| Заборонено | `403` | `forbidden`, `csrf_rejected` |
-| Не знайдено | `404` | `not_found` |
-| Конфлікт | `409` | `conflict` |
-| Тимчасово недоступно | `503` | `service_unavailable` |
-| Внутрішня помилка | `500` | `internal_error` |
-| Невідомий результат | `500` | `outcome_unknown` |
+| Invalid data | `400` | `malformed_json`, `invalid_request_body`, `validation_failed`, `unknown_query_parameter` |
+| Unauthenticated | `401` | `unauthenticated`, `invalid_credentials` |
+| Forbidden | `403` | `forbidden`, `csrf_rejected` |
+| Not found | `404` | `not_found` |
+| Conflict | `409` | `conflict` |
+| Temporarily unavailable | `503` | `service_unavailable` |
+| Internal error | `500` | `internal_error` |
+| Unknown outcome | `500` | `outcome_unknown` |
 
-Транспортні та маршрутизаційні коди:
+Transport and routing codes:
 
-| Ситуація | HTTP | `code` |
+| Situation | HTTP | `code` |
 |---|---|---|
-| Маршрут не існує | `404` | `route_not_found` |
-| Метод не підтримується наявним маршрутом | `405` | `method_not_allowed` |
-| Тіло перевищує ліміт | `413` | `request_too_large` |
-| Непідтримуваний media type | `415` | `unsupported_media_type` |
-| Перевищено ліміт запитів | `429` | `rate_limited` |
+| The route does not exist | `404` | `route_not_found` |
+| The method is not supported by an existing route | `405` | `method_not_allowed` |
+| The body exceeds the limit | `413` | `request_too_large` |
+| Unsupported media type | `415` | `unsupported_media_type` |
+| Request limit exceeded | `429` | `rate_limited` |
 
-- Для всіх помилок валідації використовується `400`. Синтаксичні помилки й помилки полів розрізняються через `code`.
-- `409` застосовується до категорії «конфлікт». Чи повертати `409` для дубля email під час реєстрації, залежить від P5.
-- `429` зарезервовано для майбутнього захисту від автоматизованого перебору. Правила, ліміти, `Retry-After` і зовнішня поведінка login визначаються після P3 і не повинні розкривати існування акаунта ([Security Conventions §7](security-conventions.md#захист-від-автоматизованого-перебору)).
-- `503` у MVP повертається без `Retry-After`.
-- `504` не використовується, бо сервіс не є gateway чи proxy.
-- Panic в обробнику → `500`, `internal_error` ([Security Conventions §10](security-conventions.md#відповіді)).
+- `400` is used for all validation errors. Syntax errors and field errors are distinguished through `code`.
+- `409` applies to the "conflict" category. Whether to return `409` for a duplicate email during registration depends on P5.
+- `429` is reserved for future protection against automated guessing. The rules, limits, `Retry-After` and the external behavior of login are defined after P3 and must not disclose the existence of an account ([Security Conventions §7](security-conventions.md#protection-against-automated-guessing)).
+- `503` is returned in the MVP without `Retry-After`.
+- `504` is not used, because the service is not a gateway or proxy.
+- A panic in a handler → `500`, `internal_error` ([Security Conventions §10](security-conventions.md#responses)).
 
-### Каталог загальних кодів
+### Catalog of Common Codes
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Повний перелік загальних кодів верхнього рівня: `malformed_json`, `invalid_request_body`, `validation_failed`, `unknown_query_parameter`, `unauthenticated`, `invalid_credentials`, `forbidden`, `csrf_rejected`, `not_found`, `route_not_found`, `method_not_allowed`, `conflict`, `request_too_large`, `unsupported_media_type`, `rate_limited`, `internal_error`, `outcome_unknown`, `service_unavailable`.
+The full list of common top-level codes: `malformed_json`, `invalid_request_body`, `validation_failed`, `unknown_query_parameter`, `unauthenticated`, `invalid_credentials`, `forbidden`, `csrf_rejected`, `not_found`, `route_not_found`, `method_not_allowed`, `conflict`, `request_too_large`, `unsupported_media_type`, `rate_limited`, `internal_error`, `outcome_unknown`, `service_unavailable`.
 
-- Загальні коди зберігаються лише в цьому документі. Новий загальний код додається тільки через оновлення цього документа.
-- Коди конкретних бізнесових помилок (наприклад, точніший код конфлікту) визначає Story в погодженому HTTP-контракті.
-- Коди стабільні: змінити значення коду — це breaking change.
+- Common codes are kept only in this document. A new common code is added only through an update of this document.
+- Codes for specific business errors (for example, a more precise conflict code) are defined by the Story in the approved HTTP contract.
+- Codes are stable: changing the value of a code is a breaking change.
 
-### Порядок 401 / 403 / 404
+### 401 / 403 / 404 Order
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-Для наявних захищених endpoint із підтримуваним HTTP-методом:
+For existing protected endpoints with a supported HTTP method:
 
-1. Немає чинної сесії → `401`.
-2. Сесія є, прав недостатньо → `403`.
-3. Права є, ресурсу немає → `404`.
+1. No valid session → `401`.
+2. There is a session, insufficient permissions → `403`.
+3. There are permissions, the resource does not exist → `404`.
 
-- Admin use case перевіряє роль до читання цільового користувача ([Security Conventions §7](security-conventions.md#авторизація-і-хто-діє)). Не-адміністратор на `/api/v1/admin/...` отримує `403`, а не замаскований `404`.
-- Маршрутизатор може повернути `404 route_not_found` і `405 method_not_allowed` без перевірки автентифікації ([розділ 10](#маршрутизатор)).
-- Self-service маршрути не мають ідентифікаторів інших користувачів, тож питання приховування існування ресурсу на них не виникає.
+- An admin use case checks the role before reading the target user ([Security Conventions §7](security-conventions.md#authorization-and-who-is-acting)). A non-administrator on `/api/v1/admin/...` receives `403`, not a masked `404`.
+- The router may return `404 route_not_found` and `405 method_not_allowed` without an authentication check ([section 10](#router)).
+- Self-service routes have no identifiers of other users, so the question of hiding the existence of a resource does not arise for them.
 
-Політику `403` чи `404` для майбутніх ресурсів, якими володіють користувачі, відкладено ([розділ 15](#відкладені-рішення)).
+The `403` or `404` policy for future resources owned by users is deferred ([section 15](#deferred-decisions)).
 
-### Збої залежностей і невідомий результат
+### Dependency Failures and Unknown Outcome
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Недоступність або timeout Redis, PostgreSQL чи черги Argon2id → `503`, `service_unavailable`, якщо HTTP-відповідь ще можна сформувати.
-- Непідтверджений `COMMIT` PostgreSQL → `500`, `outcome_unknown`. Така відповідь не означає підтвердженої невдачі і не повинна спричиняти автоматичного повтору операції ([розділ 4](#4-http-методи-та-ідемпотентність), [Security Conventions §10](security-conventions.md#postgresql)).
-- Після розриву з'єднання клієнтом, спрацювання write timeout або частково надісланої відповіді повернути Problem Details може бути неможливо. Це не порушення конвенцій.
+- Unavailability or timeout of Redis, PostgreSQL or the Argon2id queue → `503`, `service_unavailable`, if an HTTP response can still be produced.
+- An unconfirmed PostgreSQL `COMMIT` → `500`, `outcome_unknown`. Such a response does not mean a confirmed failure and must not cause an automatic retry of the operation ([section 4](#4-http-methods-and-idempotency), [Security Conventions §10](security-conventions.md#postgresql)).
+- After the client breaks the connection, a write timeout fires, or a response has been partially sent, it may be impossible to return Problem Details. This is not a violation of the conventions.
 
-**Обґрунтування:** RFC 9457 — стандарт, тож власний формат специфікувати не треба. Стабільний `code` відокремлює програмну логіку клієнта від тексту, а централізований каталог не дає Stories вигадувати різні імена для однієї ситуації.
+**Rationale:** RFC 9457 is a standard, so a custom format does not need to be specified. A stable `code` separates the client's program logic from the text, and a centralized catalog does not let Stories invent different names for the same situation.
 
-## 9. Автентифікація та CSRF на рівні HTTP
+## 9. Authentication and CSRF at the HTTP Level
 
-Механізм автентифікації, cookies і CSRF визначено в [Security Conventions](security-conventions.md). Тут зафіксовано лише HTTP-контракт.
+The authentication, cookie and CSRF mechanism is defined in [Security Conventions](security-conventions.md). Only the HTTP contract is recorded here.
 
 ### Cookie-based authentication
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Сесія передається в cookies. Атрибути access- і refresh-cookie визначено в [Security Conventions §5](security-conventions.md#cookies), `Path` refresh-cookie — у [розділі 3](#refresh).
-- Кожен маршрут або явно публічний (registration, login, refresh), або проходить перевірку сесії ([Security Conventions §7](security-conventions.md#авторизація-і-хто-діє), [AR-006](architecture.md#8-архітектурні-інваріанти)).
+- The session is passed in cookies. The attributes of the access and refresh cookies are defined in [Security Conventions §5](security-conventions.md#cookies), the `Path` of the refresh cookie — in [section 3](#refresh).
+- Each route is either explicitly public (registration, login, refresh) or goes through the session check ([Security Conventions §7](security-conventions.md#authorization-and-who-is-acting), [AR-006](architecture.md#8-architectural-invariants)).
 
-### Відповіді 401
+### 401 Responses
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Захищені маршрути й refresh повертають один код `unauthenticated`. Через окремі коди не розкривається, чи протермінований access JWT, чи відкликано сесію, чи невалідний токен.
-- Невдалий login повертає `401`, `invalid_credentials`. Відповідь однакова для невідомого email, неправильного пароля і заблокованого акаунта ([Security Conventions §7](security-conventions.md#login)).
-- Якщо майбутнє рішення P5 вимагатиме змінити нерозкриття причин невдалого login, це потребує окремого погодження змін Security Conventions.
-- **`WWW-Authenticate` не надсилається.** Це свідоме відхилення від RFC 9110 §15.5.2, яке вимагає цей заголовок у відповіді `401`. Для cookie-based authentication немає стандартної схеми. Власна незареєстрована схема (наприклад, `Cookie`) не вводиться. `Bearer` і `Basic` не використовуються, бо не відповідають моделі. Рішення переглядається, якщо з'явиться стандартна схема.
+- Protected routes and refresh return a single code `unauthenticated`. Separate codes do not disclose whether the access JWT has expired, the session has been revoked, or the token is invalid.
+- A failed login returns `401`, `invalid_credentials`. The response is the same for an unknown email, a wrong password and a blocked account ([Security Conventions §7](security-conventions.md#login)).
+- If a future P5 decision requires changing the non-disclosure of the reasons for a failed login, this requires separate approval of changes to the Security Conventions.
+- **`WWW-Authenticate` is not sent.** This is a deliberate deviation from RFC 9110 §15.5.2, which requires this header in a `401` response. There is no standard scheme for cookie-based authentication. A custom unregistered scheme (for example, `Cookie`) is not introduced. `Bearer` and `Basic` are not used, because they do not fit the model. The decision is revisited if a standard scheme appears.
 
-### Cookies у відповідях із помилкою
+### Cookies in Error Responses
 
-**Статус:** обмеження `APPROVED`, повне правило `DEFERRED`.
+**Status:** restrictions `APPROVED`, the full rule `DEFERRED`.
 
-- Відповідь `503` через недоступність Redis cookies не очищує ([Security Conventions §10](security-conventions.md#redis)).
-- Відповідь `401` захищеного маршруту не очищує refresh-cookie автоматично.
+- A `503` response due to Redis unavailability does not clear cookies ([Security Conventions §10](security-conventions.md#redis)).
+- A `401` response of a protected route does not automatically clear the refresh cookie.
 
-Чи очищуються cookies в інших відповідях `401`, визначає Technical Design US-002.
+Whether cookies are cleared in other `401` responses is defined by the Technical Design of US-002.
 
-Клієнтська стратегія реакції на `401` (наприклад, «refresh, потім login») цим документом не встановлюється. Вона залежить від A2 і Client Design та має враховувати ротацію refresh-токенів, reuse detection і конкурентні refresh-запити ([Security Conventions §4](security-conventions.md#ротація-refresh-і-reuse-detection)).
+This document does not establish a client strategy for reacting to `401` (for example, "refresh, then login"). It depends on A2 and Client Design and must take into account refresh token rotation, reuse detection and concurrent refresh requests ([Security Conventions §4](security-conventions.md#refresh-rotation-and-reuse-detection)).
 
-### CSRF і перевірка походження
+### CSRF and Origin Check
 
-**Статус:** `APPROVED`. Спосіб доставки токена — `OPEN`.
+**Status:** `APPROVED`. The token delivery method — `OPEN`.
 
-- CSRF-токен передається в заголовку запиту **`CSRF-Token`**.
-- Правила, коли токен обов'язковий, і правила перевірки `Origin` / `Sec-Fetch-Site` визначає [Security Conventions §5](security-conventions.md#csrf).
-- Відмова CSRF-перевірки або перевірки походження → `403`, `csrf_rejected`. Конкретна причина видна лише в security-логах ([Security Conventions §9](security-conventions.md#9-security-logging)).
+- The CSRF token is passed in the request header **`CSRF-Token`**.
+- The rules for when the token is mandatory and the rules for checking `Origin` / `Sec-Fetch-Site` are defined by [Security Conventions §5](security-conventions.md#csrf).
+- A failed CSRF check or origin check → `403`, `csrf_rejected`. The specific reason is visible only in security logs ([Security Conventions §9](security-conventions.md#9-security-logging)).
 
-Класифікація відповідей має зберігатися незалежно від порядку middleware:
+The classification of responses must be preserved regardless of the middleware order:
 
-| Ситуація | Відповідь |
+| Situation | Response |
 |---|---|
-| Сесія відсутня або невалідна | `401`, `unauthenticated` |
-| Інфраструктурна помилка перевірки сесії | `503`, `service_unavailable` |
-| Сесія валідна, CSRF-перевірку не пройдено | `403`, `csrf_rejected` |
-| Недозволений `Origin` для login або registration | `403`, `csrf_rejected` |
+| The session is absent or invalid | `401`, `unauthenticated` |
+| Infrastructure error of the session check | `503`, `service_unavailable` |
+| The session is valid, the CSRF check failed | `403`, `csrf_rejected` |
+| A disallowed `Origin` for login or registration | `403`, `csrf_rejected` |
 
-Порядок middleware визначає Technical Design. Спосіб доставки CSRF-токена клієнту і варіант signed double-submit лишаються відкритими разом з A2 ([розділ 15](#відкриті-питання)).
+The middleware order is defined by Technical Design. The method of delivering the CSRF token to the client and the signed double-submit option remain open together with A2 ([section 15](#open-questions)).
 
-## 10. Маршрутизатор, кешування, Request ID
+## 10. Router, Caching, Request ID
 
-### Маршрутизатор
+### Router
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-| Ситуація | Поведінка |
+| Situation | Behavior |
 |---|---|
-| Маршрут не існує | `404`, `route_not_found`, Problem Details |
-| Метод не підтримується наявним маршрутом | `405`, `method_not_allowed`, Problem Details, заголовок `Allow` |
-| Шлях із завершальним `/` або в іншому регістрі | Без перенаправлення. Якщо маршрут не існує → `404` |
+| The route does not exist | `404`, `route_not_found`, Problem Details |
+| The method is not supported by an existing route | `405`, `method_not_allowed`, Problem Details, the `Allow` header |
+| A path with a trailing `/` or in a different case | No redirect. If the route does not exist → `404` |
 
-Налаштування Gin:
+Gin settings:
 
-- `HandleMethodNotAllowed = true` і обробник `NoMethod`, який формує Problem Details;
-- обробник `NoRoute`, який формує Problem Details;
+- `HandleMethodNotAllowed = true` and a `NoMethod` handler that produces Problem Details;
+- a `NoRoute` handler that produces Problem Details;
 - `RedirectTrailingSlash = false`;
 - `RedirectFixedPath = false`.
 
-Відповіді `404` і `405` маршрутизатор може повертати до middleware автентифікації. Коректність заголовка `Allow` і формату відповідей перевіряється під час Technical Design і Verification.
+The router may return `404` and `405` responses before the authentication middleware. The correctness of the `Allow` header and the response format is checked during Technical Design and Verification.
 
-### Кешування
+### Caching
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Усі відповіді API в MVP, і успішні, і з помилкою, мають заголовок `Cache-Control: no-store` ([межі гарантій](#межі-гарантій-http-відповідей)).
-- Винятки для публічного кешування можна ввести лише окремим погодженням.
+- All API responses in the MVP, both successful and error ones, have the `Cache-Control: no-store` header ([guarantee limits](#limits-of-http-response-guarantees)).
+- Exceptions for public caching may be introduced only by separate approval.
 
 ### Request ID
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Сервер генерує Request ID для кожного запиту: непрозорий рядок із щонайменше 128 бітами ентропії з `crypto/rand`.
-- Вхідний Request ID від клієнта як серверний ідентифікатор не використовується.
-- Request ID створює middleware в `internal/platform/httpserver` ([Package Map §4](package-map.md#4-platform)).
-- В усіх точках обробки одного запиту використовується той самий Request ID.
-- Request ID повертається:
-  - у заголовку відповіді `Request-Id` на кожній відповіді ([межі гарантій](#межі-гарантій-http-відповідей));
-  - у полі `requestId` у Problem Details.
-- Request ID використовується як поле `request id` у структурованих логах ([Security Conventions §9](security-conventions.md#9-security-logging)).
+- The server generates a Request ID for each request: an opaque string with at least 128 bits of entropy from `crypto/rand`.
+- An incoming Request ID from the client is not used as the server identifier.
+- The Request ID is created by middleware in `internal/platform/httpserver` ([Package Map §4](package-map.md#4-platform)).
+- The same Request ID is used at all processing points of one request.
+- The Request ID is returned:
+  - in the `Request-Id` response header on every response ([guarantee limits](#limits-of-http-response-guarantees));
+  - in the `requestId` field in Problem Details.
+- The Request ID is used as the `request id` field in structured logs ([Security Conventions §9](security-conventions.md#9-security-logging)).
 
-**Request ID і `context.Context`.**
+**Request ID and `context.Context`.**
 
-- Actor — прикладна інформація. Application отримує його явним параметром use case ([Security Conventions §7](security-conventions.md#авторизація-і-хто-діє)).
-- Request ID — технічні метадані. Його можна передавати через `context.Context`, окремий параметр use case для нього не потрібен.
-- Application не витягує ні Actor, ні Request ID з контексту самостійно. Технічні метадані з `context.Context` використовують Platform і адаптери, наприклад адаптер порту security-подій.
+- The Actor is application information. Application receives it as an explicit use case parameter ([Security Conventions §7](security-conventions.md#authorization-and-who-is-acting)).
+- The Request ID is technical metadata. It may be passed through `context.Context`; a separate use case parameter for it is not needed.
+- Application extracts neither the Actor nor the Request ID from the context on its own. Technical metadata from `context.Context` is used by Platform and adapters, for example the security events port adapter.
 
-W3C Trace Context відкладено ([розділ 15](#відкладені-рішення)).
+W3C Trace Context is deferred ([section 15](#deferred-decisions)).
 
-### Межі гарантій HTTP-відповідей
+### Limits of HTTP Response Guarantees
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Гарантії `application/problem+json` ([розділ 8](#problem-details)), заголовка `Request-Id` і `Cache-Control: no-store` стосуються HTTP-відповідей, які формує застосунок після того, як Go `net/http` передав запит у Gin.
-- Низькорівневі помилки розбору HTTP, порушення ліміту розміру заголовків, частина timeout-ів і мережеві розриви можуть оброблятися до Gin або без можливості сформувати стандартну відповідь. Такі відповіді (або їх відсутність) не порушують цих конвенцій.
-- Власний HTTP-парсер і зміни `net/http` не створюються.
-- Для відповідей, які формує Gin або застосунок, усі вимоги цього документа обов'язкові.
+- The guarantees of `application/problem+json` ([section 8](#problem-details)), the `Request-Id` header and `Cache-Control: no-store` apply to HTTP responses that the application produces after Go `net/http` has passed the request to Gin.
+- Low-level HTTP parsing errors, violation of the header size limit, some timeouts and network breaks may be handled before Gin or without the possibility of producing a standard response. Such responses (or their absence) do not violate these conventions.
+- No custom HTTP parser or changes to `net/http` are created.
+- For responses produced by Gin or the application, all requirements of this document are mandatory.
 
-**Обґрунтування:** типові налаштування Gin (текстовий `404`, `404` замість `405`, перенаправлення шляхів) суперечать форматові помилок і правилам найменування. Серверний Request ID не дає клієнту підробити кореляцію в логах.
+**Rationale:** Gin's default settings (a text `404`, `404` instead of `405`, path redirects) contradict the error format and the naming rules. A server-side Request ID does not let the client forge correlation in logs.
 
-## 11. Модель timeout-ів і лімітів HTTP-сервера
+## 11. HTTP Server Timeout and Limit Model
 
-**Статус:** `APPROVED` — модель. Значення — `DEFERRED` до Infrastructure Bootstrap.
+**Status:** `APPROVED` — the model. Values — `DEFERRED` until Infrastructure Bootstrap.
 
-HTTP-сервер (`internal/platform/httpserver`) має такі параметри:
+The HTTP server (`internal/platform/httpserver`) has the following parameters:
 
-| Параметр | Що обмежує |
+| Parameter | What it limits |
 |---|---|
-| Read header timeout | Час читання заголовків запиту |
-| Read timeout | Час читання всього запиту |
-| Write timeout | Час формування й запису відповіді |
-| Idle timeout | Час простою keep-alive з'єднання |
-| Shutdown timeout | Час на завершення активних запитів під час graceful shutdown |
-| Ліміт розміру заголовків | Розмір заголовків запиту |
-| Ліміт розміру тіла | Розмір тіла запиту ([розділ 6](#розмір-тіла)) |
+| Read header timeout | Time to read the request headers |
+| Read timeout | Time to read the whole request |
+| Write timeout | Time to produce and write the response |
+| Idle timeout | Idle time of a keep-alive connection |
+| Shutdown timeout | Time to complete active requests during graceful shutdown |
+| Header size limit | The size of the request headers |
+| Body size limit | The size of the request body ([section 6](#body-size)) |
 
-- Усі параметри задаються конфігурацією і мають скінченні значення.
-- Конфігурація, у якій параметр відсутній, нульовий або необмежений, невалідна. Застосунок із такою конфігурацією не запускається. У Go нульовий timeout HTTP-сервера означає відсутність обмеження, тож без цього правила залишилися б необмежені очікування.
-- Timeout-и звернень до Redis і PostgreSQL та черги Argon2id не належать до цієї моделі ([Security Conventions §10](security-conventions.md#timeout-и)).
+- All parameters are set by configuration and have finite values.
+- A configuration in which a parameter is absent, zero or unlimited is invalid. The application with such a configuration does not start. In Go, a zero HTTP server timeout means no limit, so without this rule unlimited waits would remain.
+- Timeouts of calls to Redis and PostgreSQL and of the Argon2id queue do not belong to this model ([Security Conventions §10](security-conventions.md#timeouts)).
 
-**Обґрунтування:** агентам на Technical Design потрібна модель, а конкретні числа без даних про навантаження були б вигадкою.
+**Rationale:** agents at Technical Design need a model, and specific numbers without load data would be an invention.
 
-## 12. Колекції
+## 12. Collections
 
-**Статус:** інваріанти `APPROVED`. Схема пагінації, сортування й фільтрації — `DEFERRED`.
+**Status:** invariants `APPROVED`. The pagination, sorting and filtering scheme — `DEFERRED`.
 
-У MVP немає маршрутів, що повертають колекції. Для будь-якої потенційно необмеженої колекції діють такі інваріанти:
+There are no routes returning collections in the MVP. For any potentially unbounded collection, the following invariants apply:
 
-- сервер завжди застосовує максимальний розмір сторінки, навіть якщо клієнт його не вказав;
-- порядок результатів детермінований і має стабільний tie-breaker (наприклад, ідентифікатор);
-- query-параметри — camelCase;
-- персональні дані та секрети не передаються в query-параметрах ([розділ 2](#дані-в-url)).
+- the server always applies a maximum page size, even if the client did not specify one;
+- the order of results is deterministic and has a stable tie-breaker (for example, an identifier);
+- query parameters are camelCase;
+- personal data and secrets are not passed in query parameters ([section 2](#data-in-urls)).
 
-Схему пагінації (offset чи cursor), формат сортування й фільтрації та метадані сторінки визначає перша Story з колекцією. Рішення проходить окреме погодження і після цього додається до цього документа як загальне правило. Агент не встановлює його самостійно.
+The pagination scheme (offset or cursor), the sorting and filtering format and page metadata are defined by the first Story with a collection. The decision goes through separate approval and is then added to this document as a general rule. The agent does not establish it on its own.
 
 ## 13. OpenAPI
 
-**Статус:** `APPROVED`
+**Status:** `APPROVED`
 
-- Контракт API описується специфікацією **OpenAPI 3.1**, яку ведуть вручну.
-- Розташування: `docs/api/openapi.yaml`. Файл створює перша Story, яка додає HTTP endpoint.
-- Спільні компоненти описуються один раз: схема Problem Details, елемент `errors[]`, заголовок `CSRF-Token`, cookie-автентифікація, заголовок `Request-Id`. Маршрути посилаються на ці компоненти.
+- The API contract is described by an **OpenAPI 3.1** specification maintained manually.
+- Location: `docs/api/openapi.yaml`. The file is created by the first Story that adds an HTTP endpoint.
+- Shared components are described once: the Problem Details schema, the `errors[]` element, the `CSRF-Token` header, cookie authentication, the `Request-Id` header. Routes reference these components.
 
-**Ролі в SDLC:**
+**Roles in the SDLC:**
 
-| Етап | Що робить з контрактом |
+| Stage | What it does with the contract |
 |---|---|
-| Technical Design Story | Визначає погоджені зміни HTTP-контракту |
-| Implementation | Оновлює OpenAPI в тій самій зміні, що й відповідний handler |
-| Verification | Перевіряє відповідність OpenAPI, Technical Design та реалізації |
+| Story Technical Design | Defines the approved changes to the HTTP contract |
+| Implementation | Updates OpenAPI in the same change as the corresponding handler |
+| Verification | Checks the consistency of OpenAPI, Technical Design and the implementation |
 
-- OpenAPI відображає накопичений контракт реалізованого API.
-- Якщо OpenAPI, Technical Design і реалізація суперечать одне одному, агент повідомляє про суперечність і не обирає джерело правди самостійно.
-- Нові Go-залежності не додаються.
+- OpenAPI reflects the accumulated contract of the implemented API.
+- If OpenAPI, Technical Design and the implementation contradict each other, the agent reports the contradiction and does not choose the source of truth on its own.
+- New Go dependencies are not added.
 
-Swagger UI, генерацію коду та автоматичну валідацію специфікації відкладено ([розділ 15](#відкладені-рішення)).
+Swagger UI, code generation and automatic specification validation are deferred ([section 15](#deferred-decisions)).
 
-**Обґрунтування:** вручну написана специфікація дає агентам машиночитний контракт без нових технологій ([AR-012](architecture.md#8-архітектурні-інваріанти)). Генератори або додають нову залежність, або диктують форму handlers.
+**Rationale:** a manually written specification gives agents a machine-readable contract without new technologies ([AR-012](architecture.md#8-architectural-invariants)). Generators either add a new dependency or dictate the form of handlers.
 
-## 14. Відповідність AR / BR / Security Conventions
+## 14. Mapping to AR / BR / Security Conventions
 
-| Джерело | Розділи цього документа |
+| Source | Sections of this document |
 |---|---|
-| [AR-003](architecture.md#8-архітектурні-інваріанти) | 7 (DTO в `httpapi`), 8 (inbound-адаптер перекладає категорію в HTTP) |
-| [AR-006](architecture.md#8-архітектурні-інваріанти) | 9 (явні публічні маршрути) |
-| [AR-007](architecture.md#8-архітектурні-інваріанти), [BR-001](../product/business-rules.md#br-001--admin-only-capabilities), [BR-002](../product/business-rules.md#br-002--own-account-self-service) | 3 (`/me` без ідентифікатора, `/admin` як конвенція найменування), 8 (порядок 401/403/404), 10 (Actor явним параметром) |
-| [AR-008](architecture.md#8-архітектурні-інваріанти) | 8 (без технічних деталей у Problem Details) |
-| [AR-009](architecture.md#8-архітектурні-інваріанти), [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality) | 7 (DTO без пароля й хеша), 8 (без чутливих значень у помилках) |
-| [AR-012](architecture.md#8-архітектурні-інваріанти) | 6 (stdlib для JSON), 13 (OpenAPI без нових залежностей) |
-| [BR-003](../product/business-rules.md#br-003--unique-email) | 8 (`409` — залежно від P5) |
-| [BR-007](../product/business-rules.md#br-007--blocked-user-access) | 8 (`outcome_unknown` без автоматичного повтору), 9 (`invalid_credentials` для заблокованого акаунта) |
-| [Security Conventions §5](security-conventions.md#5-cookies-csrf-cors-https) | 3 (`Path` refresh-cookie), 6 (`application/json`), 9 (`CSRF-Token`, `csrf_rejected`) |
-| [Security Conventions §7](security-conventions.md#7-автентифікація-та-авторизація) | 8 (`401`, `403`, `404`), 9 (`invalid_credentials`) |
-| [Security Conventions §9](security-conventions.md#9-security-logging) | 2 (токени й персональні дані не в URL), 10 (Request ID у логах) |
-| [Security Conventions §10](security-conventions.md#10-збої-та-timeout-и) | 4 (без автоматичних повторів), 8 (`503`, `outcome_unknown`, panic), 9 (cookies при `503`) |
+| [AR-003](architecture.md#8-architectural-invariants) | 7 (DTOs in `httpapi`), 8 (the inbound adapter translates the category into HTTP) |
+| [AR-006](architecture.md#8-architectural-invariants) | 9 (explicit public routes) |
+| [AR-007](architecture.md#8-architectural-invariants), [BR-001](../product/business-rules.md#br-001--admin-only-capabilities), [BR-002](../product/business-rules.md#br-002--own-account-self-service) | 3 (`/me` without an identifier, `/admin` as a naming convention), 8 (the 401/403/404 order), 10 (Actor as an explicit parameter) |
+| [AR-008](architecture.md#8-architectural-invariants) | 8 (no technical details in Problem Details) |
+| [AR-009](architecture.md#8-architectural-invariants), [NFR-002](../product/non-functional-requirements.md#nfr-002--password-confidentiality) | 7 (DTOs without the password and hash), 8 (no sensitive values in errors) |
+| [AR-012](architecture.md#8-architectural-invariants) | 6 (stdlib for JSON), 13 (OpenAPI without new dependencies) |
+| [BR-003](../product/business-rules.md#br-003--unique-email) | 8 (`409` — depending on P5) |
+| [BR-007](../product/business-rules.md#br-007--blocked-user-access) | 8 (`outcome_unknown` without automatic retry), 9 (`invalid_credentials` for a blocked account) |
+| [Security Conventions §5](security-conventions.md#5-cookies-csrf-cors-https) | 3 (`Path` of the refresh cookie), 6 (`application/json`), 9 (`CSRF-Token`, `csrf_rejected`) |
+| [Security Conventions §7](security-conventions.md#7-authentication-and-authorization) | 8 (`401`, `403`, `404`), 9 (`invalid_credentials`) |
+| [Security Conventions §9](security-conventions.md#9-security-logging) | 2 (tokens and personal data not in URLs), 10 (Request ID in logs) |
+| [Security Conventions §10](security-conventions.md#10-failures-and-timeouts) | 4 (no automatic retries), 8 (`503`, `outcome_unknown`, panic), 9 (cookies on `503`) |
 
-**NFR-001.** [NFR-001](../product/non-functional-requirements.md#nfr-001--secure-authentication) має статус `NEEDS_CLARIFICATION`. Цей документ її не закриває і критеріїв перевірки не встановлює.
+**NFR-001.** [NFR-001](../product/non-functional-requirements.md#nfr-001--secure-authentication) has the `NEEDS_CLARIFICATION` status. This document does not close it and does not establish verification criteria.
 
-**Закриті відкладені рішення.** Цей документ закриває такі відкладені рішення:
+**Closed deferred decisions.** This document closes the following deferred decisions:
 
-- з [Architecture §9](architecture.md#відкладені-рішення): «Перелік категорій помилок, їхня відповідність HTTP-кодам, формат тіла помилки»; модель timeout-ів HTTP-сервера та graceful shutdown;
-- з [Package Map §9](package-map.md#відкладені-рішення): «URL-префікси й версіонування маршрутів»; модель timeout-ів HTTP-сервера та graceful shutdown;
-- з [Security Conventions §12](security-conventions.md#інфраструктурні-та-архітектурні-залежності): «Категорії помилок, HTTP-коди, шлях refresh для `Path`, 404 чи 403».
+- from [Architecture §9](architecture.md#deferred-decisions): "List of error categories, their mapping to HTTP codes, error body format"; the HTTP server timeout model and graceful shutdown;
+- from [Package Map §9](package-map.md#deferred-decisions): "URL prefixes and route versioning"; the HTTP server timeout model and graceful shutdown;
+- from [Security Conventions §12](security-conventions.md#infrastructure-and-architectural-dependencies): "Error categories, HTTP codes, refresh path for `Path`, 404 or 403".
 
-Відповідні рядки в тих документах позначено як визначені з посиланнями на цей документ.
+The corresponding rows in those documents are marked as defined with references to this document.
 
-## 15. Відкриті питання, відкладені рішення та залежності
+## 15. Open Questions, Deferred Decisions and Dependencies
 
-### Відкриті питання
+### Open Questions
 
-**Статус:** `OPEN`. Без окремого погодження агент їх не вирішує.
+**Status:** `OPEN`. The agent does not resolve them without separate approval.
 
-| Питання | Тип | Що від нього залежить |
+| Question | Type | What depends on it |
 |---|---|---|
-| P1 — Logout ([Security Conventions §12](security-conventions.md#продуктові-питання)) | Продуктове | Маршрут logout у `/api/v1/auth` |
-| P3 — захист від автоматизованого перебору | Продуктове | Правила `429`, `rate_limited`, `Retry-After`, зовнішня поведінка login |
-| P4 — політика пароля | Продуктове | Правила валідації пароля |
-| P5 — перелічення акаунтів під час реєстрації; що бачить заблокований користувач під час login | Продуктове | `409` для дубля email (US-001). Зміна нерозкриття причин невдалого login можлива лише через погодження Security Conventions |
-| P6 — Administrator Provisioning ([Epic Map](../product/epic-map.md#open-product-dependencies)) | Продуктове | US-006, US-007 |
-| Target User Identification ([Epic Map](../product/epic-map.md#open-product-dependencies)) | Продуктове | Форма admin-маршрутів US-006/007, можливий пошук користувачів |
-| Склад Profile | Продуктове | Підресурси `/me`, поля, які можна очищати |
-| A2 — тип клієнта API, спосіб доставки CSRF-токена, signed double-submit ([Security Conventions §12](security-conventions.md#інфраструктурні-та-архітектурні-залежності)) | Архітектурне | Як клієнт отримує значення `CSRF-Token`; клієнтська стратегія реакції на `401` |
+| P1 — Logout ([Security Conventions §12](security-conventions.md#product-questions)) | Product | The logout route in `/api/v1/auth` |
+| P3 — protection against automated guessing | Product | The rules of `429`, `rate_limited`, `Retry-After`, the external behavior of login |
+| P4 — password policy | Product | Password validation rules |
+| P5 — account enumeration during registration; what a blocked user sees during login | Product | `409` for a duplicate email (US-001). Changing the non-disclosure of the reasons for a failed login is possible only through approval of the Security Conventions |
+| P6 — Administrator Provisioning ([Epic Map](../product/epic-map.md#open-product-dependencies)) | Product | US-006, US-007 |
+| Target User Identification ([Epic Map](../product/epic-map.md#open-product-dependencies)) | Product | The form of the admin routes of US-006/007, a possible user search |
+| Profile composition | Product | `/me` subresources, fields that can be cleared |
+| A2 — API client type, CSRF token delivery method, signed double-submit ([Security Conventions §12](security-conventions.md#infrastructure-and-architectural-dependencies)) | Architectural | How the client obtains the `CSRF-Token` value; the client strategy for reacting to `401` |
 
-### Відкладені рішення
+### Deferred Decisions
 
-**Статус:** `DEFERRED`. До вказаного моменту агент не спирається на жоден варіант.
+**Status:** `DEFERRED`. Until the stated point, the agent does not rely on any option.
 
-| Рішення | Куди відкладено |
+| Decision | Deferred to |
 |---|---|
-| Значення timeout-ів, ліміту тіла, ліміту заголовків, shutdown timeout | Infrastructure Bootstrap |
-| Форма та ідемпотентність Block / Unblock | Clarification і Technical Design US-006/007 |
-| Очищення cookies у відповідях `401` (поза обмеженнями з [розділу 9](#cookies-у-відповідях-із-помилкою)) | Technical Design US-002 |
-| Фізичний формат ідентифікаторів сутностей майбутніх модулів. Для Account/User **визначено:** UUID v4 ([Persistence Conventions §6](persistence-conventions.md#ідентифікатори)) | Відповідний модуль |
-| Одночасна підтримка кількох major-версій API | Коли з'явиться потреба |
-| Перевизначення ліміту тіла для окремих маршрутів | Коли з'явиться потреба |
-| Схема пагінації, формат сортування й фільтрації, метадані сторінки | Перша Story з колекцією, через окреме погодження |
-| Семантика field-level помилок валідації query-параметрів | Перша Story, якій це потрібно |
-| `403` чи `404` для ресурсів, якими володіють користувачі | Перший модуль із такими ресурсами |
-| Політика retry для read-only операцій | Окреме рішення |
-| Винятки з `Cache-Control: no-store` | Окреме погодження |
-| W3C Trace Context | Коли з'явиться tracing |
-| Swagger UI, генерація коду, автоматична валідація OpenAPI | Налаштування Engineering Tooling |
-| `WWW-Authenticate` для `401` | Перегляд, якщо з'явиться стандартна схема для cookie-based authentication |
+| Values of timeouts, the body limit, the header limit, the shutdown timeout | Infrastructure Bootstrap |
+| Form and idempotency of Block / Unblock | Clarification and Technical Design of US-006/007 |
+| Clearing cookies in `401` responses (beyond the restrictions from [section 9](#cookies-in-error-responses)) | Technical Design of US-002 |
+| The physical identifier format of future modules' entities. For Account/User **defined:** UUID v4 ([Persistence Conventions §6](persistence-conventions.md#identifiers)) | The corresponding module |
+| Simultaneous support of several major API versions | When the need appears |
+| Overriding the body limit for individual routes | When the need appears |
+| Pagination scheme, sorting and filtering format, page metadata | The first Story with a collection, through separate approval |
+| Semantics of field-level validation errors of query parameters | The first Story that needs it |
+| `403` or `404` for resources owned by users | The first module with such resources |
+| Retry policy for read-only operations | A separate decision |
+| Exceptions to `Cache-Control: no-store` | Separate approval |
+| W3C Trace Context | When tracing appears |
+| Swagger UI, code generation, automatic OpenAPI validation | Engineering Tooling setup |
+| `WWW-Authenticate` for `401` | Revisit if a standard scheme for cookie-based authentication appears |
 
-### Залежності від Security Conventions
+### Dependencies on Security Conventions
 
-| Залежність | Статус у Security Conventions | Вплив на API |
+| Dependency | Status in Security Conventions | Impact on the API |
 |---|---|---|
-| Спосіб доставки CSRF-токена, A2 | `OPEN` / `DEFERRED` | Отримання значення `CSRF-Token` клієнтом |
-| Захист від login CSRF | `OPEN` | Правила для login і registration до появи публічного браузерного клієнта |
-| P3 і відповідна частина NFR-001 | `OPEN` | `429` для login |
-| Ідемпотентність операцій зі станом доступу | `DEFERRED` до Clarification US-006 | Форма Block / Unblock, правила повтору |
-| Ліміти й timeout-и черги Argon2id | `DEFERRED` до реалізації | Коли повертається `503` для login і зміни пароля |
+| CSRF token delivery method, A2 | `OPEN` / `DEFERRED` | The client obtaining the `CSRF-Token` value |
+| Login CSRF protection | `OPEN` | Rules for login and registration before a public browser client appears |
+| P3 and the corresponding part of NFR-001 | `OPEN` | `429` for login |
+| Idempotency of access-state operations | `DEFERRED` until Clarification of US-006 | Form of Block / Unblock, retry rules |
+| Argon2id queue limits and timeouts | `DEFERRED` until implementation | When `503` is returned for login and password change |
 
-### Залежності від Persistence-конвенцій
+### Dependencies on Persistence Conventions
 
-| Залежність | Вплив на API | Статус |
+| Dependency | Impact on the API | Status |
 |---|---|---|
-| Механізм серіалізації по користувачу і timeout-и PostgreSQL та Redis | Коли повертаються `503` і `500 outcome_unknown` | **Визначено:** механізм і модель timeout-ів — [Persistence Conventions §5](persistence-conventions.md#5-серіалізація-по-користувачу-блокування-рядків-timeout-и). Значення timeout-ів — `DEFERRED` до Infrastructure Bootstrap |
-| Розпізнавання непідтвердженого `COMMIT` | Коректне розмежування `500 internal_error` і `500 outcome_unknown` | **Визначено:** [Persistence Conventions §8](persistence-conventions.md#unknown-outcome-commit) |
-| Формат ідентифікаторів у сховищі | Формат ідентифікаторів в URL і JSON (у JSON вони завжди рядки) | **Визначено** для Account/User: UUID v4 ([Persistence Conventions §6](persistence-conventions.md#ідентифікатори)). Для майбутніх модулів — `DEFERRED` |
+| The per-user serialization mechanism and PostgreSQL and Redis timeouts | When `503` and `500 outcome_unknown` are returned | **Defined:** the mechanism and the timeout model — [Persistence Conventions §5](persistence-conventions.md#5-per-user-serialization-row-locks-timeouts). Timeout values — `DEFERRED` until Infrastructure Bootstrap |
+| Recognizing an unconfirmed `COMMIT` | Correct distinction between `500 internal_error` and `500 outcome_unknown` | **Defined:** [Persistence Conventions §8](persistence-conventions.md#unknown-outcome-commit) |
+| Identifier format in storage | Identifier format in URLs and JSON (in JSON they are always strings) | **Defined** for Account/User: UUID v4 ([Persistence Conventions §6](persistence-conventions.md#identifiers)). For future modules — `DEFERRED` |
