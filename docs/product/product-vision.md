@@ -2,70 +2,70 @@
 
 ## Product Overview
 
-Customer Portal — backend-платформа, через яку користувачі отримують доступ до порталу та керують своїм обліковим записом, а адміністратори керують користувачами.
+Customer Portal is a backend platform through which users gain access to the portal and manage their account, and administrators manage users.
 
-Розвиток продукту починається з керування користувачами. Ця частина стане основою, на яку згодом можна буде додати інші домени.
+Product development starts with user management. This part will become the foundation to which other domains can later be added.
 
-Customer Portal — навчальний проєкт.
+Customer Portal is an educational project.
 
 ## Product Vision
 
-Customer Portal — єдина точка входу для користувачів платформи. Тут користувач може:
+Customer Portal is the single entry point for the platform's users. Here a user can:
 
-- створити обліковий запис;
-- безпечно входити в систему;
-- самостійно керувати своїм профілем.
+- create an account;
+- log in to the system securely;
+- manage their profile on their own.
 
-Адміністратор у порталі контролює доступ користувачів до платформи.
+In the portal, an administrator controls users' access to the platform.
 
-Згодом портал може розширитися новими доменами, зокрема Product Catalog, Orders, Support та іншими. Усі вони спиратимуться на спільну основу керування користувачами.
+Over time, the portal may expand with new domains, including Product Catalog, Orders, Support and others. All of them will rely on the shared user management foundation.
 
 ## Target Users
 
-| Користувач | Опис | Що отримує від продукту |
+| User | Description | What they get from the product |
 |---|---|---|
-| **User** | Людина, яка реєструється та користується порталом | Власний обліковий запис, вхід у систему, керування профілем і паролем |
-| **Admin** | Людина, відповідальна за керування користувачами платформи | Можливість блокувати та розблоковувати користувачів |
+| **User** | A person who registers and uses the portal | Their own account, logging in to the system, profile and password management |
+| **Admin** | A person responsible for managing the platform's users | The ability to block and unblock users |
 
 ## Product Goals / Success Criteria
 
-### Цілі продукту
+### Product Goals
 
-1. Дати користувачам змогу самостійно створити обліковий запис і отримати доступ до порталу.
-2. Забезпечити безпечний доступ до облікових записів відповідно до ролей і прав користувачів.
-3. Дати користувачам змогу самостійно підтримувати актуальність свого профілю та пароля.
-4. Розмежувати можливості звичайних користувачів і адміністраторів.
-5. Дати адміністраторам змогу контролювати доступ користувачів до платформи.
+1. Enable users to create an account on their own and gain access to the portal.
+2. Ensure secure access to accounts in accordance with users' roles and permissions.
+3. Enable users to keep their profile and password up to date on their own.
+4. Separate the capabilities of regular users and administrators.
+5. Enable administrators to control users' access to the platform.
 
-### Критерії успіху MVP
+### MVP Success Criteria
 
-MVP вважається успішним, коли всі можливості з розділу [MVP Scope](#mvp-scope) доступні та працюють відповідно до своїх ролей:
+The MVP is considered successful when all capabilities from the [MVP Scope](#mvp-scope) section are available and work in accordance with their roles:
 
-- користувач може зареєструватися, увійти в систему, переглянути та змінити свій профіль, а також змінити пароль;
-- можливості адміністратора доступні лише користувачам із роллю admin;
-- адміністратор може заблокувати та розблокувати користувача.
+- a user can register, log in to the system, view and change their profile, and change their password;
+- administrator capabilities are available only to users with the admin role;
+- an administrator can block and unblock a user.
 
-Кількісні метрики успіху на цьому етапі не встановлено.
+No quantitative success metrics have been set at this stage.
 
 ## MVP Scope
 
-До початкового MVP входять:
+The initial MVP includes:
 
-- **Реєстрація користувача** — створення нового облікового запису.
-- **Автентифікація** — вхід користувача в систему.
-- **Керування власним профілем** — перегляд і зміна даних свого профілю.
-- **Зміна пароля** — зміна пароля власного облікового запису.
-- **Ролі user та admin** — розмежування можливостей звичайних користувачів і адміністраторів.
-- **Адміністративне керування користувачами** — блокування та розблокування користувачів.
+- **User registration** — creation of a new account.
+- **Authentication** — a user logging in to the system.
+- **Own profile management** — viewing and changing one's own profile data.
+- **Password change** — changing the password of one's own account.
+- **user and admin roles** — separation of the capabilities of regular users and administrators.
+- **Administrative user management** — blocking and unblocking users.
 
 ## Out of Scope
 
-До початкового MVP не входять:
+The initial MVP does not include:
 
-- **Email verification** — підтвердження електронної пошти.
-- **Майбутні домени** — Product Catalog, Orders, Support та інші.
-- **Будь-які можливості, не перелічені в розділі [MVP Scope](#mvp-scope).** Вони потребують окремого погодження.
+- **Email verification** — confirmation of the email address.
+- **Future domains** — Product Catalog, Orders, Support and others.
+- **Any capabilities not listed in the [MVP Scope](#mvp-scope) section.** They require separate approval.
 
 ---
 
-> **Примітка про навчальну мету.** Окремо від продуктових цілей проєкт має інженерну навчальну мету: вивчити та застосувати на практиці Artifact-Driven Agentic SDLC. Ця мета не є бізнес-ціллю продукту і не впливає на його обсяг.
+> **Note on the educational goal.** Separately from the product goals, the project has an engineering educational goal: to learn and apply Artifact-Driven Agentic SDLC in practice. This goal is not a business goal of the product and does not affect its scope.

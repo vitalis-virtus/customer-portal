@@ -1,85 +1,85 @@
 # Personas — Customer Portal
 
-Початкові proto-personas продукту Customer Portal. Канонічне джерело продуктового контексту — [Product Vision](product-vision.md).
+Initial proto-personas of the Customer Portal product. The canonical source of product context is the [Product Vision](product-vision.md).
 
-**Важливо:**
+**Important:**
 
-- Це proto-personas. Їх сформовано з Product Vision, а не з user research. Реального дослідження користувачів не проводилося.
-- Пункти з позначкою **[Гіпотеза]** є припущеннями. Їх треба перевірити.
-- Persona описує людину та її цілі. Це не те саме, що технічна роль (role) у системі. Пов'язана роль вказана для кожної persona лише для довідки.
-
----
-
-## Persona 1: Користувач порталу
-
-### Persona
-
-Людина, яка реєструється в Customer Portal і користується ним через власний обліковий запис.
-
-Пов'язана роль у системі: `user`.
-
-### Context
-
-- Отримує доступ до платформи через Customer Portal як єдину точку входу.
-- Сама створює обліковий запис і далі сама ним керує.
-
-### Goals
-
-- Отримати доступ до порталу.
-- Підтримувати актуальність даних свого профілю.
-- Контролювати доступ до свого облікового запису.
-
-### Needs
-
-- Самостійно створити обліковий запис.
-- Безпечно входити в систему.
-- Переглядати та змінювати дані свого профілю.
-- Змінювати пароль свого облікового запису.
-
-### Frustrations
-
-- **[Гіпотеза]** Невпевненість, що доступ до облікового запису має лише його власник.
-- **[Гіпотеза]** Залежність від інших людей, якщо змінити дані профілю чи пароль самостійно неможливо.
-
-### Relevant Product Capabilities
-
-- Реєстрація користувача
-- Автентифікація
-- Керування власним профілем
-- Зміна пароля
+- These are proto-personas. They were derived from the Product Vision, not from user research. No real user research has been conducted.
+- Items marked **[Hypothesis]** are assumptions. They must be validated.
+- A Persona describes a person and their goals. It is not the same as a technical role in the system. The related role is given for each persona for reference only.
 
 ---
 
-## Persona 2: Адміністратор платформи
+## Persona 1: Portal User
 
 ### Persona
 
-Людина, відповідальна за керування користувачами платформи.
+A person who registers in Customer Portal and uses it through their own account.
 
-Пов'язана роль у системі: `admin`.
+Related system role: `user`.
 
 ### Context
 
-- Контролює доступ користувачів до платформи.
-- Користується можливостями, які доступні лише адміністраторам.
+- Gains access to the platform through Customer Portal as the single entry point.
+- Creates the account on their own and then manages it on their own.
 
 ### Goals
 
-- Контролювати, хто з користувачів має доступ до платформи.
+- Gain access to the portal.
+- Keep their profile data up to date.
+- Control access to their account.
 
 ### Needs
 
-- Блокувати користувачів.
-- Розблоковувати користувачів.
-- Мати впевненість, що адміністративні можливості доступні лише адміністраторам.
+- Create an account on their own.
+- Log in to the system securely.
+- View and change their profile data.
+- Change the password of their account.
 
 ### Frustrations
 
-- **[Гіпотеза]** Неможливість швидко обмежити доступ користувача, коли це потрібно.
-- **[Гіпотеза]** Ризик, що адміністративні можливості стануть доступні людям, які не є адміністраторами.
+- **[Hypothesis]** Uncertainty that only the owner has access to the account.
+- **[Hypothesis]** Dependence on other people if changing profile data or the password on their own is not possible.
 
 ### Relevant Product Capabilities
 
-- Автентифікація
-- Ролі user та admin
-- Адміністративне керування користувачами (блокування та розблокування)
+- User registration
+- Authentication
+- Own profile management
+- Password change
+
+---
+
+## Persona 2: Platform Administrator
+
+### Persona
+
+A person responsible for managing the platform's users.
+
+Related system role: `admin`.
+
+### Context
+
+- Controls users' access to the platform.
+- Uses capabilities that are available only to administrators.
+
+### Goals
+
+- Control which users have access to the platform.
+
+### Needs
+
+- Block users.
+- Unblock users.
+- Be confident that administrative capabilities are available only to administrators.
+
+### Frustrations
+
+- **[Hypothesis]** Inability to quickly restrict a user's access when needed.
+- **[Hypothesis]** Risk that administrative capabilities become available to people who are not administrators.
+
+### Relevant Product Capabilities
+
+- Authentication
+- user and admin roles
+- Administrative user management (blocking and unblocking)

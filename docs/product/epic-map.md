@@ -1,22 +1,22 @@
 # Epic Map — Customer Portal
 
-## Призначення
+## Purpose
 
-Epic Map ділить погоджений MVP Scope з [Product Vision](product-vision.md#mvp-scope) на функціональні області (Epics) і визначає для кожної з них Candidate User Stories.
+The Epic Map divides the approved MVP Scope from the [Product Vision](product-vision.md#mvp-scope) into functional areas (Epics) and defines Candidate User Stories for each of them.
 
-Терміни вживаються у значеннях із [Business Glossary](business-glossary.md). Обмеження задають [Business Rules](business-rules.md) та [Non-Functional Requirements](non-functional-requirements.md).
+Terms are used in the meanings from the [Business Glossary](business-glossary.md). Constraints are set by the [Business Rules](business-rules.md) and [Non-Functional Requirements](non-functional-requirements.md).
 
-**Статус Candidate Stories:**
+**Status of Candidate Stories:**
 
-- Candidate Stories ще не проходили Clarification і не є погодженими специфікаціями.
-- Їхні ідентифікатори попередньо зарезервовано для майбутнього Backlog.
-- Acceptance Criteria для них ще не визначено.
+- Candidate Stories have not yet gone through Clarification and are not approved specifications.
+- Their identifiers are provisionally reserved for the future Backlog.
+- Acceptance Criteria have not yet been defined for them.
 
-Ідентифікатори Epics і Stories стабільні. Ідентифікатор не змінюється і не використовується повторно, навіть якщо Epic чи Story змінено або вилучено.
+Epic and Story identifiers are stable. An identifier does not change and is not reused, even if the Epic or Story is changed or removed.
 
-## Огляд
+## Overview
 
-| Epic | Назва | Candidate Stories |
+| Epic | Name | Candidate Stories |
 |---|---|---|
 | EPIC-001 | Account Access | US-001, US-002 |
 | EPIC-002 | Self-Service Account Management | US-003, US-004, US-005 |
@@ -24,52 +24,52 @@ Epic Map ділить погоджений MVP Scope з [Product Vision](product
 
 ## EPIC-001 — Account Access
 
-**Goal:** Дати людині змогу самостійно створити обліковий запис і входити в систему.
+**Goal:** Enable a person to create an account on their own and log in to the system.
 
-| ID | Candidate Story | Призначення |
+| ID | Candidate Story | Purpose |
 |---|---|---|
-| US-001 | Register Account | Людина створює новий обліковий запис у Customer Portal |
-| US-002 | Log In | Користувач входить у систему через свій обліковий запис |
+| US-001 | Register Account | A person creates a new account in Customer Portal |
+| US-002 | Log In | A user logs in to the system with their account |
 
-**Пов'язані правила та вимоги:** BR-003, BR-004, BR-005, BR-006, BR-007, NFR-001, NFR-002.
+**Related rules and requirements:** BR-003, BR-004, BR-005, BR-006, BR-007, NFR-001, NFR-002.
 
 ## EPIC-002 — Self-Service Account Management
 
-**Goal:** Дати користувачу змогу самостійно підтримувати актуальність свого профілю та пароля.
+**Goal:** Enable a user to keep their profile and password up to date on their own.
 
-| ID | Candidate Story | Призначення |
+| ID | Candidate Story | Purpose |
 |---|---|---|
-| US-003 | View Own Profile | Користувач переглядає дані свого профілю |
-| US-004 | Update Own Profile | Користувач змінює дані свого профілю |
-| US-005 | Change Password | Користувач змінює пароль свого облікового запису |
+| US-003 | View Own Profile | A user views their profile data |
+| US-004 | Update Own Profile | A user changes their profile data |
+| US-005 | Change Password | A user changes the password of their account |
 
-**Пов'язані правила та вимоги:** BR-002, BR-003, NFR-002.
+**Related rules and requirements:** BR-002, BR-003, NFR-002.
 
 ## EPIC-003 — User Access Administration
 
-**Goal:** Дати адміністратору змогу контролювати доступ користувачів до платформи.
+**Goal:** Enable an administrator to control users' access to the platform.
 
-| ID | Candidate Story | Призначення |
+| ID | Candidate Story | Purpose |
 |---|---|---|
-| US-006 | Block User | Адміністратор блокує користувача |
-| US-007 | Unblock User | Адміністратор скасовує блокування користувача |
+| US-006 | Block User | An administrator blocks a user |
+| US-007 | Unblock User | An administrator cancels a user's blocking |
 
-**Пов'язані правила та вимоги:** BR-001, BR-006, BR-007, BR-008.
+**Related rules and requirements:** BR-001, BR-006, BR-007, BR-008.
 
-## Наскрізні можливості
+## Cross-Cutting Capabilities
 
-Можливість MVP **«Ролі user та admin»** не виділено в окремий Epic. Вона не є самостійною дією користувача, а реалізується через правила, які діють в інших Epics:
+The MVP capability **"user and admin roles"** is not allocated to a separate Epic. It is not a standalone user action; it is implemented through rules that apply in other Epics:
 
-- BR-005: роль `user` призначається під час реєстрації (US-001);
-- BR-001: адміністративні можливості доступні лише ролі `admin` (US-006, US-007);
-- BR-006: користувач має не більше однієї ролі. Діє під час реєстрації (US-001) і там, де важлива роль користувача (US-006, US-007);
-- BR-008: блокувати можна лише користувачів із роллю `user` (US-006).
+- BR-005: the `user` role is assigned during registration (US-001);
+- BR-001: administrative capabilities are available only to the `admin` role (US-006, US-007);
+- BR-006: a user has no more than one role. It applies during registration (US-001) and wherever the user's role matters (US-006, US-007);
+- BR-008: only users with the `user` role can be blocked (US-006).
 
 ## Open Product Dependencies
 
-Невирішені продуктові залежності EPIC-003. Їх треба вирішити до Clarification пов'язаних Stories. Рішень поки не погоджено.
+Unresolved product dependencies of EPIC-003. They must be resolved before Clarification of the related Stories. No decisions have been approved yet.
 
-| Залежність | Питання | Пов'язані Candidate Stories |
+| Dependency | Question | Related Candidate Stories |
 |---|---|---|
-| **Administrator Provisioning** | Як у системі з'являється користувач із роллю `admin`, якщо самостійна реєстрація призначає лише роль `user` (BR-005)? | US-006, US-007 |
-| **Target User Identification** | Як адміністратор визначає користувача, для якого виконується блокування або розблокування? | US-006, US-007 |
+| **Administrator Provisioning** | How does a user with the `admin` role appear in the system if self-registration assigns only the `user` role (BR-005)? | US-006, US-007 |
+| **Target User Identification** | How does an administrator identify the user for whom blocking or unblocking is performed? | US-006, US-007 |
