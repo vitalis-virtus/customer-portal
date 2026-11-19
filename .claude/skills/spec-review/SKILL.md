@@ -125,7 +125,7 @@ Body sections:
 5. **`focus` Hypotheses** — confirmed or rejected, with a reference to an `F-NNN` or to the evidence.
 6. **Checked Criteria** — briefly, by items 1–10 of section 4: met or `F-NNN`.
 
-In `mode=pilot`, the first line of the body: "Pilot artifact outside the registered Workflow. Not registered, not approved, not an input of any stage." The checked pilot artifacts are not approved either; do not present them and the review as an approval.
+In `mode=pilot`, the first line of the body: "Pilot artifact outside the official registered Workflow. Not officially approved and not an input of stages of registered Stories; may be an input of subsequent stages of the same pilot." The checked pilot artifacts are not approved either; do not present them and the review as an approval.
 
 ## 6. Verdict and Return
 

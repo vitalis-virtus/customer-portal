@@ -102,7 +102,7 @@ Body sections:
 7. **Contradictions and Risks**.
 8. **Handoff for SPECIFICATION** — requirements and decisions with references to a `CQ` or the Foundation.
 
-In `mode=pilot`, the first line of the body: "Pilot artifact outside the registered Workflow. Not registered, not approved, not an input of any stage."
+In `mode=pilot`, the first line of the body: "Pilot artifact outside the official registered Workflow. Not officially approved and not an input of stages of registered Stories; may be an input of subsequent stages of the same pilot."
 
 ## 6. Verdict and Return
 
