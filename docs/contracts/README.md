@@ -1,34 +1,34 @@
 # Artifact Contracts — Simplified MVP
 
-**Статус:** `APPROVED (MVP)` — Phase 4, Simplified Artifact Contracts MVP. Людина-архітектор погодила дизайн 2026-11-17.
+**Status:** `APPROVED (MVP)` — Phase 4, Simplified Artifact Contracts MVP. The human architect approved the design on 2026-11-17.
 
-Пакет визначає, де лежать артефакти Story, які метадані вони мають, як зберігаються стан і рішення людини, і що кожна з 22 стадій читає та створює. Мета — практична основа для першої реальної Story. Пакет не реалізує Stage Skills, Orchestrator чи валідацію.
+The package defines where Story artifacts live, what metadata they have, how the state and human decisions are stored, and what each of the 22 stages reads and creates. The goal is a practical foundation for the first real Story. The package does not implement Stage Skills, the Orchestrator or validation.
 
-**Межі погодження.** Погоджено лише дизайн MVP-контрактів, тобто п'ять файлів цього пакета. Погодження не означає, що реалізовано розширені гарантії Workflow Definition. Відкладене й консервативно спрощене перелічено в розділі «Deferred Advanced Features / Workflow Compatibility». Workflow Definition лишається чинною в повному обсязі: жодна Story не може досягти `DONE`, оминувши її обов'язкові вимоги.
+**Boundaries of the approval.** Only the design of the MVP contracts is approved, that is, the five files of this package. The approval does not mean that the extended guarantees of the Workflow Definition are implemented. What is deferred and conservatively simplified is listed in the section "Deferred Advanced Features / Workflow Compatibility". The Workflow Definition remains in force in full: no Story can reach `DONE` by bypassing its mandatory requirements.
 
-Пакет замінив попередню, надмірно складну редакцію Phase 4 (JSON Schema, catalog, fixtures, Durable Transition Protocol, Git identity profiles). Ця редакція ніколи не погоджувалась як Phase 4 і не є канонічною. Її повну копію збережено поза репозиторієм разом з маніфестом SHA-256.
+The package replaced the previous, overly complex edition of Phase 4 (JSON Schema, catalog, fixtures, Durable Transition Protocol, Git identity profiles). That edition was never approved as Phase 4 and is not canonical. Its full copy is kept outside the repository together with a SHA-256 manifest.
 
-## Файли
+## Files
 
-| Файл | Що містить |
+| File | What it contains |
 |---|---|
-| [artifact-registry.yaml](artifact-registry.yaml) | Єдине джерело шляхів: типи артефактів, категорії, стадії-власники, gate, де тип погоджується |
-| [artifact-rules.md](artifact-rules.md) | Метадані документів і записів, версії, Staleness, findings, хто що пише |
-| [workflow-state.md](workflow-state.md) | `state.yaml`, `history.jsonl`, approvals, result envelope стадії |
-| [stage-io-map.yaml](stage-io-map.yaml) | Входи й виходи кожної з 22 стадій |
+| [artifact-registry.yaml](artifact-registry.yaml) | The single source of paths: artifact types, categories, owner stages, the gate where the type is approved |
+| [artifact-rules.md](artifact-rules.md) | Metadata of documents and records, versions, Staleness, findings, who writes what |
+| [workflow-state.md](workflow-state.md) | `state.yaml`, `history.jsonl`, approvals, the stage result envelope |
+| [stage-io-map.yaml](stage-io-map.yaml) | Inputs and outputs of each of the 22 stages |
 
-Маршрути, verdicts, loopbacks, gates і Approval Scope визначає лише погоджена Workflow Definition ([stage-map.yaml](../workflow/stage-map.yaml)). Пакет їх не повторює і не змінює.
+Routes, verdicts, loopbacks, gates and the Approval Scope are defined only by the approved Workflow Definition ([stage-map.yaml](../workflow/stage-map.yaml)). The package does not repeat or change them.
 
-## Як це працює
+## How It Works
 
-1. Стадія бере шляхи входів з реєстру, читає поточні версії, записує новий файл (`v<N>.md` або запис `<NNNN>.md`) і повертає result envelope.
-2. Orchestrator перевіряє результат, реєструє файли в `state.yaml`, обирає маршрут зі `stage-map.yaml` і дописує подію в `history.jsonl`.
-3. На Human Gate Orchestrator зупиняється, показує людині пакет рішення і записує її рішення: хто, що, коли, які версії.
-4. Статуси (Version Status, Currency, Approval State) живуть лише в `state.yaml`. Файли артефактів після реєстрації не змінюються.
+1. A stage takes the input paths from the registry, reads the current versions, writes a new file (`v<N>.md` or a record `<NNNN>.md`) and returns a result envelope.
+2. The Orchestrator checks the result, registers the files in `state.yaml`, chooses the route from `stage-map.yaml` and appends an event to `history.jsonl`.
+3. At a Human Gate, the Orchestrator stops, shows the human the decision package and records their decision: who, what, when, which versions.
+4. Statuses (Version Status, Currency, Approval State) live only in `state.yaml`. Artifact files do not change after registration.
 
 ## Storage
 
-MVP-розміщення:
+MVP placement:
 
 ```
 docs/stories/<story_id>/
@@ -36,71 +36,71 @@ docs/stories/<story_id>/
 ├── history.jsonl
 ├── artifacts/<artifact_type>/v<N>.md
 └── records/<record_type>/<NNNN>.md
-docs/backlog/<entry_id>.md          # рівень проєкту
+docs/backlog/<entry_id>.md          # project level
 ```
 
-Дані Story комітяться у feature branch цієї Story разом з кодом. Git дає історію змін і незмінний слід.
+Story data is committed to this Story's feature branch together with the code. Git provides the change history and an immutable trail.
 
-Це **запропоноване MVP-спрощення**, а не погоджена заміна політики ізольованого storage root (рішення D-01 старого пакета). Обмеження:
+This is a **proposed MVP simplification**, not an approved replacement of the isolated storage root policy (decision D-01 of the old package). Limitations:
 
-- **Перемикання гілок.** Стан Story видно лише у feature branch цієї Story. На іншій гілці файлів Story немає або вони інші. Orchestrator працює зі Story лише на її гілці.
-- **Кілька Stories одночасно.** Кожна Story має свою гілку й директорію. Паралельна робота — через окремі гілки чи `git worktree`. Спільний огляд усіх Stories з однієї гілки недоступний.
-- **Дані Story потрапляють у PR.** Review коду їх не враховує (`workflow-state.md`, розділ 8).
-- **Стан після merge — відоме нерозв'язане обмеження.** Після HUMAN_MERGE оновлення стану Story (`state.yaml`, `history.jsonl`, `integration-record`, `post-merge-validation-record`, перехід у `DONE` чи `BLOCKED`) з'являються вже після того, як feature branch інтегровано. Поточний MVP не визначає, як ці оновлення потрапляють і зберігаються в target branch. Це завдання майбутньої реалізації Orchestrator. Структура Story від цього не змінюється.
-- **Коміти.** [AGENTS.md](../../AGENTS.md) забороняє коміти без явного дозволу. Хто комітить дані Story (людина чи агент з дозволом), треба вирішити до першої Story.
+- **Branch switching.** The Story state is visible only in this Story's feature branch. On another branch, the Story files are absent or different. The Orchestrator works with a Story only on its branch.
+- **Several Stories at once.** Each Story has its own branch and directory. Parallel work — through separate branches or `git worktree`. A shared overview of all Stories from one branch is not available.
+- **Story data gets into the PR.** Code review does not take it into account (`workflow-state.md`, section 8).
+- **The state after merge is a known unresolved limitation.** After HUMAN_MERGE, the Story state updates (`state.yaml`, `history.jsonl`, `integration-record`, `post-merge-validation-record`, the transition to `DONE` or `BLOCKED`) appear after the feature branch has already been integrated. The current MVP does not define how these updates get into and are stored in the target branch. This is a task for the future Orchestrator implementation. The Story structure does not change because of this.
+- **Commits.** [AGENTS.md](../../AGENTS.md) prohibits commits without explicit permission. Who commits the Story data (a human or an agent with permission) must be decided before the first Story.
 
 ## Deferred Advanced Features / Workflow Compatibility
 
-MVP не реалізує всіх правил погодженої Workflow Definition. Жоден Human Gate не прибрано і не послаблено: кожен gate вимагає рішення людини.
+The MVP does not implement all rules of the approved Workflow Definition. No Human Gate is removed or weakened: every gate requires a human's decision.
 
-### Підтримано повністю
+### Fully Supported
 
-- Усі 22 стадії, маршрути й gates — за незмінним `stage-map.yaml`.
-- Власники артефактів, незмінні версії, нова версія для виправлення, залежності від конкретних версій.
-- Staleness контрольованих артефактів, Revalidation через `revalidation-record`.
-- Review PASS ≠ Human Approval. Рішення людини фіксує, хто, що, коли і які версії.
-- APPROVE, REQUEST_CHANGES, CANCEL, CONFIRM_MERGED. Підтвердження Loopback через gate, дії Recovery.
-- Optional Stages з `applicability-decision`, `NOT_APPLICABLE` лише для `optional: true`.
-- Retry Counters (Technical Attempts, Quality Loops, Repeated Failure), Cancellation Protocol, Step Mode і Auto Mode.
+- All 22 stages, routes and gates — according to the unchanged `stage-map.yaml`.
+- Artifact owners, immutable versions, a new version for a correction, dependencies on specific versions.
+- Staleness of controlled artifacts, Revalidation through `revalidation-record`.
+- Review PASS ≠ Human Approval. A human's decision records who, what, when and which versions.
+- APPROVE, REQUEST_CHANGES, CANCEL, CONFIRM_MERGED. Confirmation of a Loopback through a gate, Recovery actions.
+- Optional Stages with `applicability-decision`, `NOT_APPLICABLE` only for `optional: true`.
+- Retry Counters (Technical Attempts, Quality Loops, Repeated Failure), Cancellation Protocol, Step Mode and Auto Mode.
 
-### Підтримано консервативно або вручну
+### Supported Conservatively or Manually
 
-| Вимога | MVP | Наслідок |
+| Requirement | MVP | Consequence |
 |---|---|---|
-| Approved Content Identity | Версія документа, `record_id` запису, `changeset_commit` для changeset | Без hash. Цілісність тримається на незмінності файлів і Git |
-| Review Binding Guard (RR-10) | Review прив'язано до версії changeset. Після `changeset_commit` дозволено змінювати лише файли Story | Суворіше: будь-який rebase чи squash вимагає нового IMPLEMENTATION і review |
-| `CHANGESET_CONTENT_UNCHANGED` | `changeset_commit` не змінився | Суворіше |
-| Staleness Foundation | Залежність від git commit файлу чи каталогу | Грубо: будь-яка зміна файлу робить залежні версії `STALE` |
-| Applicability Basis (AP-04, AP-08) | `basis` записано в рішенні, переоцінка — на кожному повторному вході | Суворіше, але більше роботи |
-| Finding Identity, Repeated Failure | `F-NNN` присвоює reviewer, збіг визначає LLM | Менш детерміновано |
-| Out-of-Stage Revalidation | Не підтримано окремо. Людина обирає `ROUTE_BACK` | Суворіше й дорожче |
-| Session Recovery, цілісність | Розбіжність `state.yaml`, History і файлів → `BLOCKED` (Integrity Error), вирішує людина | Без автоматичного відновлення |
-| MERGE_READINESS_CHECK | Порівняння commits: між `changeset_commit` і head PR змінено лише файли Story, target branch = `verified_target_base` (`workflow-state.md`, розділ 8) | Достатньо для типового випадку |
-| SUSPENDED → VALID | `revalidation-record` повертає Currency `CURRENT`, але approval лишається `SUSPENDED`, доки людина не ухвалить APPROVE | Суворіше: замість RECONFIRM — повне APPROVE |
+| Approved Content Identity | The document version, the record's `record_id`, `changeset_commit` for the changeset | No hash. Integrity relies on the immutability of files and on Git |
+| Review Binding Guard (RR-10) | Review is bound to the changeset version. After `changeset_commit`, only Story files may be changed | Stricter: any rebase or squash requires a new IMPLEMENTATION and review |
+| `CHANGESET_CONTENT_UNCHANGED` | `changeset_commit` has not changed | Stricter |
+| Foundation Staleness | Dependency on the git commit of a file or directory | Coarse: any change of a file makes the dependent versions `STALE` |
+| Applicability Basis (AP-04, AP-08) | `basis` is recorded in the decision, re-evaluation — on every re-entry | Stricter, but more work |
+| Finding Identity, Repeated Failure | `F-NNN` is assigned by the reviewer, a match is determined by the LLM | Less deterministic |
+| Out-of-Stage Revalidation | Not supported separately. The human chooses `ROUTE_BACK` | Stricter and more expensive |
+| Session Recovery, integrity | A discrepancy between `state.yaml`, History and files → `BLOCKED` (Integrity Error), resolved by a human | No automatic recovery |
+| MERGE_READINESS_CHECK | Comparison of commits: between `changeset_commit` and the PR head only Story files have changed, target branch = `verified_target_base` (`workflow-state.md`, section 8) | Sufficient for the typical case |
+| SUSPENDED → VALID | `revalidation-record` returns Currency `CURRENT`, but the approval remains `SUSPENDED` until the human makes APPROVE | Stricter: a full APPROVE instead of RECONFIRM |
 
-### Відкладено. Потрібне погоджене спрощення Workflow
+### Deferred. An Approved Simplification of the Workflow Is Needed
 
-| Можливість | Що вимагає Workflow | Що робить MVP |
+| Capability | What the Workflow requires | What the MVP does |
 |---|---|---|
-| **RECONFIRM** | Gate decision RECONFIRM (OD-06) | Не пропонується. Людина обирає APPROVE. Обмеження вибору людини, тож потребує погодження |
-| **Cryptographic Changeset Content Identity** | Перебудова commits без зміни змісту не змінює identity (`workflow-policies.md`, розділ 9) | Identity = commit. Розбіжність із формулюванням розділу 9 |
-| **Full Git Integration Verification** | Доказ, що merge вніс саме погоджені зміни і нічого іншого (Integration Match), і Post-Merge Validation (OD-12 крок 7, OD-16, OD-17) | Artifact Contracts цю перевірку **не реалізують**. Вони задають лише мінімальні Git-метадані: `feature_branch`, `base_commit`, `changeset_commit`, `verified_target_base`, `merge_commit`, `target_before_merge`. Без погодженого способу перевірки INTEGRATION_CONFIRMATION не повертає `PASS`, а Story лишається в `BLOCKED` до рішення людини |
-| **Durable Transition / Crash Recovery** | Детерміноване відновлення узгодженості State і History | Немає. Розбіжність розв'язує людина |
-| **Advanced contract validation** | Детермінована перевірка контрактів, версіоновані контракти, закріплення версій | Немає валідатора і version pinning. Правила виконують Orchestrator і review за інструкціями |
+| **RECONFIRM** | Gate decision RECONFIRM (OD-06) | Not offered. The human chooses APPROVE. A restriction of the human's choice, so it requires approval |
+| **Cryptographic Changeset Content Identity** | Rebuilding commits without changing the content does not change the identity (`workflow-policies.md`, section 9) | Identity = commit. A discrepancy with the wording of section 9 |
+| **Full Git Integration Verification** | Proof that the merge introduced exactly the approved changes and nothing else (Integration Match), and Post-Merge Validation (OD-12 step 7, OD-16, OD-17) | The Artifact Contracts **do not implement** this check. They set only the minimal Git metadata: `feature_branch`, `base_commit`, `changeset_commit`, `verified_target_base`, `merge_commit`, `target_before_merge`. Without an approved verification method, INTEGRATION_CONFIRMATION does not return `PASS`, and the Story remains in `BLOCKED` until a human's decision |
+| **Durable Transition / Crash Recovery** | Deterministic recovery of the consistency of State and History | None. A discrepancy is resolved by a human |
+| **Advanced contract validation** | Deterministic contract validation, versioned contracts, version pinning | No validator and no version pinning. The rules are performed by the Orchestrator and review according to instructions |
 
-**DONE.** MVP не позначає Story як `DONE`, доки не виконано вимоги інтеграції погодженого Workflow: Integration Match `PASS`, Post-Merge Validation `PASS` (якщо target branch змінилася) і всі умови DoD (`stage-map.yaml` RR-09, `terminal_states.DONE`). Наявність `integration-record` чи атестація людини сама по собі цього не доводить.
+**DONE.** The MVP does not mark a Story as `DONE` until the integration requirements of the approved Workflow are met: Integration Match `PASS`, Post-Merge Validation `PASS` (if the target branch has changed) and all DoD conditions (`stage-map.yaml` RR-09, `terminal_states.DONE`). The presence of an `integration-record` or a human's attestation does not prove this by itself.
 
-### Передумови першої Story (не залежать від цього пакета)
+### Prerequisites for the First Story (Independent of This Package)
 
-- **FG-01** — Testing Strategy. Без неї перша реальна Story не реєструється (`workflow-policies.md`, розділ 15).
-- **PRQ-02** — Merge Protection Configuration до першого HUMAN_MERGE.
-- **PRQ-01** — канонічний Backlog. Реєстр визначає шлях `docs/backlog/`, але потрібне погодження, що це і є канонічний Backlog.
+- **FG-01** — Testing Strategy. Without it, the first real Story is not registered (`workflow-policies.md`, section 15).
+- **PRQ-02** — Merge Protection Configuration before the first HUMAN_MERGE.
+- **PRQ-01** — the canonical Backlog. The registry defines the path `docs/backlog/`, but approval is needed that this is the canonical Backlog.
 
-## Що запозичено з реалізації ментора
+## What Was Borrowed from the Mentor's Implementation
 
-- Реєстр як єдине джерело шляхів і власників.
-- Stage I/O через логічні ключі, а не шляхи.
-- Result envelope: Skill не змінює стан.
-- Простий YAML-стан і JSONL-журнал.
+- The registry as the single source of paths and owners.
+- Stage I/O through logical keys rather than paths.
+- Result envelope: the Skill does not change the state.
+- A simple YAML state and a JSONL log.
 
-Відмінності від ментора: окремий файл на кожну версію (у ментора один шлях на тип), статуси лише в стані (у ментора — у front matter), дані окремо для кожної Story, збереження того, хто ухвалив рішення.
+Differences from the mentor: a separate file for each version (the mentor has one path per type), statuses only in the state (the mentor has them in front matter), data separately for each Story, preservation of who made a decision.
