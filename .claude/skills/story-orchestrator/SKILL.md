@@ -1,12 +1,12 @@
 ---
 name: story-orchestrator
-description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4). Initializes a pilot Story outside the registered Workflow, shows its status with a State and History check, executes one stage per run (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS and SOLUTION_DESIGN in a subagent) in Step Mode up to API_DESIGN, supports re-entry into IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN, applies the human's decisions at HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL) and at the Loopback confirmation from IMPACT_ANALYSIS and SOLUTION_DESIGN (RESUME, CANCEL). Started only manually with mode=pilot.
+description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4 and the API_DESIGN integration). Initializes a pilot Story outside the registered Workflow, shows its status with a State and History check, executes one stage per run (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN and API_DESIGN in a subagent) in Step Mode up to DB_DESIGN, supports re-entry into IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN, applies the human's decisions at HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL) and at the Loopback confirmation from IMPACT_ANALYSIS, SOLUTION_DESIGN and API_DESIGN (RESUME, CANCEL). Started only manually with mode=pilot.
 argument-hint: "init|status|next story=<ID> mode=pilot | decide story=<ID> mode=pilot decision=APPROVE|REQUEST_CHANGES|CANCEL|RESUME|ROUTE_BACK by=<id> [target=<stage>] [reason=\"...\"] [comment=\"...\"]"
 disable-model-invocation: true
 user-invocable: true
 ---
 
-# Story Orchestrator — MVP (increments 6.4.1–6.4.3, 7.4.1–7.4.2, 8.3.2, 8.4)
+# Story Orchestrator — MVP (increments 6.4.1–6.4.3, 7.4.1–7.4.2, 8.3.2, 8.4, API_DESIGN)
 
 ## 1. Purpose
 
@@ -21,18 +21,20 @@ The Skill works in the main session.
 
 **Boundaries.** Commands: `init`, `status`, `next`, `decide`.
 
-- `next` executes one stage per run (Step Mode): CLARIFICATION, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS or SOLUTION_DESIGN.
+- `next` executes one stage per run (Step Mode): CLARIFICATION, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN or API_DESIGN.
 - After `PASS` of SPEC_REVIEW, the Story stops at HUMAN_SPEC_APPROVAL and waits for the human's decision.
 - After `PASS` or `NOT_APPLICABLE` of IMPACT_ANALYSIS, the Story moves to SOLUTION_DESIGN.
-- After `PASS` of SOLUTION_DESIGN, the Story moves to API_DESIGN. `next` does not execute that stage yet.
+- After `PASS` of SOLUTION_DESIGN, the Story moves to API_DESIGN.
+- After `PASS` or `NOT_APPLICABLE` of API_DESIGN, the Story moves to DB_DESIGN. `next` does not execute that stage yet.
 - `decide` applies the human's decisions:
   - `APPROVE`, `REQUEST_CHANGES` or `CANCEL` at HUMAN_SPEC_APPROVAL (section 8);
-  - `RESUME` or `CANCEL` at the Loopback confirmation (`LOOPBACK_CONFIRMATION`), when IMPACT_ANALYSIS or SOLUTION_DESIGN returned `CHANGES_REQUIRED` with a target through a gate (section 8.7). `ROUTE_BACK` is rejected without changes (section 8.7.2).
+  - `RESUME` or `CANCEL` at the Loopback confirmation (`LOOPBACK_CONFIRMATION`), when IMPACT_ANALYSIS, SOLUTION_DESIGN or API_DESIGN returned `CHANGES_REQUIRED` with a target through a gate (section 8.7). `ROUTE_BACK` is rejected without changes (section 8.7.2).
 - Re-entry after a return is supported:
   - for SPECIFICATION — after a loopback from SPEC_REVIEW or REQUEST_CHANGES at the gate (section 7.3.1);
   - for IMPACT_ANALYSIS — after a loopback from SOLUTION_DESIGN (section 7.3.2).
 - `REQUEST_CHANGES` with `target=CLARIFICATION` is rejected without changes (section 8.4.1).
-- Not implemented: execution of other stages, re-entry into CLARIFICATION and SOLUTION_DESIGN with a new version, other Human Gates, RECONFIRM, a Loopback through a gate (`ROUTE_BACK`), Recovery and Auto Mode. If the human asks for something else, explain that it does not exist yet, and stop.
+- A Loopback without a gate from API_DESIGN to SOLUTION_DESIGN or IMPACT_ANALYSIS is routed, but the target is not executed (section 7.8, API-D01).
+- Not implemented: execution of other stages, re-entry into CLARIFICATION and SOLUTION_DESIGN with a new version, re-entry into IMPACT_ANALYSIS after a Loopback from API_DESIGN, re-entry into API_DESIGN after `PASS` (only `api-design` v1), DESIGN_REVIEW, other Human Gates, RECONFIRM, a Loopback through a gate (`ROUTE_BACK`), Recovery and Auto Mode. If the human asks for something else, explain that it does not exist yet, and stop.
 
 ## 2. Inputs
 
@@ -150,6 +152,7 @@ Read-only. No file changes — even if an inconsistency is found.
    - the current versions of artifacts with `status` and `currency`, the valid records from `records`, in particular `applicability-decision` by stage with its `result`. Next to `APPROVED` — «у пілоті». If the valid IMPACT_ANALYSIS decision is `NOT_APPLICABLE`, and `impact-analysis` is registered, mark it «історична версія, не є входом» (section 7.1);
    - `approvals` under the heading «Рішення пілоту (симульований Human Gate), не офіційне погодження Workflow»: for each gate — `decision`, `decided_by`, `decided_at`, `scope`, `approval_state`;
    - `pending_human_decision`, `blocker`, non-zero `retry.technical_attempts` and `retry.quality_loops`. For `kind: LOOPBACK_CONFIRMATION` — also the proposed target (`loopback_target` of the last `stage.completed` event), `crosses_gates` and the decisions available in the MVP (`RESUME`, `CANCEL`; section 8.7);
+   - if the last routing event is `stage.completed` API_DESIGN with `verdict: CHANGES_REQUIRED` and `to_stage` `SOLUTION_DESIGN` or `IMPACT_ANALYSIS` — the marker «повернення з API_DESIGN без підтримки повторного входу в MVP: `next` цю стадію не виконає» (section 7.8, API-D01);
    - the number of History events and the last event (`ts`, `event`, `stage`);
    - the check result: «узгоджено» or a list of discrepancies.
 
@@ -214,15 +217,16 @@ Executes one attempt of the current stage and stops.
 | `SPEC_REVIEW` | `.claude/skills/spec-review/SKILL.md` | a separate `general-purpose` subagent | the `review-report` record | `story-spec`, `clarification-record` |
 | `IMPACT_ANALYSIS` | `.claude/skills/impact-analysis/SKILL.md` | a separate `general-purpose` subagent | the `applicability-decision` record (always, when the assessment is completed) and `impact-analysis` (only `PASS`) | `story-spec` |
 | `SOLUTION_DESIGN` | `.claude/skills/solution-design/SKILL.md` | a separate `general-purpose` subagent | `solution-design` | `story-spec`; `impact-analysis` — only if IMPACT_ANALYSIS is applicable (section 7.2, step 7) |
+| `API_DESIGN` | `.claude/skills/api-design/SKILL.md` | a separate `general-purpose` subagent | the `applicability-decision` record (always, when the assessment is completed) and `api-design` v1 (only `PASS`) | `story-spec`, `solution-design`. `impact-analysis` is never passed: it is not an input of the stage (`stage-io-map.yaml` → `API_DESIGN`) |
 
-The output and the owner are from `artifact-registry.yaml` (`produced_by`), the inputs — from `stage-io-map.yaml`. SPEC_REVIEW checks both inputs (`stage-map.yaml` → `reviews: [CLARIFICATION, SPECIFICATION]`). `codebase`, `architecture-foundation` and `product-foundation` for IMPACT_ANALYSIS and SOLUTION_DESIGN are sources, not registered artifacts: the Stage Skill reads them itself (`impact-analysis/SKILL.md` §2, `solution-design/SKILL.md` §2). Allowed verdicts and routes — only from `stage-map.yaml` (section 7.6).
+The output and the owner are from `artifact-registry.yaml` (`produced_by`), the inputs — from `stage-io-map.yaml`. SPEC_REVIEW checks both inputs (`stage-map.yaml` → `reviews: [CLARIFICATION, SPECIFICATION]`). `codebase`, `architecture-foundation` and `product-foundation` for IMPACT_ANALYSIS, SOLUTION_DESIGN and API_DESIGN are sources, not registered artifacts: the Stage Skill reads them itself (`impact-analysis/SKILL.md` §2, `solution-design/SKILL.md` §2, `api-design/SKILL.md` §2). Allowed verdicts and routes — only from `stage-map.yaml` (section 7.6).
 
 **Conditional input `impact-analysis`.** The condition `when: applicable` (`stage-io-map.yaml`) is determined by the valid `applicability-decision` of the stage, that is, `records.applicability-decision.IMPACT_ANALYSIS.ENTRY` with `result: APPLICABLE`, not by the existence of the artifact. If the valid decision is `NOT_APPLICABLE`, a previously registered version of `impact-analysis` remains in `artifacts` as a historical one, but it is not an input of any stage, and the Orchestrator does not pass it (section 7.2, step 7).
 
 ### 7.2. Pre-Run Check
 
 1. **Check the arguments** and consistency (section 6). A discrepancy — stop, as in `status`.
-2. **`story_status` must be `ACTIVE`.** Otherwise — show the state and stop. For `pending_human_decision.kind: GATE` at HUMAN_SPEC_APPROVAL and for `kind: LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS or SOLUTION_DESIGN, say that the human makes the decision with the `decide` command (sections 8, 8.7). For `CANCELLED` — the Story is cancelled in the pilot, the state is terminal and is not reopened. Other human decisions and Recovery are not implemented yet.
+2. **`story_status` must be `ACTIVE`.** Otherwise — show the state and stop. For `pending_human_decision.kind: GATE` at HUMAN_SPEC_APPROVAL and for `kind: LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN or API_DESIGN, say that the human makes the decision with the `decide` command (sections 8, 8.7). For `CANCELLED` — the Story is cancelled in the pilot, the state is terminal and is not reopened. Other human decisions and Recovery are not implemented yet.
    A special case — `WAITING_FOR_HUMAN` with `pending_human_decision.kind: CLARIFICATION_ANSWERS`: a new `next` run means that the interview of this attempt was interrupted together with the session. **MVP limitation:** continuing the interview in a new session is not supported, and the contract does not define a transition from `AWAITING_HUMAN` to `INTERRUPTED` during session recovery (`workflow-state-model.md` §12 describes only `RUNNING`). Change nothing: explain this to the human and stop.
 3. **`current_stage` must be in table 7.1.** Another stage — "not supported yet", stop.
 4. **`execution_state`:**
@@ -236,7 +240,7 @@ The output and the owner are from `artifact-registry.yaml` (`produced_by`), the 
    - each source from its `inputs` (`source`, `path`, `commit`) still has the same `git log -1 --format=%h -- <path>` (`artifact-rules.md` §4).
 
    Not met — change nothing, explain to the human and stop. **MVP limitation:** the current version of the Skill does not record the `staleness.detected` event and the transition to `BLOCKED` (Upstream Changed).
-6. **Approval and entry trigger (IMPACT_ANALYSIS and SOLUTION_DESIGN).** The precondition of both stages is an approved `story-spec` (`stages.md`, IMPACT_ANALYSIS and SOLUTION_DESIGN; `workflow-state-model.md` §6, step 4):
+6. **Approval and entry trigger (IMPACT_ANALYSIS, SOLUTION_DESIGN and API_DESIGN).** The precondition of these stages is an approved `story-spec` (`stages.md`, IMPACT_ANALYSIS and SOLUTION_DESIGN; `workflow-state-model.md` §6, step 4). For API_DESIGN, `solution-design` must also be current: it is checked as an input in step 5:
    - `approvals.HUMAN_SPEC_APPROVAL` is not `null`, `decision: APPROVE`, `approval_state: VALID`;
    - the current version of `story-spec` in `artifacts` has `status: APPROVED` and matches the `story-spec` version in `approvals.HUMAN_SPEC_APPROVAL.scope`;
    - **the entry trigger** is the last History event with `details.to_stage`, as in section 7.3.1. Its `to_stage` must equal `current_stage`. Allowed triggers:
@@ -245,9 +249,11 @@ The output and the owner are from `artifact-registry.yaml` (`produced_by`), the 
      |---|---|
      | IMPACT_ANALYSIS | `human_decision.applied` HUMAN_SPEC_APPROVAL with `decision: APPROVE` (first entry); `stage.completed` SOLUTION_DESIGN with `verdict: CHANGES_REQUIRED` and `loopback_target: IMPACT_ANALYSIS` (re-entry, section 7.3.2); `human_decision.applied` IMPACT_ANALYSIS with `decision: RESUME` (section 8.7.3) |
      | SOLUTION_DESIGN | `stage.completed` IMPACT_ANALYSIS with `verdict: PASS` or `NOT_APPLICABLE`; `human_decision.applied` SOLUTION_DESIGN with `decision: RESUME` |
+     | API_DESIGN | `stage.completed` SOLUTION_DESIGN with `verdict: PASS`; `human_decision.applied` API_DESIGN with `decision: RESUME` |
 
-     Another trigger means a route that this MVP does not execute;
-   - SOLUTION_DESIGN: `artifacts.solution-design` is absent. The MVP does not support re-entry into SOLUTION_DESIGN with a new version (`solution-design/SKILL.md` §3, step 1).
+     Another trigger means a route that this MVP does not execute. In particular, `stage.completed` API_DESIGN with `verdict: CHANGES_REQUIRED` and `loopback_target` `SOLUTION_DESIGN` or `IMPACT_ANALYSIS` (section 7.8, API-D01): explain that re-entry into the target after a Loopback from API_DESIGN is not implemented in the MVP, and that the Story cannot continue with `next`;
+   - SOLUTION_DESIGN: `artifacts.solution-design` is absent. The MVP does not support re-entry into SOLUTION_DESIGN with a new version (`solution-design/SKILL.md` §3, step 1);
+   - API_DESIGN: `artifacts.api-design` is absent. The MVP supports only `api-design` v1 (`api-design/SKILL.md` §3, step 1).
 
    Not met — change nothing, explain to the human and stop.
 7. **IMPACT_ANALYSIS applicability (only SOLUTION_DESIGN).** Determines whether `impact-analysis` is passed (section 7.1, "Conditional input"):
@@ -273,14 +279,17 @@ Computed by the Orchestrator, not by the Stage Skill:
 |---|---|
 | `attempt` | The number of `stage.started` events for `current_stage` in History + 1 |
 | `version` | For a document: the current version of the output type in `artifacts` + 1; if there is none — `1` |
-| `record_id` | For a record: `<record_type>/<NNNN>`, where `record_type` is `review-report` (SPEC_REVIEW) or `applicability-decision` (IMPACT_ANALYSIS), and `NNNN` is the next number of the type in the Story (`artifact-rules.md` §2): the highest number `<record_type>/…` in the `refs` of the `stage.completed` events of History + 1, four digits; if there are none — `0001` |
-| `output` | The path of the output type according to the registry with the pilot prefix (section 3). For SPEC_REVIEW — the record `records/review-report/<NNNN>.md`. For IMPACT_ANALYSIS — the document `artifacts/impact-analysis/v<version>.md`. For SOLUTION_DESIGN — `artifacts/solution-design/v<version>.md` |
-| `record_output` | Only IMPACT_ANALYSIS: `records/applicability-decision/<NNNN>.md` under the pilot root |
-| `clarification`, `spec` | The paths of the current versions of `clarification-record` and `story-spec` (for SPECIFICATION — only `clarification`; for IMPACT_ANALYSIS and SOLUTION_DESIGN — only `spec`) |
+| `record_id` | For a record: `<record_type>/<NNNN>`, where `record_type` is `review-report` (SPEC_REVIEW) or `applicability-decision` (IMPACT_ANALYSIS and API_DESIGN; one numbering of the type for the whole Story), and `NNNN` is the next number of the type in the Story (`artifact-rules.md` §2): the highest number `<record_type>/…` in the `refs` of the `stage.completed` events of History + 1, four digits; if there are none — `0001` |
+| `output` | The path of the output type according to the registry with the pilot prefix (section 3). For SPEC_REVIEW — the record `records/review-report/<NNNN>.md`. For IMPACT_ANALYSIS — the document `artifacts/impact-analysis/v<version>.md`. For SOLUTION_DESIGN — `artifacts/solution-design/v<version>.md`. For API_DESIGN — `artifacts/api-design/v1.md` |
+| `record_output` | Only IMPACT_ANALYSIS and API_DESIGN: `records/applicability-decision/<NNNN>.md` under the pilot root |
+| `clarification`, `spec` | The paths of the current versions of `clarification-record` and `story-spec` (for SPECIFICATION — only `clarification`; for IMPACT_ANALYSIS, SOLUTION_DESIGN and API_DESIGN — only `spec`) |
+| `design` | Only API_DESIGN: the path of the current version of `solution-design` |
 | `impact` | Only SOLUTION_DESIGN and only according to section 7.2, step 7 (`APPLICABLE`): the path of the current version of `impact-analysis` |
 | `previous_reports` | For SPEC_REVIEW: the paths of the previous `review-report` files of this stage from History (`stage.completed` of the SPEC_REVIEW stage); if there are none — do not pass |
 | `previous`, `reason` | SPECIFICATION: only for `version > 1` — according to section 7.3.1. IMPACT_ANALYSIS — according to section 7.3.2 |
-| `reason` (SOLUTION_DESIGN) | Only if the entry trigger (section 7.2, step 6) is `human_decision.applied` of the `SOLUTION_DESIGN` stage with `details.decision: RESUME` (section 8.7.3). The value is the `details.reason` of this event verbatim. Otherwise do not pass. `version` is always `1` |
+| `reason` (SOLUTION_DESIGN, API_DESIGN) | Only if the entry trigger (section 7.2, step 6) is `human_decision.applied` of the current stage with `details.decision: RESUME` (section 8.7.3). The value is the `details.reason` of this event verbatim. Otherwise do not pass. `version` is always `1` |
+
+For API_DESIGN, each attempt receives a new `record_id` and `record_output` by the general rule, in particular after `CHANGES_REQUIRED` and `RESUME`: the previous record is already registered. `output` stays `v1`, because `api-design` is created only for `PASS`.
 
 `focus` for SPEC_REVIEW is not passed: the Orchestrator does not suggest hypotheses or findings.
 
@@ -330,7 +339,7 @@ If there are no lines (first entry after APPROVE without `RESUME`), `reason` is 
 
 Previous versions of the artifact, records and History events do not change. Re-entry does not change the counters: Quality Loops were accounted for during the `CHANGES_REQUIRED` of SOLUTION_DESIGN (section 7.8). The HUMAN_SPEC_APPROVAL approval is not affected, because `story-spec` and `clarification-record` do not change.
 
-**Unregistered Working Draft.** Before starting any attempt, check whether the `output` file (for IMPACT_ANALYSIS — also `record_output`) exists while it is not in `state.yaml` → `artifacts` or `records`. If it exists, it is a Working Draft of a previous attempt (`artifact-rules.md` §3, item 1). Do not overwrite, delete or register it. Change nothing in the state: show the path, explain that an unregistered Working Draft was found, and stop. The human makes the decision outside the Skill.
+**Unregistered Working Draft.** Before starting any attempt, check whether the `output` file (for IMPACT_ANALYSIS and API_DESIGN — also `record_output`) exists while it is not in `state.yaml` → `artifacts` or `records`. If it exists, it is a Working Draft of a previous attempt (`artifact-rules.md` §3, item 1). Do not overwrite, delete or register it. Change nothing in the state: show the path, explain that an unregistered Working Draft was found, and stop. The human makes the decision outside the Skill.
 
 > **Temporary MVP limitation.** The contract allows a repeated attempt to overwrite a Working Draft. This Skill deliberately does not do that until Recovery is implemented. The Working Draft contract does not change.
 
@@ -345,7 +354,7 @@ One Orchestrator step:
 {"ts":"<date -u>","story_id":"US-001","actor":{"kind":"orchestrator","id":"story-orchestrator"},"event":"stage.started","stage":"SPECIFICATION","refs":["clarification-record@1"],"details":{"attempt":1,"version":1,"output":"docs/pilots/orchestrator/US-001/artifacts/story-spec/v1.md","mode":"pilot"}}
 ```
 
-`refs` are the input artifacts of the attempt (`<type>@<version>`); for CLARIFICATION — `[]`. For SPEC_REVIEW, `details` contain `record_id` instead of `version`. For IMPACT_ANALYSIS, `refs: [story-spec@<N>]`, and for a re-entry with `version > 1` — also `impact-analysis@<N-1>`. `details` contain `version`, `output`, `record_id` and `record_output`, as well as `previous` and `reason`, if they exist (section 7.3.2). For SOLUTION_DESIGN, `refs` consist of `story-spec@<N>`, `impact-analysis@<M>` (only if `impact` is passed) and the valid IMPACT_ANALYSIS `applicability-decision` that determined the input. `details` contain `version`, `output` and `reason`, if it exists. For a re-entry into SPECIFICATION (7.3.1), `refs` additionally contain the previous version (`story-spec@1`), and for a loopback from SPEC_REVIEW — also the trigger record (`review-report/0001`). `details` contain `previous` and `reason`. For the "human decision" trigger there is no record: the decision is identified by `reason` (`actor.id`, `ts`).
+`refs` are the input artifacts of the attempt (`<type>@<version>`); for CLARIFICATION — `[]`. For SPEC_REVIEW, `details` contain `record_id` instead of `version`. For IMPACT_ANALYSIS, `refs: [story-spec@<N>]`, and for a re-entry with `version > 1` — also `impact-analysis@<N-1>`. `details` contain `version`, `output`, `record_id` and `record_output`, as well as `previous` and `reason`, if they exist (section 7.3.2). For SOLUTION_DESIGN, `refs` consist of `story-spec@<N>`, `impact-analysis@<M>` (only if `impact` is passed) and the valid IMPACT_ANALYSIS `applicability-decision` that determined the input. `details` contain `version`, `output` and `reason`, if it exists. For API_DESIGN, `refs: [story-spec@<N>, solution-design@<M>]`; `details` contain `version`, `output`, `record_id`, `record_output` and `reason`, if it exists. For a re-entry into SPECIFICATION (7.3.1), `refs` additionally contain the previous version (`story-spec@1`), and for a loopback from SPEC_REVIEW — also the trigger record (`review-report/0001`). `details` contain `previous` and `reason`. For the "human decision" trigger there is no record: the decision is identified by `reason` (`actor.id`, `ts`).
 
 ### 7.5. Stage Execution
 
@@ -389,7 +398,7 @@ Only the question IDs get into History. The content of the answers is recorded o
 
 If the human stops the interview while waiting, first `pending_human_decision: null` and `story_status: ACTIVE`, then the `INTERRUPTED` failure according to section 7.7.
 
-#### 7.5.3. SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS and SOLUTION_DESIGN — Subagent
+#### 7.5.3. SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN and API_DESIGN — Subagent
 
 1. Before the run, remember `git status --porcelain --untracked-files=all` (snapshot A) and the `git hash-object` of each registered artifact or record file of the pilot (the pilot files are not tracked by Git, so `git status` will not show their changes).
 2. Start **exactly one** subagent for the current stage with the Agent tool with `subagent_type: general-purpose`. The environment may run the subagent in the background. This does not change the order: execution is sequential (steps 3–5). The prompt is only the text below for the stage, without the context of the main session (the chat, the interview, the reasoning and self-assessment of the producer stage, the Orchestrator's opinion of the artifacts are not passed).
@@ -446,11 +455,24 @@ If the human stops the interview while waiting, first `pending_human_decision: n
    At the end of your response, return the result envelope — the YAML block `result:` according to section 6 of the Stage Skill.
    ```
 
+   API_DESIGN:
+
+   ```text
+   You are executing the API_DESIGN stage of a pilot Story outside the registered Workflow.
+   Read .claude/skills/api-design/SKILL.md completely and execute it exactly.
+   Arguments: story=<ID> spec=<spec> design=<design> output=<output> version=1 record_output=<record_output> record_id=<record_id> attempt=<attempt> mode=pilot [reason="<reason>"]
+   There is no human in this context: ask nothing.
+   impact-analysis is not an input of this stage: do not search for or use it, even if such a file exists.
+   [If there is reason:] reason is the human's verbatim reason for rejecting the proposed Loopback (RESUME). It is not a source of requirements: do not invent requirements that are not in story-spec. Assess applicability anew.
+   Write only the record_output file and, only for PASS, the output file. Do not change state.yaml, history.jsonl, story-spec, solution-design, docs/api/, the code or other files. Bash — only git log, git status, git ls-files and date. Do not start other Skills or subagents.
+   At the end of your response, return the result envelope — the YAML block `result:` according to section 6 of the Stage Skill.
+   ```
+
 3. Wait for the **actual completion** of the subagent and its final response (for a background run — the completion notification). A background start does not mean that the subagent has finished. While it is running:
    - do not process its result and do not guess it;
    - do not change `state.yaml`, `history.jsonl` and the pilot files;
    - do not start other subagents and stages.
-4. Only after completion, take `git status --porcelain --untracked-files=all` again (snapshot B) and the `git hash-object` of the same files. The difference A→B must consist exactly of the new files that correspond to the elements of the envelope's `outputs`; if `outputs` are empty, there is no difference. For SPECIFICATION, SPEC_REVIEW and SOLUTION_DESIGN, this is the `output` file. For IMPACT_ANALYSIS, `{ record: <record_id> }` corresponds to `record_output`, and `{ type: impact-analysis, version }` — to `output`. The hashes of registered files do not change (`artifact-rules.md` §3, item 2). Any other change — the result is rejected (`INVALID_RESULT`) with a list of files. Do not roll anything back: the human makes the decision.
+4. Only after completion, take `git status --porcelain --untracked-files=all` again (snapshot B) and the `git hash-object` of the same files. The difference A→B must consist exactly of the new files that correspond to the elements of the envelope's `outputs`; if `outputs` are empty, there is no difference. For SPECIFICATION, SPEC_REVIEW and SOLUTION_DESIGN, this is the `output` file. For IMPACT_ANALYSIS and API_DESIGN, `{ record: <record_id> }` corresponds to `record_output`, and `{ type: impact-analysis | api-design, version }` — to `output`. The hashes of registered files do not change (`artifact-rules.md` §3, item 2). Any other change — the result is rejected (`INVALID_RESULT`) with a list of files. Do not roll anything back: the human makes the decision.
 5. The envelope is the last `result:` block in the subagent's response. A failure of the Agent tool — `FAILED`. A response without an envelope — `INVALID_RESULT`.
 
 ### 7.6. Result Envelope Check
@@ -459,9 +481,9 @@ The Orchestrator accepts the result only when **everything** is met (`workflow-s
 
 - there is a `result` block with the fields `story_id`, `stage`, `attempt`, `verdict`, `outputs`, `loopback_target`, `blocker`, `summary`;
 - `story_id`, `stage`, `attempt` match the attempt parameters;
-- `verdict` is allowed for the stage according to `stage-map.yaml`: `optional: false` → not `NOT_APPLICABLE`; `CHANGES_REQUIRED` — only if the stage's `loopbacks` are not empty. CLARIFICATION: `PASS | BLOCKED`. SPECIFICATION and SPEC_REVIEW: `PASS | CHANGES_REQUIRED | BLOCKED`. IMPACT_ANALYSIS (`optional: true`): `PASS | NOT_APPLICABLE | CHANGES_REQUIRED | BLOCKED`. SOLUTION_DESIGN (`optional: false`): `PASS | CHANGES_REQUIRED | BLOCKED`;
-- `loopback_target`: for `CHANGES_REQUIRED` — a target from the stage's `loopbacks` (SPECIFICATION → `CLARIFICATION`; SPEC_REVIEW → `SPECIFICATION` or `CLARIFICATION`; IMPACT_ANALYSIS → `SPECIFICATION` or `CLARIFICATION`, both with `crosses_gates`; SOLUTION_DESIGN → `IMPACT_ANALYSIS` without `crosses_gates` or `SPECIFICATION` or `CLARIFICATION` with `crosses_gates`); otherwise `null`;
-- for SPEC_REVIEW — section 7.6.1, for IMPACT_ANALYSIS — section 7.6.2 instead of the document rules below;
+- `verdict` is allowed for the stage according to `stage-map.yaml`: `optional: false` → not `NOT_APPLICABLE`; `CHANGES_REQUIRED` — only if the stage's `loopbacks` are not empty. CLARIFICATION: `PASS | BLOCKED`. SPECIFICATION and SPEC_REVIEW: `PASS | CHANGES_REQUIRED | BLOCKED`. IMPACT_ANALYSIS and API_DESIGN (`optional: true`): `PASS | NOT_APPLICABLE | CHANGES_REQUIRED | BLOCKED`. SOLUTION_DESIGN (`optional: false`): `PASS | CHANGES_REQUIRED | BLOCKED`;
+- `loopback_target`: for `CHANGES_REQUIRED` — a target from the stage's `loopbacks` (SPECIFICATION → `CLARIFICATION`; SPEC_REVIEW → `SPECIFICATION` or `CLARIFICATION`; IMPACT_ANALYSIS → `SPECIFICATION` or `CLARIFICATION`, both with `crosses_gates`; SOLUTION_DESIGN → `IMPACT_ANALYSIS` without `crosses_gates` or `SPECIFICATION` or `CLARIFICATION` with `crosses_gates`; API_DESIGN → `SOLUTION_DESIGN` or `IMPACT_ANALYSIS` without `crosses_gates` or `SPECIFICATION` or `CLARIFICATION` with `crosses_gates`); otherwise `null`;
+- for SPEC_REVIEW — section 7.6.1, for IMPACT_ANALYSIS — section 7.6.2, for API_DESIGN — section 7.6.3 instead of the document rules below;
 - for `PASS`: `blocker: null`; `outputs` — exactly `[{ type: <output type>, version: <version> }]`; the `output` file exists; its front matter (`artifact-rules.md` §1):
   - `artifact_type`, `story_id`, `version` match;
   - `produced_by: { stage: <current_stage>, attempt: <attempt> }`;
@@ -534,6 +556,44 @@ The `output` file (`impact-analysis`) exists only for `PASS`. For other verdicts
 - there is no status, Currency or approval;
 - the first line of the body is the pilot line of the Stage Skill.
 
+#### 7.6.3. Envelope, `applicability-decision` and `api-design` of API_DESIGN
+
+The rules — `api-design/SKILL.md` §5–6, `artifact-rules.md` §1–2, `stage-map.yaml` → `APPLICABILITY_API_DESIGN` (AP-01, AP-03). The check is structural: the semantic quality of the design is checked by DESIGN_REVIEW, not by the Orchestrator.
+
+**`outputs` and `blocker`** — as in section 7.6.2, with `api-design` instead of `impact-analysis`:
+
+| Verdict | `outputs` | `blocker` |
+|---|---|---|
+| `PASS` | exactly `{ type: api-design, version: 1 }` and `{ record: <record_id> }` | `null` |
+| `NOT_APPLICABLE` | exactly `[{ record: <record_id> }]` | `null` |
+| `CHANGES_REQUIRED` | exactly `[{ record: <record_id> }]` | `null` |
+| `BLOCKED` | `[{ record: <record_id> }]` (the assessment is completed) or `[]` | `reason`, `details`, `needed` |
+
+The `output` file (`api-design`) exists only for `PASS`. For other verdicts, it does not exist.
+
+**`applicability-decision`** — if `outputs` contain a record, the `record_output` file exists, and its front matter:
+
+- `record_type: applicability-decision`; `record_id` and `story_id` match;
+- `produced_by: { stage: API_DESIGN, attempt: <attempt> }`; `created_at` — ISO-8601 UTC;
+- `subjects` — exactly `{ type: story-spec, version: <current version> }` and `{ type: solution-design, version: <current version> }`;
+- `target_stage: API_DESIGN`, `kind: ENTRY`, `result` ∈ `APPLICABLE | NOT_APPLICABLE`;
+- `triggers` — exactly the keys `API-01`…`API-04`, each with `status` ∈ `met | not_met` and a non-empty `ref`;
+- `result: NOT_APPLICABLE` ⇔ all triggers are `not_met`; `result: APPLICABLE` ⇔ at least one is `met` (AP-01, AP-03);
+- `basis` — the `basis_facts` of the stage: exactly `{ type: story-spec, version: <current version> }` and `{ type: solution-design, version: <current version> }`. No element references the repository root (`path: .`);
+- there are no `verdict` and `findings` fields;
+- consistency with the verdict: `PASS` and `CHANGES_REQUIRED` — only with `result: APPLICABLE`; `NOT_APPLICABLE` — only with `result: NOT_APPLICABLE`; `BLOCKED` — any `result`;
+- the first line of the body is the pilot line of the Stage Skill.
+
+**`api-design`** — only for `PASS`. The `output` file exists, and its front matter (`artifact-rules.md` §1):
+
+- `artifact_type: api-design`, `story_id` match, `version: 1`; `produced_by: { stage: API_DESIGN, attempt: <attempt> }`; `created_at` — ISO-8601 UTC;
+- `inputs` contain `{ type: story-spec, version: <current version> }` and `{ type: solution-design, version: <current version> }` and no reference to `impact-analysis` or to another version of these types;
+- the `source` of each source is a key from the registry's `sources` (`architecture-foundation`, `codebase`); `path` is not `.` (D-3); each source has `commit`;
+- there is no `revision_reason`, status, Currency or approval;
+- the body contains the sections 1–11 of `api-design/SKILL.md` §5.2 (by heading), and section 12 "Human Decision" if and only if `reason` was passed;
+- the body references at least one `AC-NN`, and each referenced `AC-NN` is in `acceptance_criteria` of the current `story-spec`. Not every AC of `story-spec` has to be referenced;
+- the first line of the body is the pilot line of the Stage Skill.
+
 ### 7.7. Attempt Failure
 
 `INTERRUPTED`, `FAILED` or `INVALID_RESULT`, one step:
@@ -549,7 +609,7 @@ The route — only from `stage-map.yaml` (`workflow-state.md` §7). One step: fi
 
 **SPEC_REVIEW record.** If `outputs` contain a record, it is registered with any verdict: `records.review-report.SPEC_REVIEW: <record_id>` (`workflow-state.md` §3). The `refs` of the `stage.completed` events contain `<record_id>`.
 
-**IMPACT_ANALYSIS record.** If `outputs` contain a record, it is registered with any verdict: `records.applicability-decision.IMPACT_ANALYSIS: { ENTRY: <record_id> }` (`workflow-state.md` §3). The previous `ENTRY` value is replaced, because the last record by purpose becomes valid. Its file remains unchanged. The `refs` of the `stage.completed` events contain `<record_id>`.
+**IMPACT_ANALYSIS and API_DESIGN record.** If `outputs` contain a record, it is registered with any verdict: `records.applicability-decision.<stage>: { ENTRY: <record_id> }`, where `<stage>` is `IMPACT_ANALYSIS` or `API_DESIGN` (`workflow-state.md` §3). The previous `ENTRY` value of the same stage is replaced, because the last record by purpose becomes valid. Its file remains unchanged. The `refs` of the `stage.completed` events contain `<record_id>`.
 
 **`PASS`** of SPEC_REVIEW → `HUMAN_SPEC_APPROVAL` (the stage's `next`, type `human_gate`). The gate is not executed; the Orchestrator only records that the Story is waiting for the human (`workflow-state-model.md` §3: for `human_gate` — `AWAITING_HUMAN`):
 
@@ -588,7 +648,7 @@ Then `next` stops at step 7.2 (`story_status` is not `ACTIVE`). `next` does not 
 
 - for `PASS`: `artifacts.impact-analysis: { version: <version>, status: DRAFT, currency: CURRENT }`. On re-entry, the previous version becomes `SUPERSEDED` without a separate record, and its file remains unchanged;
 - for `NOT_APPLICABLE`, `artifacts` do not change. If there is an `impact-analysis` from a previous applicable assessment, it remains as a historical version without changing `status` and `currency`. It is no longer an input, because the valid decision is `NOT_APPLICABLE` (section 7.1, "Conditional input");
-- the record — according to the "IMPACT_ANALYSIS record" rule above;
+- the record — according to the "IMPACT_ANALYSIS and API_DESIGN record" rule above;
 - `last_stage_verdict: <verdict>`;
 - `current_stage: SOLUTION_DESIGN`, `execution_state: READY`, `story_status: ACTIVE`;
 - `artifacts` of other types, `approvals` and `retry.quality_loops` do not change;
@@ -604,11 +664,23 @@ The next `next` will execute SOLUTION_DESIGN.
 - `artifacts` of other types, `records`, `approvals` and `retry.quality_loops` do not change;
 - the `stage.completed` event with `refs: [solution-design@<version>]`, `details: { attempt, verdict: PASS, outputs, to_stage: API_DESIGN, summary, mode }`.
 
-The next `next` will stop at step 7.2, item 3: API_DESIGN is not supported yet.
+The next `next` will execute API_DESIGN.
 
-**`CHANGES_REQUIRED`** of IMPACT_ANALYSIS and **`CHANGES_REQUIRED`** of SOLUTION_DESIGN with `loopback_target` `SPECIFICATION` or `CLARIFICATION`. These targets have `crosses_gates: [HUMAN_SPEC_APPROVAL]`, so the Loopback is performed only after the human's decision (RR-04, `workflow-state-model.md` §6). The Orchestrator does not perform it, it only requests confirmation (D-1). Below, `<stage>` is `IMPACT_ANALYSIS` or `SOLUTION_DESIGN`:
+**`PASS`** and **`NOT_APPLICABLE`** of API_DESIGN → `DB_DESIGN` (the stage's `next`; for `NOT_APPLICABLE` — RR-02):
 
-- for IMPACT_ANALYSIS: the record — according to the "IMPACT_ANALYSIS record" rule above. SOLUTION_DESIGN does not create records;
+- for `PASS`: `artifacts.api-design: { version: 1, status: DRAFT, currency: CURRENT }`;
+- for `NOT_APPLICABLE`, `artifacts` do not change;
+- the record — according to the "IMPACT_ANALYSIS and API_DESIGN record" rule above;
+- `last_stage_verdict: <verdict>`;
+- `current_stage: DB_DESIGN`, `execution_state: READY`, `story_status: ACTIVE`;
+- `artifacts` of other types, `approvals` and `retry.quality_loops` do not change;
+- the `stage.completed` event with `refs` — the outputs (`api-design@1`, if any, and `<record_id>`), `details: { attempt, verdict, outputs, to_stage: DB_DESIGN, summary, mode }`.
+
+The next `next` will stop at step 7.2, item 3: DB_DESIGN is not supported yet.
+
+**`CHANGES_REQUIRED`** of IMPACT_ANALYSIS, SOLUTION_DESIGN or API_DESIGN with `loopback_target` `SPECIFICATION` or `CLARIFICATION`. These targets have `crosses_gates: [HUMAN_SPEC_APPROVAL]`, so the Loopback is performed only after the human's decision (RR-04, `workflow-state-model.md` §6). The Orchestrator does not perform it, it only requests confirmation (D-1). Below, `<stage>` is `IMPACT_ANALYSIS`, `SOLUTION_DESIGN` or `API_DESIGN`:
+
+- for IMPACT_ANALYSIS and API_DESIGN: the record — according to the "IMPACT_ANALYSIS and API_DESIGN record" rule above. SOLUTION_DESIGN does not create records;
 - `last_stage_verdict: CHANGES_REQUIRED`; `artifacts` and `approvals` do not change;
 - `retry.quality_loops` and `retry.repeated_failure` do not change. Quality Loops count returns, and there is no return yet (`workflow-state-model.md` §10). In the MVP, the accounting will be done by `ROUTE_BACK` when it is implemented; `RESUME` is not a return (decision D-1);
 - `current_stage` does not change (`<stage>`); `story_status: WAITING_FOR_HUMAN`, `execution_state: AWAITING_HUMAN`;
@@ -620,7 +692,7 @@ The next `next` will stop at step 7.2, item 3: API_DESIGN is not supported yet.
     options: [ROUTE_BACK, RESUME, CANCEL]          # loopback_confirmation_decisions; ROUTE_BACK is rejected in the MVP (section 8.7.2)
     package:
       - { type: story-spec, version: <N> }        # the approved artifact that the Loopback would change
-      - { record: <record_id> }                   # only IMPACT_ANALYSIS: the applicability-decision of this attempt
+      - { record: <record_id> }                   # only IMPACT_ANALYSIS and API_DESIGN: the applicability-decision of this attempt
     requested_at: <date -u>
   ```
 - events:
@@ -629,21 +701,24 @@ The next `next` will stop at step 7.2, item 3: API_DESIGN is not supported yet.
 
 Then `next` stops at step 7.2 (`story_status` is not `ACTIVE`). The human makes the decision with the `decide` command (section 8.7).
 
-**`CHANGES_REQUIRED`** of SPECIFICATION, SPEC_REVIEW and SOLUTION_DESIGN with `loopback_target: IMPACT_ANALYSIS` → `loopback_target`. These loopbacks do not have `crosses_gates`, so the human's decision is not needed (`stage-map.yaml` RR-03, RR-04):
+**`CHANGES_REQUIRED`** with a Loopback without `crosses_gates` → `loopback_target`: SPECIFICATION → `CLARIFICATION`; SPEC_REVIEW → `SPECIFICATION` or `CLARIFICATION`; SOLUTION_DESIGN → `IMPACT_ANALYSIS`; API_DESIGN → `SOLUTION_DESIGN` or `IMPACT_ANALYSIS`. These loopbacks do not have `crosses_gates`, so the human's decision is not needed (`stage-map.yaml` RR-03, RR-04):
 
+- for API_DESIGN: the record — according to the "IMPACT_ANALYSIS and API_DESIGN record" rule above;
 - `last_stage_verdict: CHANGES_REQUIRED`; the Version Status of artifacts does not change;
 - `retry.quality_loops.target.<loopback_target>` + 1 and `retry.quality_loops.initiator.<stage>` + 1 (`workflow-state-model.md` §10);
 - for SPEC_REVIEW: `retry.repeated_failure.<F-NNN>` + 1 for each `OPEN` `BLOCKING` finding of the report (`workflow-state.md` §3);
 - if any counter has reached the corresponding value of `retry_policy.defaults` (`quality_loops`, `repeated_failure`) — `story_status: BLOCKED`, `blocker: { reason: "Retry Budget Exhausted", source: ORCHESTRATOR, details, needed }`, `execution_state: COMPLETED`, `current_stage` does not change, the events `stage.completed` and `story.blocked`;
 - otherwise `current_stage: <loopback_target>`, `execution_state: READY`, `story_status: ACTIVE`, the `stage.completed` event with `details: { attempt, verdict, loopback_target, to_stage, summary, mode }`.
 
-Do not start the target stage. The next `next` will perform its re-entry according to section 7.3.1 if it is SPECIFICATION, or according to section 7.3.2 if it is IMPACT_ANALYSIS. For CLARIFICATION, it will stop (MVP limitation, 7.3.1).
+Do not start the target stage. The next `next` will perform its re-entry according to section 7.3.1 if it is SPECIFICATION, or according to section 7.3.2 if it is IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN. For CLARIFICATION, it will stop (MVP limitation, 7.3.1).
+
+> **MVP limitation (API-D01).** After a Loopback from API_DESIGN to SOLUTION_DESIGN or IMPACT_ANALYSIS, the route and the counters are applied, but re-entry into the target is not implemented: the next `next` stops at section 7.2, step 6, and changes nothing. In the report to the human, do not present the Story as executable by `next`: say that the Story is at `<loopback_target>` without supported re-entry, and that `decide` is not available, because the Story is not waiting for a human decision. The human decides outside the Skill.
 
 Re-entry does not change the counters: Quality Loops have already been accounted for during `CHANGES_REQUIRED`.
 
 **`BLOCKED`** → there is no route (`stage-map.yaml` RR-05):
 
-- for IMPACT_ANALYSIS: the record, if it is in `outputs` — according to the "IMPACT_ANALYSIS record" rule above;
+- for IMPACT_ANALYSIS and API_DESIGN: the record, if it is in `outputs` — according to the "IMPACT_ANALYSIS and API_DESIGN record" rule above;
 - `execution_state: COMPLETED`, `last_stage_verdict: BLOCKED`, `story_status: BLOCKED`;
 - `blocker: { reason, source: STAGE, details, needed }` from the envelope;
 - `current_stage` does not change;
@@ -674,7 +749,7 @@ Applies the human's decision for the current `pending_human_decision`. Works in 
 | `pending_human_decision.kind` | Stage | Decisions in the MVP | Sections |
 |---|---|---|---|
 | `GATE` | HUMAN_SPEC_APPROVAL | `APPROVE`, `REQUEST_CHANGES`, `CANCEL` | 8.2–8.5 |
-| `LOOPBACK_CONFIRMATION` | IMPACT_ANALYSIS, SOLUTION_DESIGN | `RESUME`, `CANCEL`; `ROUTE_BACK` is rejected without changes | 8.2, 8.5, 8.7 |
+| `LOOPBACK_CONFIRMATION` | IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN | `RESUME`, `CANCEL`; `ROUTE_BACK` is rejected without changes | 8.2, 8.5, 8.7 |
 
 The human makes the decision, and the Orchestrator only checks and applies it (`workflow-state.md` §1).
 
@@ -716,7 +791,7 @@ For each decision. Check everything in order. The first violation — explain to
 
 The decision time: `date -u +%Y-%m-%dT%H:%M:%SZ`, one value for all time fields and the `ts` of the events of this decision.
 
-Application is one Orchestrator step (`workflow-state.md` §7): first the record file, if any (only CANCEL), then `state.yaml` according to section 7.10, then the events in `history.jsonl`. `reason`, `comment` and `by` are serialized in all files according to the rules for the human's text (section 7.10). In all decisions, the `actor` of the `human_decision.applied` event is the human from `by` (`{kind: human, id: <by>}`), `stage` is `pending_human_decision.stage` (HUMAN_SPEC_APPROVAL or IMPACT_ANALYSIS), `refs` are the elements of `package`. Artifact and review report files do not change (`artifact-rules.md` §3, item 2).
+Application is one Orchestrator step (`workflow-state.md` §7): first the record file, if any (only CANCEL), then `state.yaml` according to section 7.10, then the events in `history.jsonl`. `reason`, `comment` and `by` are serialized in all files according to the rules for the human's text (section 7.10). In all decisions, the `actor` of the `human_decision.applied` event is the human from `by` (`{kind: human, id: <by>}`), `stage` is `pending_human_decision.stage` (HUMAN_SPEC_APPROVAL, IMPACT_ANALYSIS, SOLUTION_DESIGN or API_DESIGN), `refs` are the elements of `package`. Artifact and review report files do not change (`artifact-rules.md` §3, item 2).
 
 ### 8.3. APPROVE
 
@@ -815,9 +890,9 @@ Do not start the target stage. The next `next` will perform the re-entry into SP
 
 The Cancellation Protocol (`workflow-policies.md` §17, `stage-map.yaml` RR-08). `CANCELLED` is a terminal state: the Story is not reopened.
 
-The procedure is the same for both kinds of waiting: `GATE` at HUMAN_SPEC_APPROVAL and `LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS or SOLUTION_DESIGN (`loopback_confirmation_decisions.CANCEL`). The examples below are given for the gate. For `LOOPBACK_CONFIRMATION`:
-- the place of the stage in the record and the events is taken by `current_stage` (`IMPACT_ANALYSIS` or `SOLUTION_DESIGN`);
-- `subjects`, `artifacts` and `refs` are taken from the current state and `package`, in particular `applicability-decision` and `impact-analysis`, if they exist;
+The procedure is the same for both kinds of waiting: `GATE` at HUMAN_SPEC_APPROVAL and `LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN or API_DESIGN (`loopback_confirmation_decisions.CANCEL`). The examples below are given for the gate. For `LOOPBACK_CONFIRMATION`:
+- the place of the stage in the record and the events is taken by `current_stage` (`IMPACT_ANALYSIS`, `SOLUTION_DESIGN` or `API_DESIGN`);
+- `subjects`, `artifacts` and `refs` are taken from the current state and `package`, in particular `applicability-decision`, `impact-analysis` and `solution-design`, if they exist;
 - the route is `loopback_confirmation_decisions.CANCEL` instead of the gate's `decisions.CANCEL`.
 
 #### 8.5.1. Check
@@ -883,7 +958,7 @@ The route — the gate's `decisions.CANCEL` or `loopback_confirmation_decisions.
   - `COMPLETED` is described in the State Model as a completed attempt with a Stage Verdict, and a gate has no attempts and no verdict.
 
   `COMPLETED` is chosen as the closest value: the work at the current stage is completed and there will be no new attempts. A clarification is a matter of a future contract change;
-- `current_stage` does not change (`HUMAN_SPEC_APPROVAL`, `IMPACT_ANALYSIS` or `SOLUTION_DESIGN`): `CANCELLED` is a terminal state, not a Stage ID (`stage-map.yaml` → `terminal_states`). The consequence of the decision is visible in `story_status` (`workflow-state.md` §4);
+- `current_stage` does not change (`HUMAN_SPEC_APPROVAL`, `IMPACT_ANALYSIS`, `SOLUTION_DESIGN` or `API_DESIGN`): `CANCELLED` is a terminal state, not a Stage ID (`stage-map.yaml` → `terminal_states`). The consequence of the decision is visible in `story_status` (`workflow-state.md` §4);
 - `records.cancellation-record: <record_id>` — registration of the new record (`workflow-state.md` §7, step 3);
 - `last_stage_verdict`, `artifacts`, `approvals`, `retry`, `blocker`, `git` do not change.
 
@@ -902,24 +977,24 @@ Subsequent stages are not started. `next` and `decide` for `CANCELLED` stop (sec
 
 After 8.3.2, 8.4.2, 8.5.3 or 8.7.3, stop and show the summary with the `status` command. Do not start the next stage.
 
-### 8.7. LOOPBACK_CONFIRMATION (IMPACT_ANALYSIS, SOLUTION_DESIGN)
+### 8.7. LOOPBACK_CONFIRMATION (IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN)
 
-Confirmation of a Loopback through a gate (`stage-map.yaml` RR-04, `loopback_confirmation_decisions`; `workflow-state-model.md` §6). In the MVP, it is created by a `CHANGES_REQUIRED` of IMPACT_ANALYSIS or SOLUTION_DESIGN with the target `SPECIFICATION` or `CLARIFICATION` (section 7.8). Below, `<stage>` is `current_stage`. The human makes the decision, the Orchestrator only checks and applies it. A decision in the pilot is a simulation, as at a gate.
+Confirmation of a Loopback through a gate (`stage-map.yaml` RR-04, `loopback_confirmation_decisions`; `workflow-state-model.md` §6). In the MVP, it is created by a `CHANGES_REQUIRED` of IMPACT_ANALYSIS, SOLUTION_DESIGN or API_DESIGN with the target `SPECIFICATION` or `CLARIFICATION` (section 7.8). Below, `<stage>` is `current_stage`. The human makes the decision, the Orchestrator only checks and applies it. A decision in the pilot is a simulation, as at a gate.
 
 #### 8.7.1. Check
 
 Instead of steps 3–4 of section 8.2. The first violation — explain and stop, changing nothing.
 
 1. **State:**
-   - `current_stage` is `IMPACT_ANALYSIS` or `SOLUTION_DESIGN`; `pending_human_decision.kind: LOOPBACK_CONFIRMATION`, `pending_human_decision.stage` = `current_stage`;
+   - `current_stage` is `IMPACT_ANALYSIS`, `SOLUTION_DESIGN` or `API_DESIGN`; `pending_human_decision.kind: LOOPBACK_CONFIRMATION`, `pending_human_decision.stage` = `current_stage`;
    - `last_stage_verdict: CHANGES_REQUIRED`;
    - `decision` is in `pending_human_decision.options` and in `loopback_confirmation_decisions` in `stage-map.yaml`.
 2. **Package.** `pending_human_decision.package` contains exactly:
    - `{ type: story-spec, version: <current version> }`;
-   - only for IMPACT_ANALYSIS — `{ record: <record_id> }`, where `<record_id>` is `records.applicability-decision.IMPACT_ANALYSIS.ENTRY`.
+   - only for IMPACT_ANALYSIS and API_DESIGN — `{ record: <record_id> }`, where `<record_id>` is `records.applicability-decision.<stage>.ENTRY`.
 
    The `refs` of the last `human_decision.requested` event match `package`.
-3. **The cause of the Loopback.** The last `stage.completed` event has `stage: <stage>`, `verdict: CHANGES_REQUIRED`, a `loopback_target` from the stage's `loopbacks` with `crosses_gates`, and no `to_stage`. For IMPACT_ANALYSIS, its `refs` contain `<record_id>`.
+3. **The cause of the Loopback.** The last `stage.completed` event has `stage: <stage>`, `verdict: CHANGES_REQUIRED`, a `loopback_target` from the stage's `loopbacks` with `crosses_gates`, and no `to_stage`. For IMPACT_ANALYSIS and API_DESIGN, its `refs` contain `<record_id>`.
 4. **The approval has not changed** (only for `RESUME`; `CANCEL` is available from any non-terminal state, RR-08). `approvals.HUMAN_SPEC_APPROVAL` has `approval_state: VALID`, and the `story-spec` version in its `scope` is the current one (section 7.2, step 6).
 
 Then — according to `decision`: `ROUTE_BACK` → 8.7.2, `RESUME` → 8.7.3, `CANCEL` → section 8.5.
@@ -960,10 +1035,10 @@ The Loopback is rejected: the Story stays at `<stage>` and starts a new attempt 
 {"ts":"<date -u>","story_id":"US-003","actor":{"kind":"human","id":"<by>"},"event":"human_decision.applied","stage":"IMPACT_ANALYSIS","refs":["story-spec@2","applicability-decision/0001"],"details":{"decision":"RESUME","kind":"LOOPBACK_CONFIRMATION","to_stage":"IMPACT_ANALYSIS","rejected_loopback_target":"SPECIFICATION","reason":"<reason verbatim>","mode":"pilot"}}
 ```
 
-- `stage` and `to_stage` are `<stage>`. For SOLUTION_DESIGN, `refs` are `package`, that is, only `story-spec@<N>`;
+- `stage` and `to_stage` are `<stage>`. For SOLUTION_DESIGN, `refs` are `package`, that is, only `story-spec@<N>`. For API_DESIGN, `refs` are `story-spec@<N>` and `applicability-decision/<NNNN>`, as for IMPACT_ANALYSIS;
 - `rejected_loopback_target` is the `loopback_target` of the event from step 3 of section 8.7.1.
 
-Do not start the stage. The next `next` will execute a new attempt and pass `reason`: for IMPACT_ANALYSIS — according to section 7.3.2, for SOLUTION_DESIGN — verbatim according to section 7.3. `version` does not change, because the artifact of this attempt was not registered. For IMPACT_ANALYSIS, `record_id` is the next number, and the previous `applicability-decision` will be replaced by the new record after an accepted result (section 7.8).
+Do not start the stage. The next `next` will execute a new attempt and pass `reason`: for IMPACT_ANALYSIS — according to section 7.3.2, for SOLUTION_DESIGN and API_DESIGN — verbatim according to section 7.3. `version` does not change, because the artifact of this attempt was not registered. For IMPACT_ANALYSIS and API_DESIGN, `record_id` is the next number, and the previous `applicability-decision` will be replaced by the new record after an accepted result (section 7.8).
 
 ## 9. Constraints
 
@@ -973,7 +1048,7 @@ Do not start the stage. The next `next` will execute a new attempt and pass `rea
 - Do not invent statuses, events, state fields or transition rules. Report to the human what is missing in the contracts.
 - History is append-only: lines are not changed or deleted.
 - Do not fix the state silently and do not restore it automatically.
-- Start only the stages from table 7.1: CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS and SOLUTION_DESIGN — each in one `general-purpose` subagent. Do not pass a historical version of `impact-analysis` after `NOT_APPLICABLE` as an input (section 7.1). Do not start other stages and additional subagents.
+- Start only the stages from table 7.1. CLARIFICATION is executed inline in the main session, without a subagent. SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN and API_DESIGN are each executed in one separate `general-purpose` subagent. Do not pass a historical version of `impact-analysis` after `NOT_APPLICABLE` as an input (section 7.1), and do not pass `impact-analysis` to API_DESIGN at all. Do not start other stages, in particular DB_DESIGN, and additional subagents.
 - Apply the human's decisions only in `decide` (section 8), by the human's decision from the command arguments. Do not simulate or guess the human's decisions, do not substitute `by`. Do not apply decisions of other gates, RECONFIRM and `ROUTE_BACK`. Do not perform a Loopback through a gate automatically.
 - A decision in the pilot is a simulation of a Human Gate. Do not present it as an approval or cancellation of the Story in the official Workflow.
 - Do not invoke Stage Skills with the Skill tool.
