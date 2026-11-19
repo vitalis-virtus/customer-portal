@@ -1,7 +1,7 @@
 ---
 name: specification
-description: Stage Skill стадії SPECIFICATION. Перетворює clarification-record на перевірювану story-spec (Story Type, вимоги, Acceptance Criteria з Verification Method, scope) і повертає result envelope. Інтерв'ю не веде. Запускається лише вручну з готовими шляхами входу й виходу, версією і номером спроби.
-argument-hint: "story=<ID> clarification=<шлях> output=<шлях до v<N>.md> version=<N> attempt=<N> [source=<шлях>] [mode=pilot] [previous=<шлях>] [reason=<причина повернення>]"
+description: Stage Skill of the SPECIFICATION stage. Turns clarification-record into a verifiable story-spec (Story Type, requirements, Acceptance Criteria with a Verification Method, scope) and returns a result envelope. Does not conduct an interview. Started only manually with ready input and output paths, version and attempt number.
+argument-hint: "story=<ID> clarification=<path> output=<path to v<N>.md> version=<N> attempt=<N> [source=<path>] [mode=pilot] [previous=<path>] [reason=<return reason>]"
 disable-model-invocation: true
 user-invocable: true
 ---
@@ -10,94 +10,96 @@ user-invocable: true
 
 ## 1. Purpose
 
-Сформувати перевірювану специфікацію Story з уточнених вимог. Skill виконує стадію SPECIFICATION за `docs/workflow/stages.md` (розділ 7) і `docs/workflow/stage-map.yaml`. Ці файли й `docs/contracts/` — авторитетні; у разі розбіжності діють вони, а не цей Skill.
+Produce a verifiable Story specification from the clarified requirements. The Skill executes the SPECIFICATION stage according to `docs/workflow/stages.md` (section 7) and `docs/workflow/stage-map.yaml`. These files and `docs/contracts/` are authoritative; in case of a discrepancy, they apply, not this Skill.
 
-Інтерв'ю немає. Продуктові рішення живуть лише в `clarification-record`. Якщо рішення бракує — це повернення на CLARIFICATION (розділ 6), а не питання до людини.
+There is no interview. Product decisions live only in `clarification-record`. If a decision is missing, this is a return to CLARIFICATION (section 6), not a question to the human.
+
+**Language** (`AGENTS.md`): `story-spec` is written in English. The human's decisions quoted from `clarification-record` stay verbatim in their original language. Anything addressed to the human is in Ukrainian.
 
 ## 2. Inputs
 
-Аргументи (`$ARGUMENTS`):
+Arguments (`$ARGUMENTS`):
 
-| Аргумент | Обов'язковий | Значення |
+| Argument | Required | Meaning |
 |---|---|---|
-| `story` | так | ID Story, наприклад `US-001` |
-| `clarification` | так | Готовий шлях поточної версії `clarification-record`. Її номер версії бери з front matter цього файлу |
-| `output` | так | Готовий шлях файлу `story-spec`. Skill не обчислює шлях і версію сам |
-| `version`, `attempt` | так | Версія `story-spec` (збігається з `v<N>` в `output`, не залежить від версії `clarification-record`) і номер спроби стадії |
-| `source` | ні | Готовий шлях джерела Story. Без нього — `story-source` з реєстру |
-| `mode=pilot` | ні | Пілот поза зареєстрованим Workflow |
-| `previous`, `reason` | для `version > 1` | Попередня версія `story-spec` і причина повернення |
+| `story` | yes | Story ID, for example `US-001` |
+| `clarification` | yes | A ready path of the current version of `clarification-record`. Take its version number from the front matter of this file |
+| `output` | yes | A ready path of the `story-spec` file. The Skill does not compute the path and version itself |
+| `version`, `attempt` | yes | The version of `story-spec` (matches `v<N>` in `output`, does not depend on the version of `clarification-record`) and the stage attempt number |
+| `source` | no | A ready path of the Story source. Without it — `story-source` from the registry |
+| `mode=pilot` | no | A pilot outside the registered Workflow |
+| `previous`, `reason` | for `version > 1` | The previous version of `story-spec` and the reason for the return |
 
-Людину питай лише про відсутній обов'язковий аргумент. Не вгадуй.
+Ask the human only about a missing mandatory argument. Do not guess.
 
-Логічні входи — `docs/contracts/stage-io-map.yaml` → `SPECIFICATION`, шляхи — `docs/contracts/artifact-registry.yaml`:
-- `clarification-record` — рішення людини (`CQ`), встановлені факти, ризики, Handoff;
-- `story-source` — опис Story;
-- `product-foundation` — мінімум: Business Glossary, Business Rules і NFR, пов'язані зі Story; за потреби — інші документи Product Foundation.
+Logical inputs — `docs/contracts/stage-io-map.yaml` → `SPECIFICATION`, paths — `docs/contracts/artifact-registry.yaml`:
+- `clarification-record` — the human's decisions (`CQ`), established facts, risks, Handoff;
+- `story-source` — the Story description;
+- `product-foundation` — at minimum: the Business Glossary, Business Rules and NFRs related to the Story; as needed — other Product Foundation documents.
 
-`architecture-foundation` не є входом цієї стадії. Технічні факти Foundation потрапляють у специфікацію лише через `clarification-record`, з посиланням на нього. Історія чату не є входом. Читай лише потрібні документи (Progressive Context Loading).
+`architecture-foundation` is not an input of this stage. Technical facts of the Foundation get into the specification only through `clarification-record`, with a reference to it. Chat history is not an input. Read only the documents you need (Progressive Context Loading).
 
 ## 3. Procedure
 
-1. **Перевір аргументи.** У `mode=pilot` `output` не може лежати в `docs/stories/`. Якщо файл `output` уже існує — не перезаписуй без дозволу людини.
-2. **Прочитай `clarification-record`, Story і Foundation.** Виділи: рішення `CQ` з `decided_by`; відкладені питання з їхнім впливом; встановлені факти з ID (BR-, NFR-); ризики; Handoff. Рекомендація агента без рішення людини — не вимога.
-3. **Зафіксуй Story Type** зі `story_types` у `stage-map.yaml` за таблицею `docs/workflow/workflow-policies.md` §16. Стартова точка — пропозиція CLARIFICATION. Розбіжність із нею обґрунтуй. Для технічних типів не вигадуй User Persona.
-4. **Сформулюй вимоги** `REQ-NN`: спостережувана поведінка або технічний результат, кожна з джерелом (`CQ-NN` або ID правила Foundation). Посилайся на правила Foundation, а не переписуй їх. Покрий обов'язковий зміст типу (§16).
-5. **Визнач scope і поза scope.** Відкладені `CQ` і явно виключене в `clarification-record` — поза scope, з успадкованим впливом.
-6. **Сформулюй Acceptance Criteria** `AC-NN` (розділ 3.1).
-7. **Перевір межу Clarification.** Якщо вимогу неможливо сформулювати без нового продуктового рішення, або рішення суперечать одне одному чи Foundation — зупинись і поверни verdict за розділом 6. Не обирай варіант за людину і не записуй «припущень».
-8. **Перевір межу Technical Design.** Технічне, що вже встановлене Foundation і записане в `clarification-record`, — лише посилання. Нового (маршрути, коди помилок поза Foundation, схеми, алгоритми, структура коду, бібліотеки) не вирішуй — винеси в розділ «Відкрито для Technical Design».
-9. **Перевір якість** (розділ 4). Невідповідність виправ; якщо вона походить з `clarification-record` — крок 7.
-10. **Запиши `story-spec`** в `output` (розділ 5) і поверни envelope.
+1. **Check the arguments.** In `mode=pilot`, `output` cannot lie in `docs/stories/`. If the `output` file already exists, do not overwrite it without the human's permission.
+2. **Read `clarification-record`, the Story and the Foundation.** Identify: `CQ` decisions with `decided_by`; deferred questions with their impact; established facts with IDs (BR-, NFR-); risks; the Handoff. An agent's recommendation without the human's decision is not a requirement.
+3. **Record the Story Type** from `story_types` in `stage-map.yaml` according to the table in `docs/workflow/workflow-policies.md` §16. The starting point is the CLARIFICATION proposal. Justify a divergence from it. For technical types, do not invent a User Persona.
+4. **Formulate the requirements** `REQ-NN`: an observable behavior or a technical result, each with a source (a `CQ-NN` or a Foundation rule ID). Reference Foundation rules rather than rewrite them. Cover the mandatory content of the type (§16).
+5. **Define the scope and out of scope.** Deferred `CQ` and what is explicitly excluded in `clarification-record` are out of scope, with the inherited impact.
+6. **Formulate the Acceptance Criteria** `AC-NN` (section 3.1).
+7. **Check the Clarification boundary.** If a requirement cannot be formulated without a new product decision, or the decisions contradict each other or the Foundation — stop and return a verdict according to section 6. Do not choose an option for the human and do not record "assumptions".
+8. **Check the Technical Design boundary.** Technical matters already established by the Foundation and recorded in `clarification-record` — only a reference. New ones (routes, error codes beyond the Foundation, schemas, algorithms, code structure, libraries) are not decided — move them to the section "Open for Technical Design".
+9. **Check the quality** (section 4). Fix a nonconformity; if it comes from `clarification-record` — step 7.
+10. **Write `story-spec`** to `output` (section 5) and return the envelope.
 
 ### 3.1. Acceptance Criteria
 
-- Кожен AC: ID `AC-NN`, посилання на `REQ` і джерело, умова → дія → очікуваний спостережуваний результат, вид (позитивний / негативний / граничний), Verification Method.
-- Покривай позитивні сценарії, відмови (невалідний ввід, конфлікт, заборонена дія) і межі (значення на межі та за нею). Перелік тем для AC у Handoff `clarification-record` — мінімум, не стеля.
-- Один AC перевіряє одну поведінку. Без слів «коректно», «швидко», «зручно» без вимірюваного значення.
-- Verification Method описує, як спостерігати результат: через який інтерфейс чи дію і що саме перевіряється (відповідь, збережений стан, відсутність даних у відповідях і логах). Інструменти й рівні тестів не обирай — їх визначають Testing Strategy (FG-01) і Testing Approach `implementation-plan`.
-- ID `AC-NN` і `REQ-NN` стабільні між версіями. Вилучений ID не перевикористовуй.
+- Each AC: an ID `AC-NN`, a reference to a `REQ` and a source, condition → action → expected observable result, the kind (positive / negative / boundary), a Verification Method.
+- Cover positive scenarios, failures (invalid input, conflict, a forbidden action) and boundaries (a value at the boundary and beyond it). The list of topics for AC in the Handoff of `clarification-record` is a minimum, not a ceiling.
+- One AC checks one behavior. No words like "correctly", "fast", "conveniently" without a measurable value.
+- The Verification Method describes how to observe the result: through which interface or action and what exactly is checked (the response, the stored state, the absence of data in responses and logs). Do not choose tools and test levels — they are defined by the Testing Strategy (FG-01) and the Testing Approach of `implementation-plan`.
+- The IDs `AC-NN` and `REQ-NN` are stable between versions. Do not reuse a removed ID.
 
 ## 4. Quality Criteria
 
-- Кожна вимога й AC має джерело: Foundation або `CQ` з рішенням людини. Нічого вигаданого.
-- Кожне рішення `CQ` відображене в `REQ`/`AC` або явно позначене як таке, що не впливає на специфікацію, з причиною.
-- Кожен AC конкретний, перевірюваний і має Verification Method; важливі негативні й граничні сценарії покрито.
-- Вимоги не суперечать одна одній, Foundation і `clarification-record`.
-- Межі scope однозначні; відкладене не потрапило в scope.
-- Жодне відкрите продуктове питання не інтерпретовано мовчки; рекомендацію не подано як рішення.
-- Немає технічних рішень, що належать Technical Design.
+- Each requirement and AC has a source: the Foundation or a `CQ` with the human's decision. Nothing invented.
+- Each `CQ` decision is reflected in a `REQ`/`AC` or explicitly marked as not affecting the specification, with a reason.
+- Each AC is specific, verifiable and has a Verification Method; important negative and boundary scenarios are covered.
+- The requirements do not contradict each other, the Foundation and `clarification-record`.
+- The scope boundaries are unambiguous; what is deferred has not got into scope.
+- No open product question is silently interpreted; a recommendation is not presented as a decision.
+- There are no technical decisions that belong to Technical Design.
 
 ## 5. Output
 
-Один файл `story-spec` за шляхом `output`, мова — українська.
+One `story-spec` file at the `output` path, in English.
 
-Front matter — поля `docs/contracts/artifact-rules.md` §1 і лише вони: `artifact_type: story-spec`, `story_id`, `version`, `produced_by: { stage: SPECIFICATION, attempt }`, `created_at` (фактичний UTC з `date -u +%Y-%m-%dT%H:%M:%SZ`), `inputs`, `story_type`, `acceptance_criteria: [AC-01, …]`. В `inputs` — `{ type: clarification-record, version }` і кожне прочитане джерело як `{ source, path, commit }`, commit — `git log -1 --format=%h -- <path>`. Для `version > 1` — `revision_reason` і попередня версія `story-spec` в `inputs`. Статусів, approval і позначки пілоту у front matter немає.
+Front matter — the fields of `docs/contracts/artifact-rules.md` §1 and only them: `artifact_type: story-spec`, `story_id`, `version`, `produced_by: { stage: SPECIFICATION, attempt }`, `created_at` (the actual UTC from `date -u +%Y-%m-%dT%H:%M:%SZ`), `inputs`, `story_type`, `acceptance_criteria: [AC-01, …]`. In `inputs` — `{ type: clarification-record, version }` and each source read as `{ source, path, commit }`, commit — `git log -1 --format=%h -- <path>`. For `version > 1` — `revision_reason` and the previous version of `story-spec` in `inputs`. There are no statuses, approval or pilot marker in the front matter.
 
-Розділи тіла:
+Body sections:
 
-1. **Story** — ID, джерело, Story Type з обґрунтуванням; обов'язковий зміст типу (для FEATURE — роль і потреба).
-2. **Scope** — у scope / поза scope, з джерелами.
-3. **Вимоги** — `REQ-NN` з джерелами.
-4. **Acceptance Criteria** — `AC-NN` за розділом 3.1.
-5. **Трасування рішень** — таблиця `CQ` → `REQ`/`AC` або «не впливає: причина».
-6. **Ризики й обмеження** — посилання на ризики `clarification-record` і прогалини Foundation, що діють на Story.
-7. **Відкрито для Technical Design** — технічні питання, які специфікація свідомо не вирішує.
+1. **Story** — ID, source, the Story Type with a justification; the mandatory content of the type (for FEATURE — the role and the need).
+2. **Scope** — in scope / out of scope, with sources.
+3. **Requirements** — `REQ-NN` with sources.
+4. **Acceptance Criteria** — `AC-NN` according to section 3.1.
+5. **Decision Traceability** — a table `CQ` → `REQ`/`AC` or "does not affect: reason".
+6. **Risks and Constraints** — references to the risks of `clarification-record` and the Foundation gaps that apply to the Story.
+7. **Open for Technical Design** — technical questions that the specification deliberately does not resolve.
 
-У `mode=pilot` перший рядок тіла: «Пілотний артефакт поза зареєстрованим Workflow. Не зареєстрований, не погоджений, не є входом жодної стадії». Пілотний `clarification-record` теж не зареєстрований; не подавай жоден із них як погоджений.
+In `mode=pilot`, the first line of the body: "Pilot artifact outside the registered Workflow. Not registered, not approved, not an input of any stage." The pilot `clarification-record` is not registered either; do not present either of them as approved.
 
 ## 6. Verdict and Return
 
-SPECIFICATION має `optional: false` і єдину ціль loopback — `CLARIFICATION` (без `crosses_gates`), тому допустимі **`PASS`**, **`CHANGES_REQUIRED`** і **`BLOCKED`**. `NOT_APPLICABLE` недопустимий.
+SPECIFICATION has `optional: false` and a single loopback target — `CLARIFICATION` (without `crosses_gates`), so **`PASS`**, **`CHANGES_REQUIRED`** and **`BLOCKED`** are allowed. `NOT_APPLICABLE` is not allowed.
 
-| Ситуація | Verdict |
+| Situation | Verdict |
 |---|---|
-| Специфікацію записано, критерії розділу 4 виконано | `PASS`, `outputs: [{ type: story-spec, version }]` |
-| Бракує продуктового рішення, вимоги неповні або суперечать одна одній | `CHANGES_REQUIRED`, `loopback_target: CLARIFICATION`, `outputs: []` |
-| Суперечність із Foundation | `BLOCKED` (Foundation Change Required) |
-| Потрібне рішення з переліку ескалацій (`workflow-policies.md` §2) | `BLOCKED` (Escalation Required) |
+| The specification is written, the criteria of section 4 are met | `PASS`, `outputs: [{ type: story-spec, version }]` |
+| A product decision is missing, the requirements are incomplete or contradict each other | `CHANGES_REQUIRED`, `loopback_target: CLARIFICATION`, `outputs: []` |
+| A contradiction with the Foundation | `BLOCKED` (Foundation Change Required) |
+| A decision from the list of escalations is needed (`workflow-policies.md` §2) | `BLOCKED` (Escalation Required) |
 
-Envelope — формат `docs/contracts/workflow-state.md` §6, без змін і без додаткових полів:
+Envelope — the format of `docs/contracts/workflow-state.md` §6, unchanged and without additional fields:
 
 ```yaml
 result:
@@ -107,18 +109,18 @@ result:
   verdict: PASS                      # PASS | CHANGES_REQUIRED | BLOCKED
   outputs:
     - { type: story-spec, version: 1 }
-  loopback_target: null              # CLARIFICATION лише для CHANGES_REQUIRED
-  blocker: null                      # для BLOCKED: { reason, details, needed }
-  summary: "Type FEATURE, 9 REQ, 18 AC; усі CQ відображено"
+  loopback_target: null              # CLARIFICATION only for CHANGES_REQUIRED
+  blocker: null                      # for BLOCKED: { reason, details, needed }
+  summary: "Type FEATURE, 9 REQ, 18 AC; all CQ reflected"
 ```
 
-Для `CHANGES_REQUIRED` файл не записуй. У `summary` коротко перелічи прогалини з посиланнями на `CQ` чи правила, деталі покажи людині в чаті. ID `F-NNN` не присвоюй — це робить review. Для `BLOCKED`: `outputs: []`; `foundation-change-request` Skill не створює — потрібну зміну опиши в `blocker.needed`. У `mode=pilot` додай у `summary` позначку «pilot». На повторному вході Skill завжди створює нову версію з `revision_reason`; `revalidation-record` цей Draft не створює.
+For `CHANGES_REQUIRED`, do not write the file. In `summary`, briefly list the gaps with references to `CQ` or rules, and show the details to the human in the chat (in Ukrainian). Do not assign `F-NNN` IDs — that is done by review. For `BLOCKED`: `outputs: []`; the Skill does not create a `foundation-change-request` — describe the needed change in `blocker.needed`. In `mode=pilot`, add the marker "pilot" to `summary`. On re-entry, the Skill always creates a new version with `revision_reason`; this Draft does not create a `revalidation-record`.
 
 ## 7. Constraints
 
-- Не змінюй `state.yaml`, `history.jsonl`, статуси, Currency чи approvals.
-- Пиши лише файл `output`. Не змінюй `clarification-record`, Foundation, Workflow Definition, `docs/contracts/` та інші артефакти.
-- Не обчислюй номер версії чи шлях — бери їх з аргументів.
-- Не веди інтерв'ю і не ухвалюй продуктових рішень замість людини.
-- Не проходь Human Gate, не імітуй SPEC_REVIEW, Orchestrator чи рішень людини; не запускай інші стадії та Skills.
-- Не роби `git commit`, `git push` чи деструктивних операцій.
+- Do not change `state.yaml`, `history.jsonl`, statuses, Currency or approvals.
+- Write only the `output` file. Do not change `clarification-record`, the Foundation, the Workflow Definition, `docs/contracts/` or other artifacts.
+- Do not compute the version number or path — take them from the arguments.
+- Do not conduct an interview and do not make product decisions instead of the human.
+- Do not pass a Human Gate, do not simulate SPEC_REVIEW, the Orchestrator or the human's decisions; do not start other stages and Skills.
+- Do not run `git commit`, `git push` or destructive operations.
