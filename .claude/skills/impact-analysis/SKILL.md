@@ -1,7 +1,7 @@
 ---
 name: impact-analysis
 description: Stage Skill стадії IMPACT_ANALYSIS. Оцінює застосовність стадії за тригерами IA-01…IA-05 для погодженої story-spec, записує applicability-decision і, якщо стадія застосовна, impact-analysis (зачеплені області, контракти, дані, спільні компоненти, інші Stories, ризики регресії) та повертає result envelope. Інтерв'ю не веде, рішення не проєктує. Запускається лише вручну з готовими шляхами, версією, record_id і номером спроби.
-argument-hint: "story=<ID> spec=<шлях> output=<шлях до impact-analysis v1.md> version=1 record_output=<шлях> record_id=applicability-decision/<NNNN> attempt=<N> [mode=pilot] [reason=\"<рішення людини після RESUME>\"]"
+argument-hint: "story=<ID> spec=<шлях> output=<шлях до impact-analysis v<N>.md> version=<N> record_output=<шлях> record_id=applicability-decision/<NNNN> attempt=<N> [mode=pilot] [previous=<шлях v<N-1>>] [reason=\"<причини входу>\"]"
 disable-model-invocation: true
 user-invocable: true
 ---
@@ -31,16 +31,19 @@ user-invocable: true
 | `story` | так | ID Story, наприклад `US-003` |
 | `spec` | так | Готовий шлях поточної погодженої версії `story-spec`. Її номер версії бери з front matter |
 | `output` | так | Готовий шлях файлу `impact-analysis`. Skill не обчислює шлях сам |
-| `version` | так | Версія `impact-analysis`. Збігається з `v<N>` в `output`. У цьому інкременті — лише `1` |
+| `version` | так | Версія `impact-analysis`. Збігається з `v<N>` в `output`. Обчислює Orchestrator |
 | `record_output` | так | Готовий шлях файлу `applicability-decision` |
 | `record_id` | так | `applicability-decision/<NNNN>`. Номер береться з аргументу |
 | `attempt` | так | Номер спроби стадії |
 | `mode=pilot` | ні | Пілот поза зареєстрованим Workflow |
-| `reason` | ні | Дослівна причина рішення людини `RESUME` після `CHANGES_REQUIRED` цієї стадії |
+| `previous` | для `version > 1` | Готовий шлях попередньої версії `impact-analysis` (`v<N-1>`). Її не змінюють |
+| `reason` | ні | Причини цього входу, по одному рядку: findings SOLUTION_DESIGN, яка повернула Story на цю стадію, і/або дослівна причина рішення людини `RESUME` |
 
 Людини в контексті немає: Skill нічого не питає. Якщо бракує обов'язкового аргументу або вхід не читається, verdict — `BLOCKED` (розділ 6).
 
-`reason` — це рішення людини щодо попереднього Loopback, а не джерело вимог. Воно може пояснити, чому людина відхилила повернення (наприклад, що виявлена суперечність не є реальною). Нових вимог воно не додає.
+`reason` пояснює, чому стадія виконується знову: що SOLUTION_DESIGN вважає неповним чи хибним в оцінці впливу, або чому людина відхилила повернення (наприклад, що виявлена суперечність не є реальною). Це діагностика і рішення щодо Loopback, а не джерело вимог: нових вимог воно не додає.
+
+**Повторний вхід (D-4).** Кожен вхід — нова оцінка застосовності за поточними фактами і новий `applicability-decision`. Попередні висновки не переносяться автоматично (AP-04, AP-08). `previous` і `reason` показують, що перевірити особливо уважно, але висновок робиться за `story-spec`, кодом і Foundation. `revalidation-record` Skill не створює: для `PASS` завжди створюється нова версія.
 
 Логічні входи — `docs/contracts/stage-io-map.yaml` → `IMPACT_ANALYSIS`, шляхи — `docs/contracts/artifact-registry.yaml`:
 - `story-spec` — вимоги, AC, scope, Story Type і розділ «Відкрито для Technical Design»;
@@ -54,9 +57,9 @@ user-invocable: true
 
 1. **Перевір аргументи.**
    - У `mode=pilot` `output` і `record_output` не можуть лежати в `docs/stories/`.
-   - `version` має бути `1`, інакше розділ 6.
+   - `version` — ціле число від `1`. Для `version > 1` `previous` обов'язковий, файл існує, а його front matter має `artifact_type: impact-analysis` і `version: <version - 1>`. Для `version: 1` `previous` не передають. Інакше розділ 6.
    - Якщо файл `output` або `record_output` уже існує, verdict — `BLOCKED`. Файли не перезаписуй.
-2. **Прочитай `story-spec`.** Виділи `story_type`, `REQ`, `AC`, scope і поза scope, а також «Відкрито для Technical Design». Виділи також, що Story додає, змінює чи вилучає.
+2. **Прочитай `story-spec`**, а також `previous` і `reason`, якщо їх передано. Виділи `story_type`, `REQ`, `AC`, scope і поза scope, а також «Відкрито для Technical Design». Виділи також, що Story додає, змінює чи вилучає.
 3. **Визнач зачеплені області** (розділ 3.1) і зафіксуй стан коду (розділ 3.2).
 4. **Перевір інші Stories** (розділ 3.3).
 5. **Оціни тригери IA-01…IA-05** (розділ 3.4) і визнач `result`.
@@ -171,7 +174,9 @@ basis:                                       # basis_facts стадії
 2. **Зачеплені області** — короткий перелік з розділу 3.1.
 3. **Тригери** — для кожного IA-xx висновок, обґрунтування і причина неоднозначності, якщо застосовано AP-02.
 4. **Інші Stories** — обсяг перевірки й обмеження (розділ 3.3).
-5. **Рішення людини** — лише якщо передано `reason`: дослівна цитата і як її враховано.
+5. **Причини входу** — лише якщо передано `reason` чи `previous`:
+   - дослівна цитата кожного рядка `reason` і як його враховано;
+   - якщо `previous` передано, а `result` тепер `NOT_APPLICABLE`: який факт чи висновок змінився щодо `met` тригерів попередньої версії. Зафіксуй також, що `impact-analysis` `v<N-1>` більше не описує чинну оцінку.
 
 ### 5.2. `impact-analysis` (лише `PASS`)
 
@@ -179,7 +184,8 @@ Front matter — поля `docs/contracts/artifact-rules.md` §1, і лише в
 - `artifact_type: impact-analysis`, `story_id`, `version`;
 - `produced_by: { stage: IMPACT_ANALYSIS, attempt }`;
 - `created_at`;
-- `inputs`: `{ type: story-spec, version }` і кожен прочитаний шлях з історією в Git як `{ source: codebase | architecture-foundation, path, commit }`.
+- `inputs`: `{ type: story-spec, version }` і кожен прочитаний шлях з історією в Git як `{ source: codebase | architecture-foundation, path, commit }`. Для `version > 1` — також `{ type: impact-analysis, version: <N-1> }` (lineage, `artifact-rules.md` §1, §3);
+- `revision_reason` — лише для `version > 1`: що змінилося відносно `v<N-1>` і чому, з посиланням на рядки `reason`.
 
 Розділи тіла:
 1. **Предмет** — версія `story-spec`, `record_id` рішення про застосовність, `met` тригери.
@@ -191,7 +197,7 @@ Front matter — поля `docs/contracts/artifact-rules.md` §1, і лише в
 7. **Ризики регресії** — що з наявного може зламатися, з посиланням на область.
 8. **Обмеження аналізу** — незакомічені чи невідстежувані шляхи, неоднозначності (AP-02), межі видимості.
 9. **Відкрито для Solution Design** — питання, які стадія свідомо не вирішує.
-10. **Рішення людини** — лише якщо передано `reason`: дослівна цитата і як вона вплинула на аналіз. Рішення людини фіксується в канонічному артефакті, а не лише в History (`workflow-policies.md` §2).
+10. **Причини входу** — лише якщо передано `reason`: дослівна цитата кожного рядка і як він вплинув на аналіз. Рішення людини фіксується в канонічному артефакті, а не лише в History (`workflow-policies.md` §2).
 
 ## 6. Verdict and Return
 
@@ -199,7 +205,7 @@ IMPACT_ANALYSIS має `optional: true` і loopbacks `SPECIFICATION` і `CLARIFI
 
 | Ситуація | Verdict | `outputs` |
 |---|---|---|
-| Бракує аргументу, `version` ≠ `1`, вхід не читається, `output` чи `record_output` уже існує | `BLOCKED` до оцінки. Файлів немає | `[]` |
+| Бракує аргументу, `version` і `previous` не узгоджені (розділ 3, крок 1), вхід не читається, `output` чи `record_output` уже існує | `BLOCKED` до оцінки. Файлів немає | `[]` |
 | Усі тригери `not_met` | `NOT_APPLICABLE` | `[{ record: <record_id> }]` |
 | `APPLICABLE`, аналіз завершено, критерії розділу 4 виконано | `PASS` | `[{ type: impact-analysis, version }, { record: <record_id> }]` |
 | `APPLICABLE`, `story-spec` нездійсненна чи суперечить наявній системі, і це усувається в `story-spec` без нового рішення людини | `CHANGES_REQUIRED`, `loopback_target: SPECIFICATION` | `[{ record: <record_id> }]` |
