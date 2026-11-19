@@ -1,0 +1,215 @@
+# Artifact Registry — Simplified Artifact Contracts MVP (APPROVED (MVP), 2026-11-17)
+#
+# Єдине джерело шляхів і власників артефактів Story Workflow.
+#
+# Правила:
+#   - Stage Skills і Orchestrator беруть шляхи лише з цього файлу. Skill може показати
+#     приклад шляху, але не визначає власних шляхів.
+#   - Ключ артефакта — логічний ідентифікатор зі stages.md, розділ 5.
+#   - produced_by — стадія (або Orchestrator), яка має право створювати файли цього типу.
+#     Інші стадії артефакт лише читають.
+#   - Плейсхолдери: {story_id} — наприклад US-001; {version} — ціле число від 1;
+#     {nnnn} — порядковий номер запису цього типу в межах Story (0001, 0002, …);
+#     {nnn} — номер Foundation Change Request у межах Story; {entry_id} — BL-001, BL-002, …
+#   - Метадані, версії й статуси — artifact-rules.md. Workflow State — workflow-state.md.
+#   - Входи й виходи стадій — stage-io-map.yaml.
+
+version: 1
+
+storage_root: docs/stories     # Фіксований для MVP. Обмеження — README.md, розділ «Storage».
+
+categories:
+  controlled: >-
+    Контрольований документ. Має версії v1, v2, …; опублікована версія незмінна.
+    Version Status і Currency зберігаються лише у state.yaml.
+  record: >-
+    Supporting-запис. Незмінний після реєстрації, власного lifecycle не має.
+    Виправлення — новий запис.
+  project: Запис рівня проєкту поза директорією Story.
+  source: >-
+    Зовнішнє джерело, яке Story читає, але не змінює. Його версія — git commit
+    останньої зміни файлу (artifact-rules.md, розділ 3).
+
+# ---------------------------------------------------------------------------
+# Контрольовані документи Story
+# ---------------------------------------------------------------------------
+
+artifacts:
+
+  clarification-record:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/clarification-record/v{version}.md
+    produced_by: CLARIFICATION
+    approval_gate: HUMAN_SPEC_APPROVAL
+    note: Питання, відповіді й рішення людини щодо Story.
+
+  story-spec:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/story-spec/v{version}.md
+    produced_by: SPECIFICATION
+    approval_gate: HUMAN_SPEC_APPROVAL
+    note: Story Type, Acceptance Criteria (AC-NN) і Verification Method кожного критерію.
+
+  impact-analysis:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/impact-analysis/v{version}.md
+    produced_by: IMPACT_ANALYSIS
+    approval_gate: HUMAN_TECHNICAL_APPROVAL     # якщо стадія застосовна
+
+  solution-design:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/solution-design/v{version}.md
+    produced_by: SOLUTION_DESIGN
+    approval_gate: HUMAN_TECHNICAL_APPROVAL
+
+  api-design:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/api-design/v{version}.md
+    produced_by: API_DESIGN
+    approval_gate: HUMAN_TECHNICAL_APPROVAL     # якщо стадія застосовна
+
+  db-design:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/db-design/v{version}.md
+    produced_by: DB_DESIGN
+    approval_gate: HUMAN_TECHNICAL_APPROVAL     # якщо стадія застосовна
+
+  implementation-plan:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/implementation-plan/v{version}.md
+    produced_by: IMPLEMENTATION_PLANNING
+    approval_gate: HUMAN_TECHNICAL_APPROVAL
+    note: Кроки, Story Risk Assessment, Testing Approach, заплановані Optional Stages.
+
+  implementation-changeset:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/implementation-changeset/v{version}.md
+    produced_by: IMPLEMENTATION                 # лише IMPLEMENTATION (RR-10)
+    approval_gate: HUMAN_PR_APPROVAL
+    note: >-
+      Опис змін коду й тестів: feature branch, base_commit, changeset_commit, змінені файли.
+      Сам код живе в Git. Нова версія — щоразу, коли змінюється changeset_commit.
+
+  foundation-change-request:
+    category: controlled
+    path: docs/stories/{story_id}/artifacts/foundation-change-request/{nnn}/v{version}.md
+    produced_by: ANY_STAGE                      # через BLOCKED (Foundation Change Required)
+    note: Запит на зміну Product або Architecture Foundation. Вирішує людина поза Story.
+
+# ---------------------------------------------------------------------------
+# Supporting-записи Story
+# ---------------------------------------------------------------------------
+
+records:
+
+  review-report:
+    category: record
+    path: docs/stories/{story_id}/records/review-report/{nnnn}.md
+    produced_by: [SPEC_REVIEW, DESIGN_REVIEW, PLAN_REVIEW, CODE_REVIEW, SECURITY_REVIEW]
+    approval_gate: HUMAN_PR_APPROVAL            # лише звіти CODE_REVIEW і SECURITY_REVIEW
+    note: Verdict і findings щодо конкретних версій. Інші звіти входять до пакета рішення gate.
+
+  revalidation-record:
+    category: record
+    path: docs/stories/{story_id}/records/revalidation-record/{nnnn}.md
+    produced_by: OWNER_STAGE                    # стадія-власник артефакта чи запису, що перевіряється
+    note: Незмінна версія лишається актуальною щодо нових upstream-версій.
+
+  applicability-decision:
+    category: record
+    path: docs/stories/{story_id}/records/applicability-decision/{nnnn}.md
+    produced_by: [IMPACT_ANALYSIS, API_DESIGN, DB_DESIGN, IMPLEMENTATION_PLANNING, SECURITY_REVIEW, RECONCILIATION]
+    approval_gate: [HUMAN_TECHNICAL_APPROVAL, HUMAN_PR_APPROVAL]
+    note: >-
+      Оцінка тригерів Optional Stage (applicability_conditions у stage-map.yaml).
+      IMPLEMENTATION_PLANNING створює заплановані рішення для SECURITY_REVIEW і RECONCILIATION;
+      самі стадії — рішення на вході (AP-06).
+
+  reconciliation-report:
+    category: record
+    path: docs/stories/{story_id}/records/reconciliation-report/{nnnn}.md
+    produced_by: RECONCILIATION
+    approval_gate: HUMAN_PR_APPROVAL            # якщо RECONCILIATION застосовна
+
+  verification-report:
+    category: record
+    path: docs/stories/{story_id}/records/verification-report/{nnnn}.md
+    produced_by: VERIFICATION
+    approval_gate: HUMAN_PR_APPROVAL
+    note: Результати перевірок, Findings Disposition, FOLLOW_UP, стан DoD, verified_target_base.
+
+  pull-request:
+    category: record
+    path: docs/stories/{story_id}/records/pull-request/{nnnn}.md
+    produced_by: PR_PREPARATION
+    approval_gate: HUMAN_PR_APPROVAL
+    note: Репозиторій, номер PR, source і target branch, версія changeset. Метадані PR не входять до identity (RR-12).
+
+  integration-record:
+    category: record
+    path: docs/stories/{story_id}/records/integration-record/{nnnn}.md
+    produced_by: INTEGRATION_CONFIRMATION
+
+  post-merge-validation-record:
+    category: record
+    path: docs/stories/{story_id}/records/post-merge-validation-record/{nnnn}.md
+    produced_by: INTEGRATION_CONFIRMATION
+    note: Лише якщо target branch змінилася до merge. Не входить до жодного Approval Scope.
+
+  risk-acceptance-record:
+    category: record
+    path: docs/stories/{story_id}/records/risk-acceptance-record/{nnnn}.md
+    produced_by: ORCHESTRATOR                   # фіксує рішення людини; агент ризик не приймає
+
+  foundation-exception-record:
+    category: record
+    path: docs/stories/{story_id}/records/foundation-exception-record/{nnnn}.md
+    produced_by: ORCHESTRATOR                   # фіксує рішення людини за процедурою Foundation
+
+  cancellation-record:
+    category: record
+    path: docs/stories/{story_id}/records/cancellation-record/{nnnn}.md
+    produced_by: ORCHESTRATOR                   # під час CANCEL (Cancellation Protocol)
+
+# ---------------------------------------------------------------------------
+# Рівень проєкту
+# ---------------------------------------------------------------------------
+
+project:
+
+  backlog-entry:
+    category: project
+    path: docs/backlog/{entry_id}.md
+    produced_by: [INTEGRATION_CONFIRMATION, ORCHESTRATOR]   # FOLLOW_UP; Orchestrator — під час Cancellation
+    note: Запис для погодженого FOLLOW_UP з посиланням на Story і Finding (PRQ-01).
+
+# ---------------------------------------------------------------------------
+# Зовнішні джерела (читаються, не змінюються в Story)
+# ---------------------------------------------------------------------------
+
+sources:
+
+  story-source:
+    category: source
+    path: docs/product/epic-map.md              # FEATURE; для інших типів — backlog-entry
+  product-foundation:
+    category: source
+    path: docs/product/
+  architecture-foundation:
+    category: source
+    path: docs/architecture/
+  workflow-definition:
+    category: source
+    path: docs/workflow/
+  testing-strategy:
+    category: source
+    path: null                                  # документа ще немає (FG-01)
+  merge-protection-policy:
+    category: source
+    path: null                                  # ще не визначено (PRQ-02)
+  codebase:
+    category: source
+    path: .                                     # стан коду в Git; версія — commit
+  story-history:
+    category: source
+    path: docs/stories/{story_id}/history.jsonl # пише лише Orchestrator (workflow-state.md); стадії лише читають
