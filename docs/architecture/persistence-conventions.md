@@ -291,6 +291,33 @@ Time in Redis sessions — [section 9](#session-value-representation).
 - Not every migration is atomic. `CREATE INDEX CONCURRENTLY` and other operations that cannot be performed in a transaction are allowed as explicitly documented exceptions. For them, the possibility of a partial result and the need for manual recovery are taken into account.
 - How the golang-migrate driver executes an SQL file and whether it wraps it in a transaction is checked for the specific driver in the Technical Design of the first migration.
 
+### Driver Evidence: golang-migrate v4.19.1
+
+This subsection records verified technical evidence. It is not a decision: it does not select a golang-migrate version, a database driver or an execution configuration, and the repository does not use golang-migrate yet. The selection and the CLI integration remain with Infrastructure Bootstrap ([section 13](#deferred-decisions)). The transactional design of the first migration remains a decision of its Technical Design, which may reference this evidence.
+
+**Sources** (immutable versions):
+
+| Source | Version |
+|---|---|
+| `github.com/golang-migrate/migrate/v4` | `v4.19.1`, tag commit `89e308c340a2c069c3260f268307d38a7db88227`, module hash `h1:OCyb44lFuQfYXYLx1SCxPZQGU7mcaZ7gH9yH4jSFbBA=` |
+| `github.com/jackc/pgx/v5` (required by the `go.mod` of migrate v4.19.1) | `v5.5.4`, tag commit `da6f2c98f2664b215b40b1606551fdfcc7f3ea5c`, module hash `h1:Xp2aQS8uXButQdnCMWNmvx6UysWQQC+u1EoizjguY+8=` |
+| `github.com/lib/pq` (required by the `go.mod` of migrate v4.19.1) | `v1.10.9`, tag commit `2a217b94f5ccd3de31aec4152a541b9ff64bed05`, module hash `h1:YXG7RB+JIjhP29X+OtkiDnYaXQwpS4JEWq7dtCCRUEw=` |
+| PostgreSQL 18 documentation | [§54.2.2.1 "Multiple Statements in a Simple Query"](https://www.postgresql.org/docs/18/protocol-flow.html#PROTOCOL-FLOW-MULTI-STATEMENT); [CREATE INDEX, "Building Indexes Concurrently"](https://www.postgresql.org/docs/18/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY) |
+
+The module hashes were read from the local Go module cache and were not checked against `sum.golang.org`.
+
+**Findings** (line numbers are for the versions above):
+
+1. **Normal mode.** In the drivers `database/postgres` (lib/pq) and `database/pgx/v5`, `Run` reads the whole migration file and executes it with **one** `ExecContext` call without arguments (`database/postgres/postgres.go` L265–283, `runStatement` from L285; `database/pgx/v5/pgx.go` L252–270, `runStatement` from L272). golang-migrate does not open a transaction for the migration body.
+2. **Protocol.** Without arguments, both libraries use the PostgreSQL simple query protocol: pgx — `stdlib/sql.go` L478–485 and `conn.go` L483–484 (`QueryExecModeSimpleProtocol` when there are no arguments), the contract of `PgConn.Exec` in `pgconn/pgconn.go` L1047–1049; lib/pq — `conn.go` L931–935 (`simpleExec` when there are no arguments).
+3. **Implicit transaction.** PostgreSQL executes several statements of one simple Query message "as a single transaction, unless explicit transaction control commands are included", in an implicit transaction block that is closed "by an implicit commit if there was no error, or an implicit rollback if there was an error" (PostgreSQL 18, §54.2.2.1). So, in normal mode, a file without explicit `BEGIN` / `COMMIT` is applied atomically. A file with explicit transaction control defines its own transaction boundaries.
+4. **`x-multi-statement`.** The option is `false` by default (`database/postgres/postgres.go` from L195, `database/pgx/v5/pgx.go` L187–193). With `x-multi-statement=true`, the file is split into statements, and each one is executed by a separate `ExecContext` (`Run`, the same lines as item 1). Then each statement is a separate transaction, and the file is **not** atomic.
+5. **Version metadata.** `migrate.go` L737–750: `SetVersion(version, dirty=true)`, then `Run(body)`, then `SetVersion(version, dirty=false)`. `SetVersion` is a separate explicit transaction (`BeginTx` … `Commit`: `database/postgres/postgres.go` from L355, `database/pgx/v5/pgx.go` from L339). The migration body and the version metadata are therefore **three separate transactions**, not one atomic unit.
+6. **Failure and dirty state.** If the body fails in normal mode, the body is rolled back, and the version remains `dirty=true`. If the body succeeds but the final `SetVersion` fails, the schema change is applied while the version remains `dirty`. In both cases, the [dirty state rules](#dirty-state) apply.
+7. **Non-transactional operations.** "A regular `CREATE INDEX` command can be performed within a transaction block, but `CREATE INDEX CONCURRENTLY` cannot" (PostgreSQL 18, CREATE INDEX). In normal mode, a file with several statements runs in an implicit transaction block, so such an operation is possible only as a separate migration file with this one statement, as the driver documentation requires (`database/postgres/README.md` L36–39, `database/pgx/v5/README.md` L38–41), or in multi-statement mode. It remains a documented exception of the [Transactionality](#transactionality) rules.
+
+**Validity.** The findings apply only to golang-migrate v4.19.1 with the drivers `database/postgres` or `database/pgx/v5` and the library versions above, in normal mode (`x-multi-statement` not enabled), for migration files without explicit transaction control. They are not generalized to other versions, drivers or configurations. Another selection requires checking the evidence again.
+
 ### Down
 
 - For a reversible migration, a correct `down` is created.
@@ -610,7 +637,7 @@ The corresponding rows in those documents are marked as defined with references 
 | Confirming the freshness of the state during login, rehashing, session index cleanup | Technical Design of US-002 |
 | Distinguishing transactional and non-transactional repository operations, Go representation of `AccountID` | Technical Design |
 | The compare-and-set mechanism for each security-sensitive operation | Technical Design of the corresponding Story |
-| Transactionality of SQL file execution by the golang-migrate driver | Technical Design of the first migration |
+| Transactionality of SQL file execution by the golang-migrate driver | Technical Design of the first migration. Technical evidence for v4.19.1 — [section 7](#driver-evidence-golang-migrate-v4191) |
 | Protection against `down` through an irreversible migration | Before the first approved irreversible migration |
 | Migration rollback policy in shared environments | Deployment |
 | TLS to PostgreSQL and Redis | Deployment |
