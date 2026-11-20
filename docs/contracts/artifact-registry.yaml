@@ -203,7 +203,7 @@ sources:
     path: docs/workflow/
   testing-strategy:
     category: source
-    path: null                                  # the document does not exist yet (FG-01)
+    path: docs/architecture/testing-strategy.md # FG-01: DRAFT, pending human approval
   merge-protection-policy:
     category: source
     path: null                                  # not defined yet (PRQ-02)
