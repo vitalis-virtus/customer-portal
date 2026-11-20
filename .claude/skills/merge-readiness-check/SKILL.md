@@ -58,7 +58,7 @@ The stage is mandatory (`optional: false`). Loopbacks (all cross `HUMAN_PR_APPRO
 | `UNAVAILABLE` without a human-approved integration order | `BLOCKED` (Merge Protection Unavailable) |
 | `DISABLED` under a mandatory policy, without a valid `foundation-exception-record` | `BLOCKED` (Merge Protection Disabled) |
 
-- `summary` begins with `merge_protection_status: <STATUS>;` and then lists the three conditions with their evidence (commits, PR number). For `NOT_SUPPORTED`, it states the limitation for the HUMAN_MERGE package. This is the only channel for the status, because the envelope has no other fields (`workflow-state.md` §6).
+- `summary` begins exactly with `merge_protection_status: <STATUS>;`, where `<STATUS>` is one of `ACTIVE`, `NOT_SUPPORTED`, `UNAVAILABLE`, `DISABLED` (uppercase, no other value); if the status could not be determined, the verdict is not `PASS`. The Orchestrator accepts the result only if this prefix parses to a valid value. Then `summary` lists the three conditions with their evidence (commits, PR number). For `NOT_SUPPORTED`, it states the limitation for the HUMAN_MERGE package. This is the only channel for the status, because the envelope has no other fields (`workflow-state.md` §6).
 - `loopback_target` is only a proposal; every return requires a human's decision (LOOPBACK_CONFIRMATION).
 - In `mode=pilot`, add "pilot" to `summary`.
 

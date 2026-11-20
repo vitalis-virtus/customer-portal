@@ -1,7 +1,7 @@
 ---
 name: story-orchestrator
 description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4 and the API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW integration). Initializes a pilot Story outside the registered Workflow, shows its status with a State and History check, executes one stage per run (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW in a subagent) in Step Mode up to IMPLEMENTATION, supports re-entry into IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN, applies the human's decisions at HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL), at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL (APPROVE, CANCEL) and at the Loopback confirmation from IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW (RESUME, CANCEL). Started only manually with mode=pilot.
-argument-hint: "init|status|next story=<ID> mode=pilot | decide story=<ID> mode=pilot decision=APPROVE|REQUEST_CHANGES|CANCEL|RESUME|ROUTE_BACK by=<id> [target=<stage>] [reason=\"...\"] [comment=\"...\"]"
+argument-hint: "init|status|next story=<ID> mode=pilot | decide story=<ID> mode=pilot decision=APPROVE|REQUEST_CHANGES|CANCEL|RESUME|ROUTE_BACK|CONFIRM_MERGED by=<id> [target=<stage>] [reason=\"...\"] [comment=\"...\"]"
 disable-model-invocation: true
 user-invocable: true
 ---
@@ -36,7 +36,7 @@ The Skill works in the main session.
 - **RECONCILIATION is not executable in Pilot Mode either.** Its Stage Skill exists (`.claude/skills/reconciliation/SKILL.md`). Its precondition is CODE_REVIEW `PASS` and SECURITY_REVIEW `PASS` or `NOT_APPLICABLE` for the current Changeset Content Identity, which cannot exist while IMP-D01 is open; `next` at RECONCILIATION stops and changes nothing. Its integration is done together with IMP-D01, on these contract rules: inputs per `stage-io-map.yaml` → `RECONCILIATION` (including `history.jsonl` as `story-history`, read-only); `records.applicability-decision.RECONCILIATION.PLANNED` as the PLANNED decision and a separate `ENTRY` registration; the `reconciliation-report` record (`records/reconciliation-report/<NNNN>.md`, `artifact-registry.yaml`) only if applicable; `NOT_APPLICABLE` and `PASS` → VERIFICATION (RR-02); `CHANGES_REQUIRED` to IMPLEMENTATION without a gate, other targets through HUMAN_TECHNICAL_APPROVAL.
 - **VERIFICATION is not executable in Pilot Mode either.** Its Stage Skill exists (`.claude/skills/verification/SKILL.md`). Its precondition is CODE_REVIEW `PASS` and SECURITY_REVIEW / RECONCILIATION `PASS` or `NOT_APPLICABLE` for the current Changeset Content Identity; it also executes checks in a prepared workspace with the integration result against the Target Base Identity (OD-12) and requires the Testing Strategy (FG-01). None of this exists in a pilot while IMP-D01 and FG-01 are open; `next` at VERIFICATION stops and changes nothing. Its integration is done together with IMP-D01: inputs per `stage-io-map.yaml` → `VERIFICATION` (`state.yaml` and `history.jsonl` read-only), the preparation of the workspace (part of IMP-D01), the `verification-report` record with `verified_changeset` and `verified_target_base` (registration of `git.verified_target_base`, `workflow-state.md` §3), `PASS` → PR_PREPARATION, `CHANGES_REQUIRED` to IMPLEMENTATION without a gate, other targets through HUMAN_TECHNICAL_APPROVAL.
 - **PR_PREPARATION is not executable in Pilot Mode either.** Its Stage Skill exists (`.claude/skills/pr-preparation/SKILL.md`). Its precondition is VERIFICATION `PASS` for the current Changeset Content Identity and Target Base Identity, which cannot exist while IMP-D01 is open; it also needs a remote repository and the user's explicit permission for the push and the PR creation (`AGENTS.md`). `next` at PR_PREPARATION stops and changes nothing. Its integration is done together with IMP-D01: inputs per `stage-io-map.yaml` → `PR_PREPARATION`; the `pull-request` record bound to `{ implementation-changeset, version, changeset_commit }` and the target branch; `PASS` → HUMAN_PR_APPROVAL (a `human_gate`: `pending_human_decision: GATE`, as for the other gates; no approval is created); `CHANGES_REQUIRED` to IMPLEMENTATION, or to VERIFICATION with `CHANGESET_CONTENT_UNCHANGED`, both without a gate.
-- **MERGE_READINESS_CHECK is not executable in Pilot Mode either.** Its Stage Skill exists (`.claude/skills/merge-readiness-check/SKILL.md`). Its precondition is a `VALID` HUMAN_PR_APPROVAL, which cannot exist while IMP-D01 is open; it also reads the remote repository. `next` at MERGE_READINESS_CHECK stops and changes nothing. Its integration is done together with IMP-D01: `type: check`, `outputs: []` (`stage-io-map.yaml`) — the Orchestrator records the result in History and the Merge Protection Status in `git.merge_protection_status` (`workflow-state.md` §3) from the Skill's envelope `summary`; `PASS` → HUMAN_MERGE (a `human_gate`, `pending_human_decision: GATE`; the merge is performed only by the human); every return (VERIFICATION with `CHANGESET_CONTENT_UNCHANGED`, PR_PREPARATION, IMPLEMENTATION) crosses HUMAN_PR_APPROVAL and goes through `LOOPBACK_CONFIRMATION`; `BLOCKED` (Merge Protection Unavailable / Disabled) through the existing blocker handling.
+- **MERGE_READINESS_CHECK is not executable in Pilot Mode either.** Its Stage Skill exists (`.claude/skills/merge-readiness-check/SKILL.md`). Its precondition is a `VALID` HUMAN_PR_APPROVAL, which cannot exist while IMP-D01 is open; it also reads the remote repository. `next` at MERGE_READINESS_CHECK stops and changes nothing. Its integration is done together with IMP-D01: `type: check`, `outputs: []` (`stage-io-map.yaml`) — the Orchestrator records the result in History and the Merge Protection Status in `git.merge_protection_status` (`workflow-state.md` §3) from the Skill's envelope `summary`; the result is accepted only if `summary` begins with `merge_protection_status: <ACTIVE|NOT_SUPPORTED|UNAVAILABLE|DISABLED>;` — a missing or unrecognized value is `INVALID_RESULT` and is never read as `ACTIVE`; `PASS` → HUMAN_MERGE (a `human_action`, `pending_human_decision: HUMAN_ACTION` with `options: [CONFIRM_MERGED, REQUEST_CHANGES, CANCEL]` and `package` — the `pull-request` record, `verification-report`, the changeset identity and `git.merge_protection_status`; section 8.10; the merge is performed only by the human); every return (VERIFICATION with `CHANGESET_CONTENT_UNCHANGED`, PR_PREPARATION, IMPLEMENTATION) crosses HUMAN_PR_APPROVAL and goes through `LOOPBACK_CONFIRMATION`; `BLOCKED` (Merge Protection Unavailable / Disabled) through the existing blocker handling.
 - `decide` applies the human's decisions:
   - `APPROVE`, `REQUEST_CHANGES` or `CANCEL` at HUMAN_SPEC_APPROVAL (section 8);
   - `APPROVE` or `CANCEL` at HUMAN_TECHNICAL_APPROVAL; `REQUEST_CHANGES` there is rejected without changes, because re-entry into its targets is not implemented (section 8.8);
@@ -945,6 +945,7 @@ Applies the human's decision for the current `pending_human_decision`. Works in 
 | `GATE` | HUMAN_SPEC_APPROVAL | `APPROVE`, `REQUEST_CHANGES`, `CANCEL` | 8.2–8.5 |
 | `GATE` | HUMAN_TECHNICAL_APPROVAL | `APPROVE`, `CANCEL`; `REQUEST_CHANGES` is rejected without changes | 8.2, 8.5, 8.8 |
 | `GATE` | HUMAN_PR_APPROVAL | `APPROVE`, `CANCEL`; `REQUEST_CHANGES` is rejected without changes | 8.2, 8.5, 8.9 |
+| `HUMAN_ACTION` | HUMAN_MERGE | `CONFIRM_MERGED`, `REQUEST_CHANGES` (only `target=MERGE_READINESS_CHECK`), `CANCEL` | 8.2, 8.5, 8.10 |
 | `LOOPBACK_CONFIRMATION` | IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW | `RESUME`, `CANCEL`; `ROUTE_BACK` is rejected without changes | 8.2, 8.5, 8.7 |
 
 The human makes the decision, and the Orchestrator only checks and applies it (`workflow-state.md` §1).
@@ -957,7 +958,7 @@ A decision in the pilot is a simulation of a Human Gate. It applies only within 
 
 | Argument | Decision | Rule |
 |---|---|---|
-| `decision` | all | For `GATE`: `APPROVE`, `REQUEST_CHANGES` or `CANCEL` (`gate_decisions` in `stage-map.yaml`); `RECONFIRM` is not offered in the MVP (`docs/contracts/README.md`, "Deferred. An Approved Simplification of the Workflow Is Needed"). For `LOOPBACK_CONFIRMATION`: `ROUTE_BACK`, `RESUME` or `CANCEL` (`loopback_confirmation_decisions`). Any other value is an error |
+| `decision` | all | For `GATE`: `APPROVE`, `REQUEST_CHANGES` or `CANCEL` (`gate_decisions` in `stage-map.yaml`); `RECONFIRM` is not offered in the MVP (`docs/contracts/README.md`, "Deferred. An Approved Simplification of the Workflow Is Needed"). For `LOOPBACK_CONFIRMATION`: `ROUTE_BACK`, `RESUME` or `CANCEL` (`loopback_confirmation_decisions`). For `HUMAN_ACTION` at HUMAN_MERGE: `CONFIRM_MERGED`, `REQUEST_CHANGES` or `CANCEL` (the stage's `decisions`). Any other value is an error |
 | `by` | all, mandatory | A non-empty identifier of the human who made the decision. In the pilot, this is a declared identifier, not verified authentication. The Orchestrator does not invent it, does not substitute it for the human and does not take the identifier of an agent or Skill |
 | `target` | only `REQUEST_CHANGES`, mandatory | The target stage of the return (section 8.4.1) |
 | `reason` | `REQUEST_CHANGES`, `CANCEL` and `RESUME`, mandatory | A non-empty reason. Recorded verbatim according to the rules for the human's text in section 7.10 (`workflow-policies.md` §3, §17). For `RESUME`, the next attempt of the stage receives it verbatim (section 7.3) |
@@ -973,6 +974,7 @@ For each decision. Check everything in order. The first violation — explain to
 2. **Kind of waiting.** `story_status: WAITING_FOR_HUMAN`, `execution_state: AWAITING_HUMAN`, `pending_human_decision.stage` = `current_stage`. Then — according to `pending_human_decision.kind`:
    - `LOOPBACK_CONFIRMATION` — the check of section 8.7.1 instead of steps 3–4 below;
    - `GATE` at HUMAN_SPEC_APPROVAL — steps 3–4 below; `GATE` at HUMAN_TECHNICAL_APPROVAL — the check of section 8.8.1 instead of steps 3–4; `GATE` at HUMAN_PR_APPROVAL — the check of section 8.9.1 instead of steps 3–4;
+   - `HUMAN_ACTION` at HUMAN_MERGE — the check of section 8.10.1 instead of steps 3–4;
    - another kind or `null` — the decision is not supported by this Skill: explain and stop.
 3. **Gate state** (only `GATE`):
    - `current_stage: HUMAN_SPEC_APPROVAL`; in `stage-map.yaml` this stage has `type: human_gate`;
@@ -987,7 +989,7 @@ For each decision. Check everything in order. The first violation — explain to
 
 The decision time: `date -u +%Y-%m-%dT%H:%M:%SZ`, one value for all time fields and the `ts` of the events of this decision.
 
-Application is one Orchestrator step (`workflow-state.md` §7): first the record file, if any (only CANCEL), then `state.yaml` according to section 7.10, then the events in `history.jsonl`. `reason`, `comment` and `by` are serialized in all files according to the rules for the human's text (section 7.10). In all decisions, the `actor` of the `human_decision.applied` event is the human from `by` (`{kind: human, id: <by>}`), `stage` is `pending_human_decision.stage` (HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL, HUMAN_PR_APPROVAL, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW), `refs` are the elements of `package`. Artifact and review report files do not change (`artifact-rules.md` §3, item 2).
+Application is one Orchestrator step (`workflow-state.md` §7): first the record file, if any (only CANCEL), then `state.yaml` according to section 7.10, then the events in `history.jsonl`. `reason`, `comment` and `by` are serialized in all files according to the rules for the human's text (section 7.10). In all decisions, the `actor` of the `human_decision.applied` event is the human from `by` (`{kind: human, id: <by>}`), `stage` is `pending_human_decision.stage` (HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL, HUMAN_PR_APPROVAL, HUMAN_MERGE, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW), `refs` are the elements of `package`. Artifact and review report files do not change (`artifact-rules.md` §3, item 2).
 
 ### 8.3. APPROVE
 
@@ -1086,7 +1088,7 @@ Do not start the target stage. The next `next` will perform the re-entry into SP
 
 The Cancellation Protocol (`workflow-policies.md` §17, `stage-map.yaml` RR-08). `CANCELLED` is a terminal state: the Story is not reopened.
 
-The procedure is the same for both kinds of waiting: `GATE` at HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL or HUMAN_PR_APPROVAL (for the latter two, `subjects` and `refs` are taken from the gate's `package`) and `LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW (`loopback_confirmation_decisions.CANCEL`). The examples below are given for the gate. For `LOOPBACK_CONFIRMATION`:
+The procedure is the same for both kinds of waiting: `GATE` at HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL or HUMAN_PR_APPROVAL, `HUMAN_ACTION` at HUMAN_MERGE (for the latter three, `subjects` and `refs` are taken from the gate's `package`) and `LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW (`loopback_confirmation_decisions.CANCEL`). The examples below are given for the gate. For `LOOPBACK_CONFIRMATION`:
 - the place of the stage in the record and the events is taken by `current_stage` (`IMPACT_ANALYSIS`, `SOLUTION_DESIGN`, `API_DESIGN`, `DB_DESIGN`, `DESIGN_REVIEW`, `IMPLEMENTATION_PLANNING` or `PLAN_REVIEW`);
 - `subjects`, `artifacts` and `refs` are taken from the current state and `package`, in particular `applicability-decision`, `impact-analysis` and `solution-design`, if they exist;
 - the route is `loopback_confirmation_decisions.CANCEL` instead of the gate's `decisions.CANCEL`.
@@ -1154,7 +1156,7 @@ The route — the gate's `decisions.CANCEL` or `loopback_confirmation_decisions.
   - `COMPLETED` is described in the State Model as a completed attempt with a Stage Verdict, and a gate has no attempts and no verdict.
 
   `COMPLETED` is chosen as the closest value: the work at the current stage is completed and there will be no new attempts. A clarification is a matter of a future contract change;
-- `current_stage` does not change (`HUMAN_SPEC_APPROVAL`, `HUMAN_TECHNICAL_APPROVAL`, `HUMAN_PR_APPROVAL`, `IMPACT_ANALYSIS`, `SOLUTION_DESIGN`, `API_DESIGN`, `DB_DESIGN`, `DESIGN_REVIEW`, `IMPLEMENTATION_PLANNING` or `PLAN_REVIEW`): `CANCELLED` is a terminal state, not a Stage ID (`stage-map.yaml` → `terminal_states`). The consequence of the decision is visible in `story_status` (`workflow-state.md` §4);
+- `current_stage` does not change (`HUMAN_SPEC_APPROVAL`, `HUMAN_TECHNICAL_APPROVAL`, `HUMAN_PR_APPROVAL`, `HUMAN_MERGE`, `IMPACT_ANALYSIS`, `SOLUTION_DESIGN`, `API_DESIGN`, `DB_DESIGN`, `DESIGN_REVIEW`, `IMPLEMENTATION_PLANNING` or `PLAN_REVIEW`): `CANCELLED` is a terminal state, not a Stage ID (`stage-map.yaml` → `terminal_states`). The consequence of the decision is visible in `story_status` (`workflow-state.md` §4);
 - `records.cancellation-record: <record_id>` — registration of the new record (`workflow-state.md` §7, step 3);
 - `last_stage_verdict`, `artifacts`, `approvals`, `retry`, `blocker`, `git` do not change.
 
@@ -1171,7 +1173,7 @@ Subsequent stages are not started. `next` and `decide` for `CANCELLED` stop (sec
 
 ### 8.6. Completion
 
-After 8.3.2, 8.4.2, 8.5.3, 8.7.3, 8.8.3 or 8.9.3, stop and show the summary with the `status` command. Do not start the next stage.
+After 8.3.2, 8.4.2, 8.5.3, 8.7.3, 8.8.3, 8.9.3 or 8.10.3, stop and show the summary with the `status` command. Do not start the next stage.
 
 ### 8.7. LOOPBACK_CONFIRMATION (IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW)
 
@@ -1330,6 +1332,39 @@ Do not start MERGE_READINESS_CHECK. Its Stage Skill exists, but it is not execut
 
 **CANCEL** — section 8.5 with `current_stage: HUMAN_PR_APPROVAL` and the gate's `decisions.CANCEL`. The open PR is not closed by the Orchestrator; the human closes it.
 
+### 8.10. HUMAN_MERGE
+
+A human integrates the approved changes into the target branch (`stages.md` §12, Q5, Q8, OD-12 step 6). It is a delivery action (`type: human_action`), not an approval. **Only the human performs the merge**, outside the Orchestrator, with the strategy the human chooses; the Orchestrator never merges, pushes or edits the PR. `decide` only records the human's decision from the stage's `decisions`: `CONFIRM_MERGED`, `REQUEST_CHANGES`, `CANCEL`. Human decisions that are not an approval are recorded only in History (`workflow-state.md` §4). The stage is reached only after MERGE_READINESS_CHECK `PASS` (section 1, IMP-D01).
+
+#### 8.10.1. Check
+
+Instead of steps 3–4 of section 8.2. The first violation — explain and stop, changing nothing.
+
+1. **Waiting state.** `current_stage: HUMAN_MERGE`; `pending_human_decision.kind: HUMAN_ACTION`, `stage: HUMAN_MERGE`; `decision` is in `options` and in the stage's `decisions`; `blocker: null`; the `refs` of the last `human_decision.requested` event match `package`.
+2. **Preconditions** (`stages.md`): the last `stage.completed` event is MERGE_READINESS_CHECK with `verdict: PASS` and `to_stage: HUMAN_MERGE`; `approvals.HUMAN_PR_APPROVAL` is `VALID` and its `scope` contains the current `implementation-changeset` identity (`version`, `git.changeset_commit`), `records.verification-report` and `records.pull-request`.
+3. **Merge Protection Status.** `git.merge_protection_status` is one of `ACTIVE`, `NOT_SUPPORTED`, `UNAVAILABLE`, `DISABLED` (`merge_protection_statuses`). `DISABLED` — stop (MERGE_READINESS_CHECK could not have passed). `UNAVAILABLE` — only with a human-approved integration order recorded in History. A missing or another value — stop; it is never read as `ACTIVE`.
+
+#### 8.10.2. REQUEST_CHANGES and CANCEL
+
+- `REQUEST_CHANGES` needs `target` and a non-empty `reason`. `target=MERGE_READINESS_CHECK` (the merge is impossible because the target branch changed, or a manual procedure found a change after the check): apply — `current_stage: MERGE_READINESS_CHECK`, `story_status: ACTIVE`, `execution_state: READY`, `pending_human_decision: null`; `approvals`, `artifacts`, `records`, `git` do not change; the `human_decision.applied` event with `details: { decision: REQUEST_CHANGES, to_stage: MERGE_READINESS_CHECK, reason, kind: HUMAN_ACTION, mode }`. MERGE_READINESS_CHECK is a check without outputs, so its repeated run needs no new versions. `target=PR_PREPARATION` or `IMPLEMENTATION` require re-entry with new records or versions, which is not implemented: reject before any changes and explain.
+- `CANCEL` — section 8.5 with `current_stage: HUMAN_MERGE` and the stage's `decisions.CANCEL`. The PR is not closed by the Orchestrator.
+
+#### 8.10.3. CONFIRM_MERGED
+
+A human's claim alone is not a confirmation. Before applying, check with read-only queries against `pull-request.repository` (as in section 8.9.1, step 3):
+
+- the PR is merged: `gh pr view <number> --repo <repository> --json state,mergedAt,mergeCommit,baseRefName,headRefOid` — `state: MERGED`, `baseRefName` = the record's `target_branch`, `headRefOid` = `git.changeset_commit` (the approved head was merged), and `mergeCommit` exists;
+- the merge commit is on the remote `target_branch` (it is the tip or an ancestor of the tip read with `git ls-remote` / the platform API);
+- the parent of the merge result on the target side (the target branch before the merge) is read and recorded as `target_before_merge`.
+
+Any check fails or cannot be performed — change nothing, explain, stop. The Orchestrator does not assume a merge commit and does not require that the merge commit equals `changeset_commit`: the strategy (merge commit, squash, rebase) may change commit identity. Whether exactly the approved Changeset Content Identity was integrated (Integration Match) and whether a `target_before_merge` different from `verified_target_base` needs Post-Merge Validation are decided by INTEGRATION_CONFIRMATION, not here (`workflow-state-model.md` §7, §9; OD-16). For a controlled manual procedure (`NOT_SUPPORTED` or `UNAVAILABLE` with an approved order), the human's `CONFIRM_MERGED` also states that the target branch had not changed after the check; a recorded `target_before_merge` different from `verified_target_base` is left to INTEGRATION_CONFIRMATION.
+
+**`state.yaml`:** `current_stage: INTEGRATION_CONFIRMATION` (the stage's `decisions.CONFIRM_MERGED`), `story_status: ACTIVE`, `execution_state: READY`, `pending_human_decision: null`, `updated_at`; `approvals`, `artifacts`, `records`, `git` and `last_stage_verdict` do not change.
+
+**`history.jsonl`** — the `human_decision.applied` event: `actor: { kind: human, id: <by> }`, `stage: HUMAN_MERGE`, `refs` — the elements of `package`, `details: { decision: CONFIRM_MERGED, kind: HUMAN_ACTION, to_stage: INTEGRATION_CONFIRMATION, repository, pr_number, merge_commit, target_branch, target_before_merge, merged_at, merge_protection_status, mode }` (`stage-io-map.yaml`: CONFIRM_MERGED and the merge commit — in History).
+
+Do not start INTEGRATION_CONFIRMATION; it is not implemented, so the next `next` stops at section 7.2, step 3.
+
 ## 9. Constraints
 
 - The Orchestrator writes only the pilot's `state.yaml` and `history.jsonl`: in `init`, at steps 7.2 (only `RUNNING` → `INTERRUPTED`), 7.4, 7.5.2, 7.7, 7.8, 8.3.2, 8.4.2, 8.5.3 and 8.7.3. The only record it writes itself is `cancellation-record` in 8.5.2. `status` writes nothing.
@@ -1339,7 +1374,7 @@ Do not start MERGE_READINESS_CHECK. Its Stage Skill exists, but it is not execut
 - History is append-only: lines are not changed or deleted.
 - Do not fix the state silently and do not restore it automatically.
 - Start only the stages from table 7.1. CLARIFICATION is executed inline in the main session, without a subagent. SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW are each executed in one separate `general-purpose` subagent. Do not pass a historical version of `impact-analysis` after `NOT_APPLICABLE` as an input (section 7.1), do not pass `impact-analysis` to API_DESIGN at all, and pass `impact`, `api` and `db` to DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW only according to section 7.2, steps 7–9. Do not start IMPLEMENTATION_PLANNING or PLAN_REVIEW without the Testing Strategy (section 7.2, steps 10–11). Do not start other stages, in particular IMPLEMENTATION, CODE_REVIEW, SECURITY_REVIEW, RECONCILIATION, VERIFICATION, PR_PREPARATION and MERGE_READINESS_CHECK (not executable in Pilot Mode, section 1, IMP-D01), and additional subagents.
-- Apply the human's decisions only in `decide` (section 8), by the human's decision from the command arguments. Do not simulate or guess the human's decisions, do not substitute `by`. Do not apply decisions of other gates (only HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL), RECONFIRM, `REQUEST_CHANGES` at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL and `ROUTE_BACK`. Do not merge, push or close PRs. Do not perform a Loopback through a gate automatically.
+- Apply the human's decisions only in `decide` (section 8), by the human's decision from the command arguments. Do not simulate or guess the human's decisions, do not substitute `by`. Do not apply decisions of other gates (only HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL), RECONFIRM, `REQUEST_CHANGES` at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL and `ROUTE_BACK`. Do not merge, push or close PRs: at HUMAN_MERGE the Orchestrator only records `CONFIRM_MERGED`, `REQUEST_CHANGES` (to MERGE_READINESS_CHECK) or `CANCEL` after the checks of section 8.10. Do not perform a Loopback through a gate automatically.
 - A decision in the pilot is a simulation of a Human Gate. Do not present it as an approval or cancellation of the Story in the official Workflow.
 - Do not invoke Stage Skills with the Skill tool.
 - Change `state.yaml` only according to section 7.10.
