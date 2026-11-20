@@ -1,7 +1,7 @@
 ---
 name: implementation
 description: Stage Skill of the IMPLEMENTATION stage. Implements the approved implementation-plan within the approved technical design — code and tests in the Story's feature branch — and writes an implementation-changeset that describes the changes (feature branch, base_commit, changeset_commit, changed files, unplanned dependencies, test results). Returns a result envelope. Does not change requirements, the design, the plan or Workflow State. Started only manually with ready paths, the feature branch and the attempt number.
-argument-hint: "story=<ID> plan=<path> spec=<path> design=<path> [api=<path>] [db=<path>] feature_branch=<name> target_branch=<name> output=<path to implementation-changeset v<N>.md> version=<N> attempt=<N> [mode=pilot] [findings=<path,...>] [reason=\"<the human's decision>\"]"
+argument-hint: "story=<ID> plan=<path> spec=<path> design=<path> [api=<path>] [db=<path>] feature_branch=<name> target_branch=<name> output=<path to implementation-changeset v<N>.md> version=<N> attempt=<N> [commit=allowed] [mode=pilot] [findings=<path,...>] [reason=\"<the human's decision>\"]"
 disable-model-invocation: true
 user-invocable: true
 ---
@@ -35,7 +35,8 @@ IMPLEMENTATION is the only code-modifying stage and the only stage that creates 
 | `output` | yes | A ready path of the `implementation-changeset` file |
 | `version` | yes | Its version, matches `output` |
 | `attempt` | yes | The stage attempt number |
-| `mode=pilot` | no | A pilot outside the registered Workflow |
+| `commit=allowed` | no | The user's explicit permission for `git add <paths>` and `git commit` in `feature_branch` for this invocation only (`AGENTS.md`). Without it, no commit is made (section 3, step 7). It never permits push, merge, rebase, reset or branch operations |
+| `mode=pilot` | no | A pilot outside the registered Workflow. The pilot root `docs/pilots/orchestrator/<story>/` holds Orchestrator-owned State, History, artifacts and records: they are not code changes |
 | `findings` | no | On re-entry: the review reports whose findings caused the return (`stages.md`, "On re-entry") |
 | `reason` | no | The verbatim reason of the human's decision that returned or resumed the stage |
 
@@ -45,13 +46,13 @@ There is no human in the context: the Skill asks nothing. A missing argument or 
 
 ## 3. Procedure
 
-1. **Check the preconditions.** The current branch is `feature_branch` (`git rev-parse --abbrev-ref HEAD`), not `target_branch`; the working tree has no changes outside this Story's scope (`git status --porcelain`); `output` does not exist. Otherwise — `BLOCKED`, change nothing.
-2. **Record `base_commit`** — `git rev-parse HEAD` before any change.
+1. **Check the preconditions.** The current branch is `feature_branch` (`git rev-parse --abbrev-ref HEAD`), not `target_branch`; the working tree has no changes outside this Story's scope (`git status --porcelain -- . ':(exclude)<story root>'`, where the story root is `docs/stories/<story>/`, or the pilot root in `mode=pilot`); `output` does not exist. Otherwise — `BLOCKED`, change nothing.
+2. **Record `base_commit`** — for `version: 1`, `git rev-parse HEAD` before any change; for `version > 1`, the `base_commit` of the previous version, so that the changeset always describes the Story's cumulative change.
 3. **Read the inputs** and, on re-entry, each finding of `findings`: each is fixed or explained.
 4. **Implement the plan steps in their order.** For each step: the code within the module, layer and import rules of the Package Map and the AR- invariants; the tests defined by the plan's Testing Approach, Test-First where the plan says so. Names, files and structure follow the Foundation conventions.
 5. **Dependencies.** A dependency that the design and the plan already contain is introduced as planned. An unplanned dependency is recorded in the changeset; a significant or ambiguous one (OD-09) — stop: `BLOCKED` (Escalation Required).
 6. **Run the tests related to the changes locally.** All must pass (`stages.md`, Completion Conditions). A failure that cannot be fixed within the design is a return (section 6).
-7. **Create the commits in `feature_branch` only.** Never commit to `target_branch`, never merge, never push, never rewrite history that is not this Story's (`workflow-policies.md` §9). `AGENTS.md` requires an explicit permission of the user for `git commit`: commit only when the invoking command grants it; otherwise stop before the commit and return `BLOCKED` (Missing Information: commit permission), leaving the changes uncommitted.
+7. **Create the commits in `feature_branch` only.** Never commit to `target_branch`, never merge, never push, never rewrite history that is not this Story's (`workflow-policies.md` §9). `AGENTS.md` requires an explicit permission of the user for `git commit`: commit only with `commit=allowed`; stage only explicit code, test and build paths — never the story or pilot root, never `git add -A`, `git add .` or `git commit -a`; otherwise stop before the commit and return `BLOCKED` (Missing Information: commit permission), leaving the changes uncommitted.
 8. **Record `changeset_commit`** — `git rev-parse HEAD` after the last commit.
 9. **Write `implementation-changeset`** (section 5) and return the envelope. For a verdict other than `PASS`, write no `output`.
 

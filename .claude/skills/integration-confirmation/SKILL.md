@@ -37,6 +37,8 @@ Logical inputs — `stage-io-map.yaml` → `INTEGRATION_CONFIRMATION`: `pull-req
 
 ## 3. Procedure
 
+A verdict reached in steps 3–6 does not return at once: the procedure continues with step 7, which writes `integration-record` (and keeps the `post-merge-validation-record` if it was written) before the envelope is returned. Only steps 1–2 return without a record (section 5).
+
 1. **Preconditions.** `output` does not exist. The last routing event is `human_decision.applied` HUMAN_MERGE `CONFIRM_MERGED` (its `merge_commit`, `pr_number`, `repository`, `target_branch` are the merge to evaluate, `merge_binding`); `approvals.HUMAN_PR_APPROVAL` is `VALID` for the Changeset Content Identity of `changeset`. Changes of the target branch after the merge do not affect the approval (`workflow-state-model.md` §7). Otherwise — `BLOCKED`.
 2. **The merge was performed.** With every remote query against `pull_request.repository` (`gh ... --repo`, `git ls-remote <URL>`): the PR is `MERGED`, its `mergeCommit` equals the recorded `merge_commit`, and `merge_commit` is reachable from the remote `target_branch`. The PR is not merged, or the merge commit is not on the target branch → `CHANGES_REQUIRED`, `loopback_target: HUMAN_MERGE`. Fetch the needed objects (`git fetch <URL> <target_branch>`, `git fetch <URL> pull/<number>/head` or the source branch).
 3. **INTEGRATION_MATCH** (`check_order` 1). Determine the strategy and the integrated range from Git, not from assumptions:
