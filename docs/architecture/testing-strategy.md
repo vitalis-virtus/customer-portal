@@ -25,7 +25,8 @@ The Testing Approach may add checks, never remove the checks this document makes
 **Status:** `PROPOSED`
 
 - Go module `github.com/vitalis-virtus/customer-portal`, `go 1.25.0` (`go.mod`); `main.go` is an empty `main`. There is no application code and **no tests** yet.
-- There is no CI pipeline, no Makefile, no container or compose setup, no test database and no linter configuration in the repository.
+- A local PostgreSQL 18 test database and golang-migrate runs are **configured** ([Infrastructure Bootstrap](infrastructure-bootstrap.md), `compose.test.yaml`), but **not yet started or verified**. Redis test infrastructure is not configured.
+- There is no CI pipeline, no Makefile and no linter configuration; no application tests and no integration tests exist, and none has been executed.
 - Therefore no test result exists. This document defines rules, it does not record any execution.
 
 ## 3. Principles
