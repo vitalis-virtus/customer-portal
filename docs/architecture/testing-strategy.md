@@ -115,7 +115,7 @@ Each executed check in `verification-report` (and `post-merge-validation-record`
 **Status:** `PROPOSED`
 
 - Checks run locally in the workspace prepared for VERIFICATION or Post-Merge Validation, with the Go toolchain matching `go.mod`. There is no CI; the local run is the evidence.
-- **Integration test infrastructure is not available.** How PostgreSQL 18 and Redis 8.x are started for tests is deferred to Infrastructure Bootstrap. Until it exists, integration checks are `blocked` (not `passed`), and a Story whose Testing Approach requires them cannot pass VERIFICATION. The connection settings for integration tests will come from environment variables defined by Infrastructure Bootstrap; tests must not hard-code credentials.
+- **Integration test infrastructure — PostgreSQL configured, not yet verified.** [Infrastructure Bootstrap](infrastructure-bootstrap.md) defines a local PostgreSQL 18 test database (`compose.test.yaml`), migration runs with the golang-migrate CLI and the `TEST_DATABASE_URL` variable for integration tests; tests must not hard-code credentials. Configured is not the same as started or tested: an integration check is `passed` only with the actual run evidence (section 8); if the database cannot be started in the workspace, the check is `blocked`. Redis test infrastructure is not configured: Redis integration checks are `blocked` until it is added.
 - `-race` requires cgo and a C compiler; if it is unavailable in the workspace, the check is `blocked` with that reason.
 - Tests must not need network access other than the test stores, and must clean up the data they create.
 
@@ -123,7 +123,7 @@ Each executed check in `verification-report` (and `post-merge-validation-record`
 
 | Item | Deferred to |
 |---|---|
-| Starting PostgreSQL / Redis for integration tests, test database lifecycle | Infrastructure Bootstrap |
+| Redis for integration tests; verification of the PostgreSQL test setup by a first real run | Infrastructure Bootstrap |
 | CI pipeline | Separate decision |
 | Network failure during `COMMIT`, Redis recovery / failover tests | Deployment Verification ([Persistence Conventions §11](persistence-conventions.md#mandatory-scenarios)) |
 | Test libraries (assertions, mocks, testcontainers), `govulncheck`, linters | Separate approved decision |
