@@ -1,6 +1,6 @@
 ---
 name: story-orchestrator
-description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4 and the API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW integration). Initializes a pilot Story outside the registered Workflow, shows its status with a State and History check, executes one stage per run (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW in a subagent) in Step Mode up to IMPLEMENTATION, supports re-entry into IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN, applies the human's decisions at HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL), at HUMAN_TECHNICAL_APPROVAL (APPROVE, CANCEL) and at the Loopback confirmation from IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW (RESUME, CANCEL). Started only manually with mode=pilot.
+description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4 and the API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW integration). Initializes a pilot Story outside the registered Workflow, shows its status with a State and History check, executes one stage per run (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW in a subagent) in Step Mode up to IMPLEMENTATION, supports re-entry into IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN, applies the human's decisions at HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL), at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL (APPROVE, CANCEL) and at the Loopback confirmation from IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW (RESUME, CANCEL). Started only manually with mode=pilot.
 argument-hint: "init|status|next story=<ID> mode=pilot | decide story=<ID> mode=pilot decision=APPROVE|REQUEST_CHANGES|CANCEL|RESUME|ROUTE_BACK by=<id> [target=<stage>] [reason=\"...\"] [comment=\"...\"]"
 disable-model-invocation: true
 user-invocable: true
@@ -39,6 +39,7 @@ The Skill works in the main session.
 - `decide` applies the human's decisions:
   - `APPROVE`, `REQUEST_CHANGES` or `CANCEL` at HUMAN_SPEC_APPROVAL (section 8);
   - `APPROVE` or `CANCEL` at HUMAN_TECHNICAL_APPROVAL; `REQUEST_CHANGES` there is rejected without changes, because re-entry into its targets is not implemented (section 8.8);
+  - `APPROVE` or `CANCEL` at HUMAN_PR_APPROVAL, with the same rejection of `REQUEST_CHANGES` (section 8.9). The gate is defined for valid future state; in Pilot Mode it is not reached while IMP-D01 is open. `APPROVE` does not merge: the merge is HUMAN_MERGE;
   - `RESUME` or `CANCEL` at the Loopback confirmation (`LOOPBACK_CONFIRMATION`), when IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW returned `CHANGES_REQUIRED` with a target through a gate (section 8.7). `ROUTE_BACK` is rejected without changes (section 8.7.2).
 - Re-entry after a return is supported:
   - for SPECIFICATION — after a loopback from SPEC_REVIEW or REQUEST_CHANGES at the gate (section 7.3.1);
@@ -942,6 +943,7 @@ Applies the human's decision for the current `pending_human_decision`. Works in 
 |---|---|---|---|
 | `GATE` | HUMAN_SPEC_APPROVAL | `APPROVE`, `REQUEST_CHANGES`, `CANCEL` | 8.2–8.5 |
 | `GATE` | HUMAN_TECHNICAL_APPROVAL | `APPROVE`, `CANCEL`; `REQUEST_CHANGES` is rejected without changes | 8.2, 8.5, 8.8 |
+| `GATE` | HUMAN_PR_APPROVAL | `APPROVE`, `CANCEL`; `REQUEST_CHANGES` is rejected without changes | 8.2, 8.5, 8.9 |
 | `LOOPBACK_CONFIRMATION` | IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW | `RESUME`, `CANCEL`; `ROUTE_BACK` is rejected without changes | 8.2, 8.5, 8.7 |
 
 The human makes the decision, and the Orchestrator only checks and applies it (`workflow-state.md` §1).
@@ -969,7 +971,7 @@ For each decision. Check everything in order. The first violation — explain to
 1. **Consistency** of State, History and files — section 6. A discrepancy — as in `status`.
 2. **Kind of waiting.** `story_status: WAITING_FOR_HUMAN`, `execution_state: AWAITING_HUMAN`, `pending_human_decision.stage` = `current_stage`. Then — according to `pending_human_decision.kind`:
    - `LOOPBACK_CONFIRMATION` — the check of section 8.7.1 instead of steps 3–4 below;
-   - `GATE` at HUMAN_SPEC_APPROVAL — steps 3–4 below; `GATE` at HUMAN_TECHNICAL_APPROVAL — the check of section 8.8.1 instead of steps 3–4;
+   - `GATE` at HUMAN_SPEC_APPROVAL — steps 3–4 below; `GATE` at HUMAN_TECHNICAL_APPROVAL — the check of section 8.8.1 instead of steps 3–4; `GATE` at HUMAN_PR_APPROVAL — the check of section 8.9.1 instead of steps 3–4;
    - another kind or `null` — the decision is not supported by this Skill: explain and stop.
 3. **Gate state** (only `GATE`):
    - `current_stage: HUMAN_SPEC_APPROVAL`; in `stage-map.yaml` this stage has `type: human_gate`;
@@ -984,7 +986,7 @@ For each decision. Check everything in order. The first violation — explain to
 
 The decision time: `date -u +%Y-%m-%dT%H:%M:%SZ`, one value for all time fields and the `ts` of the events of this decision.
 
-Application is one Orchestrator step (`workflow-state.md` §7): first the record file, if any (only CANCEL), then `state.yaml` according to section 7.10, then the events in `history.jsonl`. `reason`, `comment` and `by` are serialized in all files according to the rules for the human's text (section 7.10). In all decisions, the `actor` of the `human_decision.applied` event is the human from `by` (`{kind: human, id: <by>}`), `stage` is `pending_human_decision.stage` (HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW), `refs` are the elements of `package`. Artifact and review report files do not change (`artifact-rules.md` §3, item 2).
+Application is one Orchestrator step (`workflow-state.md` §7): first the record file, if any (only CANCEL), then `state.yaml` according to section 7.10, then the events in `history.jsonl`. `reason`, `comment` and `by` are serialized in all files according to the rules for the human's text (section 7.10). In all decisions, the `actor` of the `human_decision.applied` event is the human from `by` (`{kind: human, id: <by>}`), `stage` is `pending_human_decision.stage` (HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL, HUMAN_PR_APPROVAL, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW), `refs` are the elements of `package`. Artifact and review report files do not change (`artifact-rules.md` §3, item 2).
 
 ### 8.3. APPROVE
 
@@ -1083,7 +1085,7 @@ Do not start the target stage. The next `next` will perform the re-entry into SP
 
 The Cancellation Protocol (`workflow-policies.md` §17, `stage-map.yaml` RR-08). `CANCELLED` is a terminal state: the Story is not reopened.
 
-The procedure is the same for both kinds of waiting: `GATE` at HUMAN_SPEC_APPROVAL or HUMAN_TECHNICAL_APPROVAL (for the latter, `subjects` and `refs` are taken from its `package`) and `LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW (`loopback_confirmation_decisions.CANCEL`). The examples below are given for the gate. For `LOOPBACK_CONFIRMATION`:
+The procedure is the same for both kinds of waiting: `GATE` at HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL or HUMAN_PR_APPROVAL (for the latter two, `subjects` and `refs` are taken from the gate's `package`) and `LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW (`loopback_confirmation_decisions.CANCEL`). The examples below are given for the gate. For `LOOPBACK_CONFIRMATION`:
 - the place of the stage in the record and the events is taken by `current_stage` (`IMPACT_ANALYSIS`, `SOLUTION_DESIGN`, `API_DESIGN`, `DB_DESIGN`, `DESIGN_REVIEW`, `IMPLEMENTATION_PLANNING` or `PLAN_REVIEW`);
 - `subjects`, `artifacts` and `refs` are taken from the current state and `package`, in particular `applicability-decision`, `impact-analysis` and `solution-design`, if they exist;
 - the route is `loopback_confirmation_decisions.CANCEL` instead of the gate's `decisions.CANCEL`.
@@ -1151,7 +1153,7 @@ The route — the gate's `decisions.CANCEL` or `loopback_confirmation_decisions.
   - `COMPLETED` is described in the State Model as a completed attempt with a Stage Verdict, and a gate has no attempts and no verdict.
 
   `COMPLETED` is chosen as the closest value: the work at the current stage is completed and there will be no new attempts. A clarification is a matter of a future contract change;
-- `current_stage` does not change (`HUMAN_SPEC_APPROVAL`, `HUMAN_TECHNICAL_APPROVAL`, `IMPACT_ANALYSIS`, `SOLUTION_DESIGN`, `API_DESIGN`, `DB_DESIGN`, `DESIGN_REVIEW`, `IMPLEMENTATION_PLANNING` or `PLAN_REVIEW`): `CANCELLED` is a terminal state, not a Stage ID (`stage-map.yaml` → `terminal_states`). The consequence of the decision is visible in `story_status` (`workflow-state.md` §4);
+- `current_stage` does not change (`HUMAN_SPEC_APPROVAL`, `HUMAN_TECHNICAL_APPROVAL`, `HUMAN_PR_APPROVAL`, `IMPACT_ANALYSIS`, `SOLUTION_DESIGN`, `API_DESIGN`, `DB_DESIGN`, `DESIGN_REVIEW`, `IMPLEMENTATION_PLANNING` or `PLAN_REVIEW`): `CANCELLED` is a terminal state, not a Stage ID (`stage-map.yaml` → `terminal_states`). The consequence of the decision is visible in `story_status` (`workflow-state.md` §4);
 - `records.cancellation-record: <record_id>` — registration of the new record (`workflow-state.md` §7, step 3);
 - `last_stage_verdict`, `artifacts`, `approvals`, `retry`, `blocker`, `git` do not change.
 
@@ -1168,7 +1170,7 @@ Subsequent stages are not started. `next` and `decide` for `CANCELLED` stop (sec
 
 ### 8.6. Completion
 
-After 8.3.2, 8.4.2, 8.5.3, 8.7.3 or 8.8.3, stop and show the summary with the `status` command. Do not start the next stage.
+After 8.3.2, 8.4.2, 8.5.3, 8.7.3, 8.8.3 or 8.9.3, stop and show the summary with the `status` command. Do not start the next stage.
 
 ### 8.7. LOOPBACK_CONFIRMATION (IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW)
 
@@ -1288,6 +1290,45 @@ Do not start IMPLEMENTATION. The next `next` will stop at section 7.2, step 3: I
 
 **CANCEL** — section 8.5 with `current_stage: HUMAN_TECHNICAL_APPROVAL` and the gate's `decisions.CANCEL`.
 
+### 8.9. HUMAN_PR_APPROVAL
+
+A human approves a specific version of the Story's changes before integration (`stages.md` §12, Q5). The procedure is that of section 8.8 with this gate's `approval_scope` and `decisions` (`stage-map.yaml`). The gate is reached only after PR_PREPARATION `PASS` (section 1, IMP-D01); the rules below apply to valid state produced by the integrated stages.
+
+#### 8.9.1. Check
+
+Instead of steps 3–4 of section 8.2. The first violation — explain and stop, changing nothing.
+
+1. **Gate state.** `current_stage: HUMAN_PR_APPROVAL` (`type: human_gate`); `pending_human_decision.kind: GATE`, `stage: HUMAN_PR_APPROVAL`; `decision` is in `options` and in the gate's `decisions`; `blocker: null`.
+2. **Preconditions.** The last `stage.completed` event is PR_PREPARATION with `verdict: PASS`, `to_stage: HUMAN_PR_APPROVAL`, and its `refs` contain `records.pull-request`. The `pull-request` record has this `story_id`, and its `changeset` equals the current `artifacts.implementation-changeset` (`version`) and `git.changeset_commit`. The `verification-report` (`records.verification-report`) has `verdict: PASS`, `verified_changeset` equal to the same identity and `verified_target_base` equal to `git.verified_target_base`; its DoD conditions 1–7 are `met`; no finding of any report is `OPEN` `BLOCKING`; each `NON_BLOCKING` and FOLLOW_UP finding has a Disposition (DoD 6).
+3. **Live Git check** (read-only): the remote PR is open and its head commit equals `changeset_commit` (for example, `gh pr view <number> --json state,headRefOid`); the remote tip of `target_branch` (`git ls-remote`) equals `verified_target_base`. A moved target branch or a different head — stop and explain: the approval would not be bound to the verified identity, and the route (a new PR_PREPARATION / VERIFICATION pass) is not implemented (8.9.2). If the remote cannot be read — stop.
+4. **The package corresponds to the current state.** `pending_human_decision.package` contains exactly the `approval_scope` elements with their identities (`workflow-state.md` §4): `{ type: implementation-changeset, version, changeset_commit }`; `{ record }` of the CODE_REVIEW report and, if SECURITY_REVIEW was applicable, of the SECURITY_REVIEW report, both for this identity; `{ record }` of the `reconciliation-report` if RECONCILIATION was applicable; `{ record }` of the `verification-report`; `{ record }` of the ENTRY `applicability-decision` of SECURITY_REVIEW and RECONCILIATION; `{ record }` of the `pull-request`. The `refs` of the last `human_decision.requested` event match `package`.
+5. **Mandatory rules.** No violation of a mandatory Foundation rule (in particular a Security Rule) is resolved by a `risk-acceptance-record` (WF-V2-01, RR-14).
+6. **Previous approvals.** `approvals.HUMAN_PR_APPROVAL` is absent or `null` (a repeated pass is not implemented). `approvals.HUMAN_SPEC_APPROVAL` and `approvals.HUMAN_TECHNICAL_APPROVAL` are `VALID`.
+
+#### 8.9.2. REQUEST_CHANGES — Not Supported
+
+The targets of `decisions.REQUEST_CHANGES` (PR_PREPARATION and the earlier stages) all require re-entry with a new version or record of an already registered result, which this MVP does not implement. Reject the command after the check of 8.9.1, before any changes; `APPROVE` and `CANCEL` are available. Do not redirect the decision.
+
+#### 8.9.3. APPROVE
+
+**Check:** as section 8.3.1, step 3 — `comment` does not change requirements or the changes.
+
+**Approval boundaries.** The approval is bound to the exact Scope elements (`artifact-rules.md` §5). By approving the Scope, which includes the `verification-report` with its Findings Disposition and `follow_up`, the human finally approves the classification of the NON_BLOCKING and FOLLOW_UP findings as listed there (`stages.md` §12, OD-11). The MVP does not support approving only a part of the FOLLOW_UP items: a human who does not accept the list uses `CANCEL` (`REQUEST_CHANGES` is not supported). The `backlog-entry` records are created later by INTEGRATION_CONFIRMATION (`workflow-policies.md` §7), not here. The approval does not merge and does not push.
+
+**`state.yaml`:**
+
+- `approvals.HUMAN_PR_APPROVAL` (`workflow-state.md` §4): `decision: APPROVE`, `decided_by: <by>`, `decided_at: <date -u>`, `scope` — the package elements of 8.9.1, step 4, `package: []` (all reviewed reports are part of the Scope of this gate), `comment`, `approval_state: VALID`, `previous: []`;
+- `status: APPROVED` for the current `implementation-changeset` (the only document of the Scope); `version` and `currency` do not change;
+- `pending_human_decision: null`;
+- Quality Loops reset, as in section 8.3.2, for the producer and review stages of the Scope (IMPLEMENTATION, CODE_REVIEW, SECURITY_REVIEW, RECONCILIATION, VERIFICATION, PR_PREPARATION);
+- `current_stage: MERGE_READINESS_CHECK` (the gate's `decisions.APPROVE`), `story_status: ACTIVE`, `execution_state: READY`, `updated_at`; `last_stage_verdict`, `blocker`, `records`, `git` do not change.
+
+**`history.jsonl`** — the `human_decision.applied` event, as in section 8.3.2: `stage: HUMAN_PR_APPROVAL`, `refs` — the elements of `package`, `details: { decision: APPROVE, to_stage: MERGE_READINESS_CHECK, scope, approval_state: VALID, comment, retry_reset, mode }`.
+
+Do not start MERGE_READINESS_CHECK; it is not implemented, so the next `next` stops at section 7.2, step 3.
+
+**CANCEL** — section 8.5 with `current_stage: HUMAN_PR_APPROVAL` and the gate's `decisions.CANCEL`. The open PR is not closed by the Orchestrator; the human closes it.
+
 ## 9. Constraints
 
 - The Orchestrator writes only the pilot's `state.yaml` and `history.jsonl`: in `init`, at steps 7.2 (only `RUNNING` → `INTERRUPTED`), 7.4, 7.5.2, 7.7, 7.8, 8.3.2, 8.4.2, 8.5.3 and 8.7.3. The only record it writes itself is `cancellation-record` in 8.5.2. `status` writes nothing.
@@ -1297,7 +1338,7 @@ Do not start IMPLEMENTATION. The next `next` will stop at section 7.2, step 3: I
 - History is append-only: lines are not changed or deleted.
 - Do not fix the state silently and do not restore it automatically.
 - Start only the stages from table 7.1. CLARIFICATION is executed inline in the main session, without a subagent. SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW are each executed in one separate `general-purpose` subagent. Do not pass a historical version of `impact-analysis` after `NOT_APPLICABLE` as an input (section 7.1), do not pass `impact-analysis` to API_DESIGN at all, and pass `impact`, `api` and `db` to DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW only according to section 7.2, steps 7–9. Do not start IMPLEMENTATION_PLANNING or PLAN_REVIEW without the Testing Strategy (section 7.2, steps 10–11). Do not start other stages, in particular IMPLEMENTATION, CODE_REVIEW, SECURITY_REVIEW, RECONCILIATION, VERIFICATION and PR_PREPARATION (not executable in Pilot Mode, section 1, IMP-D01), and additional subagents.
-- Apply the human's decisions only in `decide` (section 8), by the human's decision from the command arguments. Do not simulate or guess the human's decisions, do not substitute `by`. Do not apply decisions of other gates (only HUMAN_SPEC_APPROVAL and HUMAN_TECHNICAL_APPROVAL), RECONFIRM, `REQUEST_CHANGES` at HUMAN_TECHNICAL_APPROVAL and `ROUTE_BACK`. Do not perform a Loopback through a gate automatically.
+- Apply the human's decisions only in `decide` (section 8), by the human's decision from the command arguments. Do not simulate or guess the human's decisions, do not substitute `by`. Do not apply decisions of other gates (only HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL), RECONFIRM, `REQUEST_CHANGES` at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL and `ROUTE_BACK`. Do not merge, push or close PRs. Do not perform a Loopback through a gate automatically.
 - A decision in the pilot is a simulation of a Human Gate. Do not present it as an approval or cancellation of the Story in the official Workflow.
 - Do not invoke Stage Skills with the Skill tool.
 - Change `state.yaml` only according to section 7.10.
