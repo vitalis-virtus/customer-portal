@@ -7,7 +7,7 @@ user-invocable: true
 context: fork
 agent: general-purpose
 background: false
-allowed-tools: Read, Grep, Glob, Write, Bash(git log:*), Bash(git status:*), Bash(git diff:*), Bash(git show:*), Bash(git rev-parse:*), Bash(git ls-files:*), Bash(git cat-file:*), Bash(date:*)
+allowed-tools: Read, Grep, Glob, Write, Bash(git log:*), Bash(git status:*), Bash(git diff:*), Bash(git show:*), Bash(git rev-parse:*), Bash(git ls-files:*), Bash(git cat-file:*), Bash(git merge-base:*), Bash(date:*)
 disallowed-tools: Edit, NotebookEdit, AskUserQuestion, Agent, Skill
 ---
 
@@ -45,7 +45,7 @@ A missing argument or an unreadable input — `BLOCKED` before the check.
 
 1. **Check the arguments.** In `mode=pilot`, `output` cannot lie in `docs/stories/`. If `output` exists — `BLOCKED`.
 2. **Verify the Git identity** of the changeset:
-   - `base_commit` and `changeset_commit` exist (`git cat-file -t`); `changeset_commit` is the tip of `feature_branch` (`git rev-parse <feature_branch>`); `base_commit` is an ancestor of `changeset_commit`;
+   - `base_commit` and `changeset_commit` exist (`git cat-file -t`); `changeset_commit` is the tip of `feature_branch` (`git rev-parse <feature_branch>`); `base_commit` is an ancestor of `changeset_commit`, checked with `git merge-base --is-ancestor <base_commit> <changeset_commit>` (exit code 0); a non-ancestor result is a Git identity mismatch;
    - the actual changed files (`git diff --name-status <base_commit> <changeset_commit>`) match the "Changed Files" of the changeset exactly.
 
    A mismatch is a `BLOCKING` finding (the description does not identify the reviewed content). If the commits do not exist — `BLOCKED` before the check.
