@@ -1,7 +1,7 @@
 ---
 name: story-orchestrator
-description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4 and the API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW integration; IMP-D01 with IMPLEMENTATION and CODE_REVIEW; the Quality Pipeline SECURITY_REVIEW, RECONCILIATION, VERIFICATION; the Delivery Pipeline PR_PREPARATION, MERGE_READINESS_CHECK, INTEGRATION_CONFIRMATION → DONE). Initializes a pilot Story outside the registered Workflow, shows its status with a State and History check, executes one stage per run (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW, IMPLEMENTATION and CODE_REVIEW in a subagent, then SECURITY_REVIEW, RECONCILIATION, VERIFICATION, PR_PREPARATION, MERGE_READINESS_CHECK and INTEGRATION_CONFIRMATION) in Step Mode up to DONE; remote push and PR creation only with allow_remote=PR_PREPARATION, the merge only by the human; IMPLEMENTATION runs only in a dedicated pilot worktree and commits only with allow_commit=IMPLEMENTATION; supports re-entry into IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN, applies the human's decisions at HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL), at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL (APPROVE, CANCEL) and at the Loopback confirmation from IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW (RESUME, CANCEL). Started only manually with mode=pilot.
-argument-hint: "init|status|next story=<ID> mode=pilot [allow_commit=IMPLEMENTATION] [allow_remote=PR_PREPARATION repository=<owner/name>] [workspace=<path>] | decide story=<ID> mode=pilot decision=APPROVE|REQUEST_CHANGES|CANCEL|RESUME|ROUTE_BACK|CONFIRM_MERGED by=<id> [target=<stage>] [reason=\"...\"] [comment=\"...\"]"
+description: Story Orchestrator MVP (Phase 6, increments 6.4.1–6.4.3; Phase 7, increments 7.4.1–7.4.2; Phase 8, increments 8.3.2, 8.4 and the API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW integration; IMP-D01 with IMPLEMENTATION and CODE_REVIEW; the Quality Pipeline SECURITY_REVIEW, RECONCILIATION, VERIFICATION; the Delivery Pipeline PR_PREPARATION, MERGE_READINESS_CHECK, INTEGRATION_CONFIRMATION → DONE). Initializes a pilot Story outside the registered Workflow, shows its status with a State and History check, executes one stage per run (CLARIFICATION inline, SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW, IMPLEMENTATION and CODE_REVIEW in a subagent, then SECURITY_REVIEW, RECONCILIATION, VERIFICATION, PR_PREPARATION, MERGE_READINESS_CHECK and INTEGRATION_CONFIRMATION) in Step Mode up to DONE; remote push and PR creation only with allow_remote=PR_PREPARATION, the merge only by the human; IMPLEMENTATION runs only in a dedicated pilot worktree and commits only with allow_commit=IMPLEMENTATION; supports re-entry into IMPACT_ANALYSIS after a Loopback from SOLUTION_DESIGN, applies the human's decisions at HUMAN_SPEC_APPROVAL (APPROVE, REQUEST_CHANGES, CANCEL), at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL (APPROVE, CANCEL) and at the Loopback confirmation from IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW (RESUME, CANCEL), and the minimal Recovery RESUME of a Story BLOCKED at SOLUTION_DESIGN with Escalation Required (section 8.11). Started only manually with mode=pilot.
+argument-hint: "init|status|next story=<ID> mode=pilot [allow_commit=IMPLEMENTATION] [allow_remote=PR_PREPARATION repository=<owner/name>] [workspace=<path>] | decide story=<ID> mode=pilot decision=APPROVE|REQUEST_CHANGES|CANCEL|RESUME|ROUTE_BACK|CONFIRM_MERGED by=<id> [target=<stage>] [reason=\"...\"] [comment=\"...\"] [evidence=<path>]"
 disable-model-invocation: true
 user-invocable: true
 ---
@@ -38,13 +38,14 @@ The Skill works in the main session.
   - `APPROVE`, `REQUEST_CHANGES` or `CANCEL` at HUMAN_SPEC_APPROVAL (section 8);
   - `APPROVE` or `CANCEL` at HUMAN_TECHNICAL_APPROVAL; `REQUEST_CHANGES` there is rejected without changes, because re-entry into its targets is not implemented (section 8.8);
   - `APPROVE` or `CANCEL` at HUMAN_PR_APPROVAL, with the same rejection of `REQUEST_CHANGES` (section 8.9). The gate is reached after PR_PREPARATION `PASS` (section 7.13.1). `APPROVE` does not merge: the merge is HUMAN_MERGE;
-  - `RESUME` or `CANCEL` at the Loopback confirmation (`LOOPBACK_CONFIRMATION`), when IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW returned `CHANGES_REQUIRED` with a target through a gate (section 8.7). `ROUTE_BACK` is rejected without changes (section 8.7.2).
+  - `RESUME` or `CANCEL` at the Loopback confirmation (`LOOPBACK_CONFIRMATION`), when IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW returned `CHANGES_REQUIRED` with a target through a gate (section 8.7). `ROUTE_BACK` is rejected without changes (section 8.7.2);
+  - the minimal Recovery `RESUME` of a Story `BLOCKED` at SOLUTION_DESIGN with the reason Escalation Required, after the escalation decision is recorded in the committed Foundation (section 8.11).
 - Re-entry after a return is supported:
   - for SPECIFICATION — after a loopback from SPEC_REVIEW or REQUEST_CHANGES at the gate (section 7.3.1);
   - for IMPACT_ANALYSIS — after a loopback from SOLUTION_DESIGN (section 7.3.2).
 - `REQUEST_CHANGES` with `target=CLARIFICATION` is rejected without changes (section 8.4.1).
 - A Loopback without a gate from API_DESIGN (to SOLUTION_DESIGN or IMPACT_ANALYSIS) or from DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING or PLAN_REVIEW (to IMPLEMENTATION_PLANNING, DB_DESIGN, API_DESIGN, SOLUTION_DESIGN or IMPACT_ANALYSIS) is routed, but the target is not executed (section 7.8, API-D01, DB-D01).
-- Not implemented: execution of other stages, re-entry into CLARIFICATION and SOLUTION_DESIGN with a new version, re-entry into IMPACT_ANALYSIS after a Loopback from API_DESIGN or DB_DESIGN, re-entry into API_DESIGN after `PASS` (only `api-design` v1), re-entry into DB_DESIGN after `PASS` (only `db-design` v1), other Human Gates, RECONFIRM, a Loopback through a gate (`ROUTE_BACK`), Recovery and Auto Mode. If the human asks for something else, explain that it does not exist yet, and stop.
+- Not implemented: execution of other stages, re-entry into CLARIFICATION and SOLUTION_DESIGN with a new version, re-entry into IMPACT_ANALYSIS after a Loopback from API_DESIGN or DB_DESIGN, re-entry into API_DESIGN after `PASS` (only `api-design` v1), re-entry into DB_DESIGN after `PASS` (only `db-design` v1), other Human Gates, RECONFIRM, a Loopback through a gate (`ROUTE_BACK`), Recovery other than the minimal Recovery `RESUME` of section 8.11 (SOLUTION_DESIGN, Escalation Required), and Auto Mode. If the human asks for something else, explain that it does not exist yet, and stop.
 
 ## 2. Inputs
 
@@ -60,6 +61,7 @@ Arguments (`$ARGUMENTS`):
 | `target` | only for `decide` with `REQUEST_CHANGES` | The target stage of the return (section 8.1) |
 | `reason` | only for `decide` with `REQUEST_CHANGES`, `CANCEL` or `RESUME` | The reason for the decision (section 8.1) |
 | `comment` | no, only for `decide` with `APPROVE` | The human's comment on the decision (section 8.1) |
+| `evidence=<path>` | only for `decide` with Recovery `RESUME`, mandatory there | The repository path of the committed canonical Foundation document that records the escalation decision (section 8.11) |
 | `workspace=<path>` | only for `next` at VERIFICATION and INTEGRATION_CONFIRMATION, mandatory there | The human-prepared workspace (sections 7.12.3, 7.13.4). Not stored in `state.yaml` |
 | `allow_remote=PR_PREPARATION`, `repository=<owner/name>` | only for `next` at PR_PREPARATION, both mandatory there | The human's explicit permission to push `pilot/<story_id>` (without force) and create one PR in exactly this repository, for that one attempt (section 7.13.1). Not stored, not inferred from `git remote`, not granted by `allow_commit` |
 | `allow_commit=IMPLEMENTATION` | only for `next` at IMPLEMENTATION | The human's explicit permission for the commits of that one IMPLEMENTATION attempt (section 7.11.2). Not allowed with another command or stage |
@@ -207,7 +209,7 @@ Check only what the sources define directly. Each discrepancy — with a referen
 - `actor.kind` ∈ `agent | human | orchestrator`;
 - `ts` does not decrease;
 - the first event is the initialization event (section 4.2);
-- `execution_state: RUNNING` ⇔ the last event is `stage.started` or `human_decision.applied` for `current_stage`. The exception is `human_decision.applied` with `details.decision: RESUME` (`LOOPBACK_CONFIRMATION`, section 8.7.3): after it, `execution_state: READY`;
+- `execution_state: RUNNING` ⇔ the last event is `stage.started` or `human_decision.applied` for `current_stage`. The exception is `human_decision.applied` with `details.decision: RESUME` (`LOOPBACK_CONFIRMATION`, section 8.7.3, or `RECOVERY`, section 8.11): after it, `execution_state: READY`;
 - `execution_state: AWAITING_HUMAN` ⇔ the last event is `human_decision.requested` for `current_stage`.
 
 **Files** (`workflow-state-model.md` §12, step 2):
@@ -250,7 +252,7 @@ The output and the owner are from `artifact-registry.yaml` (`produced_by`), the 
 ### 7.2. Pre-Run Check
 
 1. **Check the arguments** and consistency (section 6). A discrepancy — stop, as in `status`.
-2. **`story_status` must be `ACTIVE`.** Otherwise — show the state and stop. For `pending_human_decision.kind: GATE` at HUMAN_SPEC_APPROVAL or HUMAN_TECHNICAL_APPROVAL and for `kind: LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW, IMPLEMENTATION, CODE_REVIEW, SECURITY_REVIEW, RECONCILIATION, VERIFICATION or MERGE_READINESS_CHECK, at `GATE` HUMAN_PR_APPROVAL and at `HUMAN_ACTION` HUMAN_MERGE, say that the human makes the decision with the `decide` command (sections 8, 8.7). For `CANCELLED` — the Story is cancelled in the pilot, the state is terminal and is not reopened. Other human decisions and Recovery are not implemented yet.
+2. **`story_status` must be `ACTIVE`.** Otherwise — show the state and stop. For `pending_human_decision.kind: GATE` at HUMAN_SPEC_APPROVAL or HUMAN_TECHNICAL_APPROVAL and for `kind: LOOPBACK_CONFIRMATION` at IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW, IMPLEMENTATION, CODE_REVIEW, SECURITY_REVIEW, RECONCILIATION, VERIFICATION or MERGE_READINESS_CHECK, at `GATE` HUMAN_PR_APPROVAL and at `HUMAN_ACTION` HUMAN_MERGE, say that the human makes the decision with the `decide` command (sections 8, 8.7). For `CANCELLED` — the Story is cancelled in the pilot, the state is terminal and is not reopened. For `BLOCKED` at SOLUTION_DESIGN with the reason Escalation Required — say that, after the escalation decision is recorded in the committed Foundation, the human may apply the Recovery `RESUME` with `decide` (section 8.11); `next` does not unblock the Story. Other human decisions and other Recovery are not implemented yet.
    A special case — `WAITING_FOR_HUMAN` with `pending_human_decision.kind: CLARIFICATION_ANSWERS`: a new `next` run means that the interview of this attempt was interrupted together with the session. **MVP limitation:** continuing the interview in a new session is not supported, and the contract does not define a transition from `AWAITING_HUMAN` to `INTERRUPTED` during session recovery (`workflow-state-model.md` §12 describes only `RUNNING`). Change nothing: explain this to the human and stop.
 3. **`current_stage` must be in table 7.1.** Another stage — "not supported yet", stop. For PR_PREPARATION, MERGE_READINESS_CHECK and INTEGRATION_CONFIRMATION, steps 6–11 are replaced by section 7.13. For IMPLEMENTATION and CODE_REVIEW, steps 6–11 are replaced by section 7.11 (7.11.1–7.11.3); steps 7–9 still determine `api` and `db`. For SECURITY_REVIEW, RECONCILIATION and VERIFICATION, steps 6, 10–11 are replaced by section 7.12 (steps 7–9 determine `api`, `db`, `impact`).
 4. **`execution_state`:**
@@ -1244,6 +1246,7 @@ Applies the human's decision for the current `pending_human_decision`. Works in 
 | `GATE` | HUMAN_PR_APPROVAL | `APPROVE`, `CANCEL`; `REQUEST_CHANGES` is rejected without changes | 8.2, 8.5, 8.9 |
 | `HUMAN_ACTION` | HUMAN_MERGE | `CONFIRM_MERGED`, `REQUEST_CHANGES` (only `target=MERGE_READINESS_CHECK`), `CANCEL` | 8.2, 8.5, 8.10 |
 | `LOOPBACK_CONFIRMATION` | IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW | `RESUME`, `CANCEL`; `ROUTE_BACK` is rejected without changes | 8.2, 8.5, 8.7 |
+| none (`story_status: BLOCKED`, `pending_human_decision: null`) — Recovery | SOLUTION_DESIGN, blocker Escalation Required | only `RESUME`; any other decision is rejected without changes | 8.2, 8.11 |
 
 The human makes the decision, and the Orchestrator only checks and applies it (`workflow-state.md` §1).
 
@@ -1255,10 +1258,11 @@ A decision in the pilot is a simulation of a Human Gate. It applies only within 
 
 | Argument | Decision | Rule |
 |---|---|---|
-| `decision` | all | For `GATE`: `APPROVE`, `REQUEST_CHANGES` or `CANCEL` (`gate_decisions` in `stage-map.yaml`); `RECONFIRM` is not offered in the MVP (`docs/contracts/README.md`, "Deferred. An Approved Simplification of the Workflow Is Needed"). For `LOOPBACK_CONFIRMATION`: `ROUTE_BACK`, `RESUME` or `CANCEL` (`loopback_confirmation_decisions`). For `HUMAN_ACTION` at HUMAN_MERGE: `CONFIRM_MERGED`, `REQUEST_CHANGES` or `CANCEL` (the stage's `decisions`). Any other value is an error |
+| `decision` | all | For `GATE`: `APPROVE`, `REQUEST_CHANGES` or `CANCEL` (`gate_decisions` in `stage-map.yaml`); `RECONFIRM` is not offered in the MVP (`docs/contracts/README.md`, "Deferred. An Approved Simplification of the Workflow Is Needed"). For `LOOPBACK_CONFIRMATION`: `ROUTE_BACK`, `RESUME` or `CANCEL` (`loopback_confirmation_decisions`). For `HUMAN_ACTION` at HUMAN_MERGE: `CONFIRM_MERGED`, `REQUEST_CHANGES` or `CANCEL` (the stage's `decisions`). For Recovery (section 8.11): only `RESUME` (`recovery_actions`); `ROUTE_BACK`, `CANCEL` and `KEEP_BLOCKED` are not implemented for Recovery. Any other value is an error |
 | `by` | all, mandatory | A non-empty identifier of the human who made the decision. In the pilot, this is a declared identifier, not verified authentication. The Orchestrator does not invent it, does not substitute it for the human and does not take the identifier of an agent or Skill |
 | `target` | only `REQUEST_CHANGES`, mandatory | The target stage of the return (section 8.4.1) |
 | `reason` | `REQUEST_CHANGES`, `CANCEL` and `RESUME`, mandatory | A non-empty reason. Recorded verbatim according to the rules for the human's text in section 7.10 (`workflow-policies.md` §3, §17). For `RESUME`, the next attempt of the stage receives it verbatim (section 7.3) |
+| `evidence` | only Recovery `RESUME` (section 8.11), mandatory | A repository path of a Foundation document (`docs/architecture/` or `docs/product/`). Checked in section 8.11.1, step 4 |
 | `comment` | only `APPROVE`, optional | Recorded verbatim according to the rules of section 7.10. It is not a source of requirements (section 8.3.1, step 3) |
 
 If a mandatory argument is missing, there is an argument not allowed for this decision, or the `decision` is not allowed — explain how to repeat the command, and stop. `state.yaml` and `history.jsonl` do not change.
@@ -1268,7 +1272,7 @@ If a mandatory argument is missing, there is an argument not allowed for this de
 For each decision. Check everything in order. The first violation — explain to the human what exactly is wrong and where (file, field), and stop. The state, History and files do not change.
 
 1. **Consistency** of State, History and files — section 6. A discrepancy — as in `status`.
-2. **Kind of waiting.** `story_status: WAITING_FOR_HUMAN`, `execution_state: AWAITING_HUMAN`, `pending_human_decision.stage` = `current_stage`. Then — according to `pending_human_decision.kind`:
+2. **Kind of waiting.** If `story_status: BLOCKED` and `pending_human_decision: null` — this is a Recovery decision: the check of section 8.11.1 instead of steps 2–4 below. Otherwise `story_status: WAITING_FOR_HUMAN`, `execution_state: AWAITING_HUMAN`, `pending_human_decision.stage` = `current_stage`. Then — according to `pending_human_decision.kind`:
    - `LOOPBACK_CONFIRMATION` — the check of section 8.7.1 instead of steps 3–4 below;
    - `GATE` at HUMAN_SPEC_APPROVAL — steps 3–4 below; `GATE` at HUMAN_TECHNICAL_APPROVAL — the check of section 8.8.1 instead of steps 3–4; `GATE` at HUMAN_PR_APPROVAL — the check of section 8.9.1 instead of steps 3–4;
    - `HUMAN_ACTION` at HUMAN_MERGE — the check of section 8.10.1 instead of steps 3–4;
@@ -1664,16 +1668,50 @@ Any check fails or cannot be performed — change nothing, explain, stop. The Or
 
 Do not start INTEGRATION_CONFIRMATION. The next `next` with `workspace=<path>` executes it (section 7.13.4).
 
+### 8.11. Recovery `RESUME` — SOLUTION_DESIGN, Escalation Required (minimal)
+
+The only Recovery implemented in the MVP (`workflow-state-model.md` §9, Recovery Actions and Procedure). It applies when SOLUTION_DESIGN returned `BLOCKED` (Escalation Required, `workflow-policies.md` §2) and the human has recorded the escalation decision in the canonical Foundation document. The human decides; the Orchestrator checks the preconditions and applies the decision. A decision does not remove a blocker by itself: the evidence must exist and be committed. The decision in the pilot is a simulation, as at a gate.
+
+#### 8.11.1. Check
+
+Instead of steps 2–4 of section 8.2. The first violation — explain and stop, changing nothing; the Story remains `BLOCKED` (`workflow-state-model.md` §9, Procedure).
+
+1. **Arguments.** `decision=RESUME`, non-empty `by`, `reason` and `evidence`; `target` and `comment` are not passed. Another decision — explain that only `RESUME` is implemented for this Recovery, and stop.
+2. **State.** `story_status: BLOCKED`, `pending_human_decision: null`, `current_stage: SOLUTION_DESIGN`, `execution_state: COMPLETED`, `last_stage_verdict: BLOCKED`; `blocker.source: STAGE`, `blocker.reason` begins with `Escalation Required`. Any other blocking reason, source or stage — Recovery for it is not implemented: explain and stop.
+3. **History.** The last two events are `stage.completed` SOLUTION_DESIGN with `details.verdict: BLOCKED` and `story.blocked` SOLUTION_DESIGN whose `details.reason` equals `blocker.reason`. `artifacts.solution-design` is absent (the blocked attempt wrote no file).
+4. **The blocker is resolved** (`workflow-state-model.md` §9, step 3: "the escalation decision is recorded in the canonical source"):
+   - `evidence` is under `docs/architecture/` or `docs/product/`, is tracked (`git ls-files --error-unmatch <evidence>`) and has no uncommitted changes (`git status --porcelain -- <evidence>` is empty);
+   - its last commit `git log -1 --format="%h|%cI" -- <evidence>` is later than the `ts` of the `story.blocked` event: the decision was committed after the blocking;
+   - the file contains the decision that answers `blocker.needed` (for a dependency — an entry naming the dependency, its purpose and this Story). The Orchestrator only confirms that such an entry exists and quotes its location; it does not judge whether the decision is sufficient — the new SOLUTION_DESIGN attempt assesses the design again and may return `BLOCKED` again.
+5. **Approvals and inputs.** `approvals.HUMAN_SPEC_APPROVAL` is `VALID` and its `story-spec` version is the current one; the inputs of SOLUTION_DESIGN pass section 7.2, steps 5 and 7 (the change of the Foundation must not have changed a recorded source of a registered artifact). Otherwise — stop: Revalidation and RECONFIRM are not implemented.
+6. **The reason does not change requirements** — as in section 8.7.3.
+
+#### 8.11.2. Application
+
+One Orchestrator step (section 8.2, last paragraphs), with one decision time.
+
+**`state.yaml`:** `story_status: ACTIVE`, `execution_state: READY`, `blocker: null`, `updated_at`; `current_stage` (SOLUTION_DESIGN), `last_stage_verdict` (`BLOCKED`: a human's decision is not a Stage Verdict), `pending_human_decision` (`null`), `artifacts`, `records`, `approvals`, `retry` and `git` do not change. `RESUME` does not reset counters (`workflow-state-model.md` §10).
+
+**`history.jsonl`** — append one `human_decision.applied` event; the `stage.completed` and `story.blocked` events stay unchanged:
+
+```json
+{"ts":"<date -u>","story_id":"US-001","actor":{"kind":"human","id":"<by>"},"event":"human_decision.applied","stage":"SOLUTION_DESIGN","refs":["story-spec@1"],"details":{"decision":"RESUME","kind":"RECOVERY","to_stage":"SOLUTION_DESIGN","resolved_blocker":"<blocker.reason verbatim>","evidence":[{"path":"<evidence>","commit":"<short commit>"}],"reason":"<reason verbatim>","mode":"pilot"}}
+```
+
+`refs` — the current `story-spec@<N>` (and `impact-analysis@<N>` if it is passed according to section 7.2, step 7).
+
+Do not start SOLUTION_DESIGN. The next `next` executes a new attempt: the entry trigger is this event (section 7.2, step 6), `attempt` is the count of `stage.started` SOLUTION_DESIGN + 1, `version` stays `1`, and `reason` is passed verbatim (section 7.3).
+
 ## 9. Constraints
 
-- The Orchestrator writes only the pilot's `state.yaml` and `history.jsonl`: in `init`, at steps 7.2 (only `RUNNING` → `INTERRUPTED`), 7.4, 7.5.2, 7.7, 7.8, 8.3.2, 8.4.2, 8.5.3, 8.7.3, 8.8.3 (HUMAN_TECHNICAL_APPROVAL), 8.9.3 (HUMAN_PR_APPROVAL), 8.10.2–8.10.3 (HUMAN_MERGE), 7.11.3, 7.11.6 (IMPLEMENTATION, CODE_REVIEW) 7.12.6 (SECURITY_REVIEW, RECONCILIATION, VERIFICATION) and 7.13 (PR_PREPARATION, MERGE_READINESS_CHECK, INTEGRATION_CONFIRMATION, `DONE`). The only record it writes itself is `cancellation-record` in 8.5.2. `status` writes nothing.
+- The Orchestrator writes only the pilot's `state.yaml` and `history.jsonl`: in `init`, at steps 7.2 (only `RUNNING` → `INTERRUPTED`), 7.4, 7.5.2, 7.7, 7.8, 8.3.2, 8.4.2, 8.5.3, 8.7.3, 8.8.3 (HUMAN_TECHNICAL_APPROVAL), 8.9.3 (HUMAN_PR_APPROVAL), 8.10.2–8.10.3 (HUMAN_MERGE), 8.11.2 (Recovery `RESUME`), 7.11.3, 7.11.6 (IMPLEMENTATION, CODE_REVIEW) 7.12.6 (SECURITY_REVIEW, RECONCILIATION, VERIFICATION) and 7.13 (PR_PREPARATION, MERGE_READINESS_CHECK, INTEGRATION_CONFIRMATION, `DONE`). The only record it writes itself is `cancellation-record` in 8.5.2. `status` writes nothing.
 - An artifact file is written only by the Stage Skill during 7.5. The Orchestrator does not create, edit or delete it.
 - Write nothing to `docs/stories/`, `docs/contracts/`, `docs/workflow/`, the Foundation or `.claude/skills/`.
 - Do not invent statuses, events, state fields or transition rules. Report to the human what is missing in the contracts.
 - History is append-only: lines are not changed or deleted.
 - Do not fix the state silently and do not restore it automatically.
 - Start only the stages from table 7.1. CLARIFICATION is executed inline in the main session, without a subagent. SPECIFICATION, SPEC_REVIEW, IMPACT_ANALYSIS, SOLUTION_DESIGN, API_DESIGN, DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING, PLAN_REVIEW, IMPLEMENTATION, CODE_REVIEW, SECURITY_REVIEW, RECONCILIATION and VERIFICATION are each executed in one separate `general-purpose` subagent; every review and verification stage in a fresh one, never the IMPLEMENTATION subagent. Do not pass a historical version of `impact-analysis` after `NOT_APPLICABLE` as an input (section 7.1), do not pass `impact-analysis` to API_DESIGN at all, and pass `impact`, `api` and `db` to DB_DESIGN, DESIGN_REVIEW, IMPLEMENTATION_PLANNING and PLAN_REVIEW only according to section 7.2, steps 7–9. Do not start IMPLEMENTATION_PLANNING or PLAN_REVIEW without the Testing Strategy (section 7.2, steps 10–11). Do not start IMPLEMENTATION or CODE_REVIEW outside the pilot worktree checks of section 7.11.1, and IMPLEMENTATION without `allow_commit=IMPLEMENTATION`. Do not start VERIFICATION without a verification workspace that passes section 7.12.3. Do not start PR_PREPARATION without `allow_remote=PR_PREPARATION repository=<owner/name>`, or INTEGRATION_CONFIRMATION without a workspace that passes section 7.13.4. Do not start additional subagents.
-- Apply the human's decisions only in `decide` (section 8), by the human's decision from the command arguments. Do not simulate or guess the human's decisions, do not substitute `by`. Do not apply decisions of other gates (only HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL), RECONFIRM, `REQUEST_CHANGES` at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL and `ROUTE_BACK`. The Orchestrator does not merge, push or close PRs itself; a push and one PR creation happen only inside PR_PREPARATION under section 7.13.1. At HUMAN_MERGE the Orchestrator only records `CONFIRM_MERGED`, `REQUEST_CHANGES` (to MERGE_READINESS_CHECK) or `CANCEL` after the checks of section 8.10. Do not perform a Loopback through a gate automatically.
+- Apply the human's decisions only in `decide` (section 8), by the human's decision from the command arguments. Do not simulate or guess the human's decisions, do not substitute `by`. Do not apply decisions of other gates (only HUMAN_SPEC_APPROVAL, HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL), RECONFIRM, `REQUEST_CHANGES` at HUMAN_TECHNICAL_APPROVAL and HUMAN_PR_APPROVAL, `ROUTE_BACK` and any Recovery other than section 8.11. The Orchestrator does not merge, push or close PRs itself; a push and one PR creation happen only inside PR_PREPARATION under section 7.13.1. At HUMAN_MERGE the Orchestrator only records `CONFIRM_MERGED`, `REQUEST_CHANGES` (to MERGE_READINESS_CHECK) or `CANCEL` after the checks of section 8.10. Do not perform a Loopback through a gate automatically.
 - A decision in the pilot is a simulation of a Human Gate. Do not present it as an approval or cancellation of the Story in the official Workflow.
 - Do not invoke Stage Skills with the Skill tool.
 - Change `state.yaml` only according to section 7.10.

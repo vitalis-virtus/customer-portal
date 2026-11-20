@@ -38,11 +38,11 @@ Arguments (`$ARGUMENTS`):
 | `version` | yes | The version of `solution-design`, matches `v<N>` in `output`. In this increment — only `1` |
 | `attempt` | yes | The stage attempt number |
 | `mode=pilot` | no | A pilot outside the registered Workflow |
-| `reason` | no | The verbatim reason of the human's `RESUME` decision after a `CHANGES_REQUIRED` of this stage |
+| `reason` | no | The verbatim reason of the human's `RESUME` decision after a `CHANGES_REQUIRED` of this stage (Loopback confirmation) or after a `BLOCKED` of this stage (Recovery) |
 
 There is no human in the context: the Skill asks nothing. If a mandatory argument is missing or an input cannot be read, the verdict is `BLOCKED` (section 6).
 
-`reason` is the human's decision regarding the previous Loopback, not a source of requirements. It may explain why the human rejected the return. It does not add new requirements.
+`reason` is the human's decision regarding the previous Loopback or blocking, not a source of requirements. It may explain why the human rejected the return or how the blocker was resolved. It does not add new requirements and does not by itself approve a dependency: only the Foundation record does (section 3.3).
 
 Logical inputs — `docs/contracts/stage-io-map.yaml` → `SOLUTION_DESIGN`, paths — `docs/contracts/artifact-registry.yaml`:
 - `story-spec` — `REQ`, `AC` with a Verification Method, scope, Story Type, "Open for Technical Design";
@@ -98,7 +98,7 @@ If a decision cannot be made without API or schema details, move the question to
 - **Security at the architecture level** — for every Story, regardless of whether SECURITY_REVIEW will be applicable (OD-05). Describe authentication, authorization and "who is acting", trust boundaries, sensitive data in logs and responses, sessions and credentials, if the Story touches them. The basis — references to `security-conventions.md` and AR-. Do not weaken mandatory rules (RR-14).
 - **Dependencies** (`workflow-policies.md` §2, Risk-Based Dependency Approval, OD-09). Each new or changed dependency receives a classification according to the OD-09 criteria:
   - a simple auxiliary dependency that does not meet any criterion — proposed in the design with a justification;
-  - a significant dependency, as well as any whose classification is ambiguous — `BLOCKED` (section 6);
+  - a significant dependency, as well as any whose classification is ambiguous — `BLOCKED` (section 6). Exception: a dependency listed in `architecture.md` §6 "Approved Library Dependencies", used for exactly the listed purpose and within the listed scope (Story), is classified "significant — approved by the project owner" with a reference to that entry; it does not block. Any other package, purpose or Story still gives `BLOCKED`;
   - for Customer Portal, AR-012 applies: a new technology or a replacement of an entry of `architecture.md` §6 requires a Foundation update — `BLOCKED` (Foundation Change Required);
   - if there are no new dependencies, say so.
 - **Analyses required by the Foundation.** For example, a Consistency Analysis for each use case that changes both PostgreSQL and Redis (`persistence-conventions.md` §10), covering all items of its table. If there are no such use cases, say so.
@@ -171,7 +171,7 @@ Therefore **`PASS`**, **`CHANGES_REQUIRED`** and **`BLOCKED`** are allowed. `NOT
 | `story-spec` is infeasible, contradictory or incomplete for the design, and this can be eliminated in `story-spec` without a new decision of the human | `CHANGES_REQUIRED`, `loopback_target: SPECIFICATION` | `[]` |
 | The design requires a new or different product decision of the human | `CHANGES_REQUIRED`, `loopback_target: CLARIFICATION` | `[]` |
 | The Story requires a change to the Architecture or Product Foundation, in particular a new technology (AR-012) | `BLOCKED` (Foundation Change Required) | `[]` |
-| A significant or ambiguous new dependency (OD-09) or another decision from the list of escalations (`workflow-policies.md` §2) | `BLOCKED` (Escalation Required) | `[]` |
+| A significant or ambiguous new dependency (OD-09) not covered by an approved entry (section 3.3), or another decision from the list of escalations (`workflow-policies.md` §2) | `BLOCKED` (Escalation Required) | `[]` |
 | A decision is impossible without weakening a mandatory Foundation rule, in particular the Security Rules | `BLOCKED` (Foundation Rule Violation) | `[]` |
 
 Rules:

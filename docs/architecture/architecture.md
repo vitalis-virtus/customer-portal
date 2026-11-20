@@ -160,6 +160,16 @@ Platform is a separate logical part outside the modules. It contains shared tech
 
 **Rationale:** the stack was approved by the project owner. It is consistent with the session model and the hexagonal architecture described in this document.
 
+### Approved Library Dependencies
+
+Significant dependencies (OD-09, [workflow-policies.md §2](../workflow/workflow-policies.md#risk-based-dependency-approval-od-09)) approved by the project owner. Each implements a mechanism already approved by the Foundation and does not add or replace an entry of the table above, so it is not a new technology under AR-012. The approval is limited to the stated package, purpose and scope.
+
+| Dependency | Purpose | Scope | Decision |
+|---|---|---|---|
+| `golang.org/x/crypto/argon2` | Argon2id password hashing ([Security Conventions §6](security-conventions.md#6-passwords)) | US-001 | Project owner, 2026-11-20: "I, the human owner of Customer Portal, approve the use of: `golang.org/x/crypto/argon2` for Argon2id password hashing in US-001. This approval is limited to this dependency and purpose. It does not authorize other cryptographic dependencies or changes to the approved password-hashing algorithm." |
+
+Use of a listed dependency in another Story or for another purpose needs a new decision of the project owner.
+
 ## 7. Cross-Cutting Concerns
 
 ### Session Model and Authentication
